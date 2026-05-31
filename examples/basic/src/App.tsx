@@ -10,17 +10,17 @@ import {
   type LargeGraphOptions,
 } from 'galaxy-nodes';
 import {
-  createMarketAccessors,
+  createInitiativeAccessors,
   DATASET_SIZES,
   generateGalaxyDataset,
-  MARKET_CATEGORIES,
-  renderMarketEdgeDetail,
-  renderMarketNodeDetail,
-  type MarketClusterMeta,
-  type MarketNodeMeta,
-} from 'galaxy-nodes/presets/markets';
+  INITIATIVE_CATEGORIES,
+  renderInitiativeEdgeDetail,
+  renderInitiativeNodeDetail,
+  type InitiativeClusterMeta,
+  type InitiativeNodeMeta,
+} from 'galaxy-nodes/presets/initiatives';
 
-const marketLegend = (
+const initiativeLegend = (
   <>
     <span>Color</span>
     <b className="yes">ON TRACK</b>
@@ -40,7 +40,7 @@ function graphApiHeaders(token: string | undefined, headers?: HeadersInit): Head
 export default function App() {
   const graphApiUrl = (import.meta.env.VITE_GRAPH_API_URL as string | undefined) ?? 'http://127.0.0.1:8787';
   const graphApiToken = import.meta.env.VITE_GRAPH_API_TOKEN as string | undefined;
-  const [dataset, setDataset] = useState<GraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>>(() =>
+  const [dataset, setDataset] = useState<GraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>>(() =>
     generateGalaxyDataset(INITIAL_DATASET_SIZE),
   );
   const [sharpMoney, setSharpMoney] = useState(true);
@@ -48,7 +48,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Memoize so parent renders do not force redundant color/size buffer refreshes.
-  const accessors = useMemo(() => createMarketAccessors({ sharpMoney }), [sharpMoney]);
+  const accessors = useMemo(() => createInitiativeAccessors({ sharpMoney }), [sharpMoney]);
   const apiBase = graphApiUrl.replace(/\/$/, '');
   const fetchGraphApi = useMemo(
     () =>
@@ -59,13 +59,13 @@ export default function App() {
         }),
     [graphApiToken],
   );
-  const largeGraph = useMemo<LargeGraphOptions<MarketNodeMeta, unknown, MarketClusterMeta>>(
+  const largeGraph = useMemo<LargeGraphOptions<InitiativeNodeMeta, unknown, InitiativeClusterMeta>>(
     () => ({
       enabled: dbStatus === 'loaded',
       async expandGraph(
         request: LargeGraphExpandRequest,
         signal: AbortSignal,
-      ): Promise<GraphDatasetPatch<MarketNodeMeta, unknown, MarketClusterMeta>> {
+      ): Promise<GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta>> {
         const url = new URL(
           request.type === 'node' && request.nodeId
             ? `${apiBase}/graph/expand/node/${encodeURIComponent(request.nodeId)}`
@@ -85,7 +85,7 @@ export default function App() {
 
         const response = await fetchGraphApi(url, { signal });
         if (!response.ok) throw new Error(`Graph expansion returned ${response.status}`);
-        return (await response.json()) as GraphDatasetPatch<MarketNodeMeta, unknown, MarketClusterMeta>;
+        return (await response.json()) as GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta>;
       },
       async loadEdgeDetail(edge, _endpoints, signal) {
         const response = await fetchGraphApi(`${apiBase}/graph/edge/${encodeURIComponent(getEdgeId(edge))}/detail`, {
@@ -104,7 +104,7 @@ export default function App() {
   );
 
   async function importDataset(file: File) {
-    setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(JSON.parse(await file.text())));
+    setDataset(parseGraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>(JSON.parse(await file.text())));
     setDbStatus('idle');
   }
 
@@ -113,7 +113,7 @@ export default function App() {
     try {
       const response = await fetchGraphApi(`${apiBase}/graph`);
       if (!response.ok) throw new Error(`Graph API returned ${response.status}`);
-      setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(await response.json()));
+      setDataset(parseGraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>(await response.json()));
       setDbStatus('loaded');
     } catch {
       setDbStatus('error');
@@ -124,10 +124,10 @@ export default function App() {
     <GalaxyGraphVisualizer
       dataset={dataset}
       accessors={accessors}
-      groups={MARKET_CATEGORIES}
-      legend={marketLegend}
-      renderNodeDetail={renderMarketNodeDetail}
-      renderEdgeDetail={renderMarketEdgeDetail}
+      groups={INITIATIVE_CATEGORIES}
+      legend={initiativeLegend}
+      renderNodeDetail={renderInitiativeNodeDetail}
+      renderEdgeDetail={renderInitiativeEdgeDetail}
       largeGraph={largeGraph}
       onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
       options={{

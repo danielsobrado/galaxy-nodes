@@ -3,6 +3,10 @@ import type { GalaxyRendererCallbacks, GalaxyRendererOptions } from './core';
 
 export { createGalaxyRenderer, DEFAULT_GRAPH_EDGE_BUDGET, mergeGraphDataset } from './core';
 
+/**
+ * Angular-named alias for the imperative core renderer. It does not declare
+ * Angular components or manage lifecycle; call it from component hooks.
+ */
 export function createGalaxyAngularRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host: HTMLElement,
   options: GalaxyRendererOptions<NMeta, EMeta, CMeta>,

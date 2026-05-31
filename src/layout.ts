@@ -298,11 +298,12 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
   const edgeLookup = new Map<string, GraphEdge<EMeta>>();
   dataset.edges.forEach((edge, index) => edgeLookup.set(getEdgeId(edge, index), edge));
 
-  const componentLabels = connectedComponentLabels(dataset.nodes, dataset.edges);
+  const allNodesGrouped = dataset.nodes.every((node) => node.group !== undefined);
+  const componentLabels = allNodesGrouped ? null : connectedComponentLabels(dataset.nodes, dataset.edges);
   const nodesByGroup = new Map<string, GraphNode<NMeta>[]>();
 
   for (const node of dataset.nodes) {
-    const group = node.group ?? componentLabels.get(node.id) ?? 'Component 1';
+    const group = node.group ?? componentLabels?.get(node.id) ?? 'Component 1';
     const nodes = nodesByGroup.get(group) ?? [];
     nodes.push(node);
     nodesByGroup.set(group, nodes);

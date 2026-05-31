@@ -254,7 +254,6 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [hoverEdge, setHoverEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand | null>(null);
-  const [cameraView, setCameraView] = useState<GalaxyCameraView | null>(null);
   const [augmentedDataset, setAugmentedDataset] = useState<GraphDataset<NMeta, EMeta, CMeta>>(dataset);
   const [nodeDetail, setNodeDetail] = useState<AsyncDetailState>(EMPTY_DETAIL_STATE);
   const [edgeDetail, setEdgeDetail] = useState<AsyncDetailState>(EMPTY_DETAIL_STATE);
@@ -262,6 +261,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [expandError, setExpandError] = useState<unknown>(null);
   const [sceneReady, setSceneReady] = useState(true);
   const expansionAbortRef = useRef<AbortController | null>(null);
+  const cameraViewRef = useRef<GalaxyCameraView | null>(null);
 
   const showControls = options?.showControls ?? true;
   const showStats = options?.showStats ?? true;
@@ -384,16 +384,15 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   );
 
   const selectEdge = useCallback(
-    (edge: GraphEdge<EMeta> | null, focusSelection = false) => {
+    (edge: GraphEdge<EMeta> | null) => {
       if (selectedEdgeId === undefined) setInternalSelectedEdge(edge);
       if (edge) {
         if (selectedNodeId === undefined) setInternalSelectedNode(null);
         if (selectedNode) onSelectNode?.(null);
-        if (focusSelection) issueCameraCommand({ edgeId: displayEdgeId(edge), type: 'focus-edge' });
       }
       onSelectEdge?.(edge);
     },
-    [displayEdgeId, issueCameraCommand, onSelectEdge, onSelectNode, selectedEdgeId, selectedNode, selectedNodeId],
+    [onSelectEdge, onSelectNode, selectedEdgeId, selectedNode, selectedNodeId],
   );
 
   const hoverConnection = useCallback(
@@ -494,13 +493,14 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const expandNode = useCallback(
     (node: GraphNode<NMeta> | null) => {
       if (!node) return;
-      void runExpansion({ camera: cameraView ?? undefined, nodeId: node.id, type: 'node' });
+      void runExpansion({ camera: cameraViewRef.current ?? undefined, nodeId: node.id, type: 'node' });
     },
-    [cameraView, runExpansion],
+    [runExpansion],
   );
 
   const expandDirection = useCallback(
     (direction: SpaceDirection) => {
+      const cameraView = cameraViewRef.current;
       void runExpansion({
         camera: cameraView ?? undefined,
         direction,
@@ -508,8 +508,12 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         type: 'direction',
       });
     },
-    [cameraView, runExpansion],
+    [runExpansion],
   );
+
+  const handleCameraViewChange = useCallback((view: GalaxyCameraView) => {
+    cameraViewRef.current = view;
+  }, []);
 
   useEffect(() => {
     if (!largeGraphEnabled || !loadNodeDetail || !selectedNode) {
@@ -619,10 +623,10 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
           onSceneFailure?.(failure);
         }}
         onSceneReady={() => setSceneReady(true)}
-        onCameraViewChange={setCameraView}
+        onCameraViewChange={handleCameraViewChange}
         onSelectNode={selectNode}
         onHoverNode={hover}
-        onSelectEdge={(edge) => selectEdge(edge, true)}
+        onSelectEdge={selectEdge}
         onHoverEdge={hoverConnection}
       />
 

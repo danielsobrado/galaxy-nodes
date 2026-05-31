@@ -6,9 +6,11 @@ import type { CameraCommand, GalaxySceneProps } from './GalaxyScene';
 import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode } from './types';
 
 let latestSceneProps: GalaxySceneProps | null = null;
+let sceneRenderCount = 0;
 
 vi.mock('./GalaxyScene', () => ({
   default: (props: GalaxySceneProps) => {
+    sceneRenderCount += 1;
     latestSceneProps = props;
     return (
       <div
@@ -38,6 +40,7 @@ const dataset: GraphDataset = {
 
 afterEach(() => {
   latestSceneProps = null;
+  sceneRenderCount = 0;
   cleanup();
 });
 
@@ -85,6 +88,37 @@ describe('GalaxyGraphVisualizer', () => {
     expect(screen.getByRole('heading', { name: /Alpha to Beta/ })).toBeTruthy();
     expect(screen.getByText('Relationship id')).toBeTruthy();
     expect(screen.getByTestId('galaxy-scene').dataset.selectedEdge).toBe('depends:alpha->beta:0');
+  });
+
+  it('does not focus the camera when an edge is selected from the scene', () => {
+    const onNavigate = vi.fn<(command: CameraCommand) => void>();
+    render(<GalaxyGraphVisualizer dataset={dataset} onNavigate={onNavigate} />);
+
+    act(() => {
+      latestSceneProps?.onSelectEdge(edge);
+    });
+
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('galaxy-scene').dataset.selectedEdge).toBe('depends:alpha->beta:0');
+  });
+
+  it('stores camera view updates without re-rendering the HUD', () => {
+    const cameraView: GalaxyCameraView = {
+      direction: { x: 0, y: 0, z: -1 },
+      position: { x: 10, y: 20, z: 30 },
+      right: { x: 1, y: 0, z: 0 },
+      target: { x: 0, y: 0, z: 0 },
+      up: { x: 0, y: 1, z: 0 },
+    };
+    render(<GalaxyGraphVisualizer dataset={dataset} />);
+    const initialRenderCount = sceneRenderCount;
+
+    act(() => {
+      latestSceneProps?.onCameraViewChange?.(cameraView);
+      latestSceneProps?.onCameraViewChange?.({ ...cameraView, position: { x: 11, y: 20, z: 30 } });
+    });
+
+    expect(sceneRenderCount).toBe(initialRenderCount);
   });
 
   it('honors HUD visibility options and calls dataset-size changes', () => {

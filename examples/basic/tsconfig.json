@@ -6,7 +6,7 @@
     "noEmit": true,
     "paths": {
       "galaxy-nodes": ["../../src/index.ts"],
-      "galaxy-nodes/presets/markets": ["../../src/presets/markets.tsx"],
+      "galaxy-nodes/presets/initiatives": ["../../src/presets/initiatives.tsx"],
       "galaxy-nodes/styles.css": ["../../src/styles.css"]
     },
     "types": ["vite/client"]

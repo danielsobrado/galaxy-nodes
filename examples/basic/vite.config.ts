@@ -15,8 +15,8 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('../../src/styles.css', import.meta.url)),
       },
       {
-        find: 'galaxy-nodes/presets/markets',
-        replacement: fileURLToPath(new URL('../../src/presets/markets.tsx', import.meta.url)),
+        find: 'galaxy-nodes/presets/initiatives',
+        replacement: fileURLToPath(new URL('../../src/presets/initiatives.tsx', import.meta.url)),
       },
       {
         find: 'galaxy-nodes',

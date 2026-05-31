@@ -300,6 +300,9 @@ app.get('/graph/expand/direction', async (request, response) => {
   const session = driver.session();
 
   try {
+    // Demo implementation: this scans GraphNode coordinates in Memgraph. A
+    // production-sized graph should back directional expansion with a spatial
+    // index or precomputed neighborhood service.
     const nodeResult = await session.run(
       `
       MATCH (n:GraphNode)

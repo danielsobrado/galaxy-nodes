@@ -51,13 +51,23 @@
       "import": "./dist/angular.js",
       "require": "./dist/angular.cjs"
     },
+    "./presets/initiatives": {
+      "types": "./dist/presets/initiatives.d.ts",
+      "import": "./dist/presets/initiatives.js",
+      "require": "./dist/presets/initiatives.cjs"
+    },
+    "./presets/initiatives/core": {
+      "types": "./dist/presets/initiatives/core.d.ts",
+      "import": "./dist/presets/initiatives/core.js",
+      "require": "./dist/presets/initiatives/core.cjs"
+    },
     "./presets/markets": {
       "types": "./dist/presets/markets.d.ts",
       "import": "./dist/presets/markets.js",
       "require": "./dist/presets/markets.cjs"
     },
     "./presets/markets/core": {
-      "types": "./dist/presets/markets-core.d.ts",
+      "types": "./dist/presets/markets/core.d.ts",
       "import": "./dist/presets/markets/core.js",
       "require": "./dist/presets/markets/core.cjs"
     },

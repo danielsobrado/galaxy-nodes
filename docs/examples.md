@@ -57,6 +57,9 @@ window.addEventListener('beforeunload', () => renderer.dispose());
 
 ## Vue Core Adapter
 
+This subpath is a Vue-named alias around the imperative core renderer; it does
+not register Vue components or own lifecycle for you.
+
 ```vue
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue';
@@ -93,6 +96,9 @@ onBeforeUnmount(() => renderer?.dispose());
 ```
 
 ## Angular Core Adapter
+
+This subpath is an Angular-named alias around the imperative core renderer; it
+does not declare Angular components or own lifecycle for you.
 
 ```ts
 import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';

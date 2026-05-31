@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildNodeDegrees,
   buildSceneNodeIndex,
   countRenderablePoints,
   edgeMatchesActiveGroup,
   getSceneRebuildKey,
+  maxDegreeForMode,
+  planetSizeMultiplierForDegree,
   getVisiblePointIndexes,
+  selectPlanetOverlayNodesBySizing,
   selectMajorOverlayNodes,
   writeVisiblePointSizes,
 } from './sceneData';
@@ -62,6 +66,43 @@ describe('scene data helpers', () => {
     expect(edgeMatchesActiveGroup('Alpha', 'Beta', null)).toBe(true);
     expect(edgeMatchesActiveGroup('Alpha', 'Beta', 'Alpha')).toBe(true);
     expect(edgeMatchesActiveGroup('Alpha', 'Beta', 'Gamma')).toBe(false);
+  });
+
+  it('selects authored major planets by default accessor sizing', () => {
+    const graph: GraphDataset = {
+      nodes: [
+        { id: 'authored', group: 'Alpha', major: true },
+        { id: 'hub', group: 'Alpha' },
+        { id: 'leaf-1', group: 'Alpha' },
+        { id: 'leaf-2', group: 'Alpha' },
+      ],
+      edges: [
+        { source: 'hub', target: 'leaf-1' },
+        { source: 'hub', target: 'leaf-2' },
+      ],
+    };
+    const index = buildSceneNodeIndex(graph.nodes);
+    const degrees = buildNodeDegrees(graph);
+
+    expect(
+      selectPlanetOverlayNodesBySizing(index, graph.nodes, degrees, 'accessor', null).map((node) => node.id),
+    ).toEqual(['authored']);
+    expect(
+      selectPlanetOverlayNodesBySizing(index, graph.nodes, degrees, 'degree', null, 1).map((node) => node.id),
+    ).toEqual(['hub']);
+  });
+
+  it('computes degree-based planet size multipliers without WebGL', () => {
+    const graph: GraphDataset = {
+      nodes: [{ id: 'source' }, { id: 'target' }, { id: 'isolated' }],
+      edges: [{ source: 'source', target: 'target' }],
+    };
+    const degrees = buildNodeDegrees(graph);
+    const sizing = { max: 2, min: 0.5, mode: 'outgoing' as const, scale: 3, strength: 1 };
+
+    expect(maxDegreeForMode(graph.nodes, degrees, 'outgoing', null)).toBe(1);
+    expect(planetSizeMultiplierForDegree(degrees.get('source'), sizing, 1)).toBe(6);
+    expect(planetSizeMultiplierForDegree(degrees.get('target'), sizing, 1)).toBe(1.5);
   });
 
   it('keeps scene rebuild keys scoped to dataset topology and layout', () => {

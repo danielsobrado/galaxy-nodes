@@ -18,7 +18,7 @@ npm install react react-dom
 
 ## Generic Usage
 
-The root package export remains the React adapter for backward compatibility. New React integrations can also import from `galaxy-nodes/react`.
+The root package export remains the React adapter for backward compatibility. New React integrations can also import from `galaxy-nodes/react`. Because `react` and `react-dom` are optional peer dependencies, non-React consumers should import from `galaxy-nodes/core` instead of the bare `galaxy-nodes` root.
 
 ```tsx
 import { GalaxyGraphVisualizer, type GraphAccessors, type GraphDataset } from 'galaxy-nodes';
@@ -75,7 +75,7 @@ Lower-level React scene-only embedding is available through `GalaxyScene` when y
 
 ## Framework-Neutral Core
 
-Use `galaxy-nodes/core` when your app owns the framework lifecycle, such as vanilla DOM, Svelte, or a custom element. Vue and Angular also have explicit subpath exports, `galaxy-nodes/vue` and `galaxy-nodes/angular`, which expose the same renderer with framework-named factory functions.
+Use `galaxy-nodes/core` when your app owns the framework lifecycle, such as vanilla DOM, Svelte, or a custom element. Vue and Angular can use the imperative core directly; `galaxy-nodes/vue` and `galaxy-nodes/angular` only provide framework-named aliases for the same renderer.
 
 ```ts
 import { createGalaxyRenderer, type GraphDataset } from 'galaxy-nodes/core';
@@ -280,23 +280,23 @@ The corporate operations demo is available as a preset, not part of the generic 
 ```tsx
 import { GalaxyGraphVisualizer } from 'galaxy-nodes';
 import {
-  createMarketAccessors,
+  createInitiativeAccessors,
   generateGalaxyDataset,
-  renderMarketEdgeDetail,
-  renderMarketNodeDetail,
-} from 'galaxy-nodes/presets/markets';
+  renderInitiativeEdgeDetail,
+  renderInitiativeNodeDetail,
+} from 'galaxy-nodes/presets/initiatives';
 import 'galaxy-nodes/styles.css';
 
 const dataset = generateGalaxyDataset(75_000);
-const accessors = createMarketAccessors({ sharpMoney: true });
+const accessors = createInitiativeAccessors({ sharpMoney: true });
 
-export function MarketGraph() {
+export function InitiativeGraph() {
   return (
     <GalaxyGraphVisualizer
       dataset={dataset}
       accessors={accessors}
-      renderNodeDetail={renderMarketNodeDetail}
-      renderEdgeDetail={renderMarketEdgeDetail}
+      renderNodeDetail={renderInitiativeNodeDetail}
+      renderEdgeDetail={renderInitiativeEdgeDetail}
     />
   );
 }

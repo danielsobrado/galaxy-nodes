@@ -11,11 +11,17 @@ import {
 import { resolveGraphLayout, type GraphLayoutInput } from './layout';
 import {
   buildSceneNodeIndex,
+  buildNodeDegrees,
+  maxDegreeForMode as getMaxDegreeForMode,
   edgeMatchesActiveGroup,
   getSceneRebuildKey,
   MAJOR_PLANET_LIMIT_ALL,
-  selectMajorOverlayNodes,
+  planetSizeMultiplierForDegree,
+  rankPlanetNodes,
+  selectPlanetOverlayNodesBySizing,
   writeVisiblePointSizes,
+  type PlanetSizingMode,
+  type ResolvedPlanetSizing,
   type SceneNodeIndex,
 } from './sceneData';
 import type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
@@ -61,7 +67,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
 
 export interface GalaxyPlanetSizingOptions {
   /** `degree` uses all links, `incoming` uses target links, `outgoing` uses source links, `accessor` uses nodeSize only. */
-  mode?: 'accessor' | 'degree' | 'incoming' | 'outgoing';
+  mode?: PlanetSizingMode;
   /** Multiplier applied to the final planet radius. */
   scale?: number;
   /** Lower visual multiplier for degree-based sizing. */
@@ -120,7 +126,21 @@ interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   dispose: () => void;
 }
 
+/** Snapshot of the inputs each in-place updater consumes, used to diff `update()` calls. */
+interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
+  accessors: GraphAccessors<NMeta, EMeta> | undefined;
+  activeGroup: string | null;
+  galaxyMode: boolean;
+  planetSizing: GalaxyPlanetSizingOptions | undefined;
+  resolvedMotion: ResolvedGalaxyMotion;
+  selectedEdgeId: string | null;
+  selectedNodeId: string | null;
+  showClusters: boolean;
+  theme: GalaxyGraphTheme | undefined;
+}
+
 interface CoreState<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  appliedOptions: AppliedRendererState<NMeta, EMeta> | null;
   callbacks: GalaxyRendererCallbacks<NMeta, EMeta>;
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>;
   disposed: boolean;
@@ -224,16 +244,12 @@ const tmpProjected = new THREE.Vector3();
 const tmpDirection = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const tmpMove = new THREE.Vector3();
+const tmpPointCloudColor = new THREE.Color();
+const pointCloudLerpColor = new THREE.Color(0xf4f7f2);
 const instanceDummy = new THREE.Object3D();
 
-interface NodeDegree {
-  incoming: number;
-  outgoing: number;
-  total: number;
-}
-
-const DEFAULT_PLANET_SIZING: Required<GalaxyPlanetSizingOptions> = {
-  mode: 'degree',
+const DEFAULT_PLANET_SIZING: ResolvedPlanetSizing = {
+  mode: 'accessor',
   scale: 1,
   min: 0.72,
   max: 2.15,
@@ -253,39 +269,11 @@ function getLayoutKey(layout?: GraphLayoutInput) {
   });
 }
 
-function resolvePlanetSizing(planetSizing?: GalaxyPlanetSizingOptions): Required<GalaxyPlanetSizingOptions> {
+function resolvePlanetSizing(planetSizing?: GalaxyPlanetSizingOptions): ResolvedPlanetSizing {
   return {
     ...DEFAULT_PLANET_SIZING,
     ...planetSizing,
   };
-}
-
-function buildNodeDegrees<NMeta, EMeta>(dataset: GraphDataset<NMeta, EMeta>) {
-  const degrees = new Map<string, NodeDegree>();
-  dataset.nodes.forEach((node) => degrees.set(node.id, { incoming: 0, outgoing: 0, total: 0 }));
-
-  dataset.edges.forEach((edge) => {
-    const source = degrees.get(edge.source);
-    if (source) {
-      source.outgoing += 1;
-      source.total += 1;
-    }
-
-    const target = degrees.get(edge.target);
-    if (target) {
-      target.incoming += 1;
-      target.total += 1;
-    }
-  });
-
-  return degrees;
-}
-
-function degreeValue(degree: NodeDegree | undefined, mode: GalaxyPlanetSizingOptions['mode']) {
-  if (!degree || mode === 'accessor') return 0;
-  if (mode === 'incoming') return degree.incoming;
-  if (mode === 'outgoing') return degree.outgoing;
-  return degree.total;
 }
 
 function makeGlowTexture() {
@@ -349,7 +337,7 @@ function planetColor(color: string) {
 }
 
 function pointCloudColor(color: string) {
-  return new THREE.Color(color).lerp(new THREE.Color(0xf4f7f2), 0.24).multiplyScalar(1.02);
+  return tmpPointCloudColor.set(color).lerp(pointCloudLerpColor, 0.24).multiplyScalar(1.02);
 }
 
 function curvedEdgeCurve(a: THREE.Vector3, b: THREE.Vector3, lift = 50) {
@@ -601,10 +589,14 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   controls.maxDistance = 2700;
   controls.target.copy(TARGET_HOME);
 
+  const cameraViewDirection = new THREE.Vector3();
+  const cameraViewRight = new THREE.Vector3();
+  const cameraViewUp = new THREE.Vector3();
+
   function currentCameraView(): GalaxyCameraView {
-    const direction = camera.getWorldDirection(new THREE.Vector3()).normalize();
-    const right = new THREE.Vector3().crossVectors(direction, camera.up).normalize();
-    const up = camera.up.clone().normalize();
+    const direction = camera.getWorldDirection(cameraViewDirection).normalize();
+    const right = cameraViewRight.crossVectors(direction, camera.up).normalize();
+    const up = cameraViewUp.copy(camera.up).normalize();
     return {
       direction: vectorToVec3(direction),
       position: vectorToVec3(camera.position),
@@ -826,52 +818,34 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     createEndpointMarker(theme?.panelAccentColor ?? '#46f4bc'),
   ];
   endpointMarkers.forEach((marker) => world.add(marker.group));
-  const rankedPlanetNodes = new Map<Required<GalaxyPlanetSizingOptions>['mode'], GraphNode<NMeta>[]>();
+  const rankedPlanetNodes = new Map<PlanetSizingMode, GraphNode<NMeta>[]>();
 
-  function maxDegreeForMode(mode: Required<GalaxyPlanetSizingOptions>['mode']) {
-    let maxDegree = 0;
-    dataset.nodes.forEach((node) => {
-      if (activeGroup !== null && node.group !== activeGroup) return;
-      maxDegree = Math.max(maxDegree, degreeValue(nodeDegrees.get(node.id), mode));
-    });
-    return maxDegree;
+  function maxDegreeForMode(mode: PlanetSizingMode) {
+    return getMaxDegreeForMode(dataset.nodes, nodeDegrees, mode, activeGroup);
   }
 
-  function getRankedPlanetNodes(mode: Required<GalaxyPlanetSizingOptions>['mode']) {
+  function getRankedPlanetNodes(mode: PlanetSizingMode) {
     const existing = rankedPlanetNodes.get(mode);
     if (existing) return existing;
 
-    let maxDegree = 1;
-    dataset.nodes.forEach((node) => {
-      maxDegree = Math.max(maxDegree, degreeValue(nodeDegrees.get(node.id), mode));
-    });
-    const ranked = [...dataset.nodes].sort((left, right) => {
-      const leftScore = degreeValue(nodeDegrees.get(left.id), mode) + (left.major ? maxDegree * 0.22 + 1 : 0);
-      const rightScore = degreeValue(nodeDegrees.get(right.id), mode) + (right.major ? maxDegree * 0.22 + 1 : 0);
-      return rightScore - leftScore || left.id.localeCompare(right.id);
-    });
+    const ranked = rankPlanetNodes(dataset.nodes, nodeDegrees, mode);
     rankedPlanetNodes.set(mode, ranked);
     return ranked;
   }
 
   function selectPlanetOverlayNodes() {
-    if (planetSizing.mode === 'accessor') return selectMajorOverlayNodes(nodeIndex, activeGroup);
+    if (planetSizing.mode !== 'accessor') {
+      const limit = activeGroup === null ? MAJOR_PLANET_LIMIT_ALL : Math.min(48, MAJOR_PLANET_LIMIT_ALL);
+      return getRankedPlanetNodes(planetSizing.mode)
+        .filter((node) => activeGroup === null || node.group === activeGroup)
+        .slice(0, limit);
+    }
 
-    const limit = activeGroup === null ? MAJOR_PLANET_LIMIT_ALL : Math.min(48, MAJOR_PLANET_LIMIT_ALL);
-    return getRankedPlanetNodes(planetSizing.mode)
-      .filter((node) => activeGroup === null || node.group === activeGroup)
-      .slice(0, limit);
+    return selectPlanetOverlayNodesBySizing(nodeIndex, dataset.nodes, nodeDegrees, planetSizing.mode, activeGroup);
   }
 
   function planetSizeMultiplier(node: GraphNode<NMeta>, maxDegree = maxDegreeForMode(planetSizing.mode)) {
-    if (planetSizing.mode === 'accessor') return planetSizing.scale;
-
-    const value = degreeValue(nodeDegrees.get(node.id), planetSizing.mode);
-    if (maxDegree <= 0) return planetSizing.min * planetSizing.scale;
-
-    const normalized = Math.log1p(value) / Math.log1p(maxDegree);
-    const emphasis = Math.pow(Math.max(0, Math.min(1, normalized)), planetSizing.strength);
-    return (planetSizing.min + (planetSizing.max - planetSizing.min) * emphasis) * planetSizing.scale;
+    return planetSizeMultiplierForDegree(nodeDegrees.get(node.id), planetSizing, maxDegree);
   }
 
   function planetRadius(node: GraphNode<NMeta>, maxDegree?: number) {
@@ -1522,22 +1496,50 @@ function configureMotion<NMeta = unknown, EMeta = unknown, CMeta = unknown>(stat
   };
 }
 
+function snapshotAppliedState<NMeta, EMeta, CMeta>(
+  state: CoreState<NMeta, EMeta, CMeta>,
+  overrides?: Partial<AppliedRendererState<NMeta, EMeta>>,
+): AppliedRendererState<NMeta, EMeta> {
+  return {
+    accessors: state.options.accessors,
+    activeGroup: state.options.activeGroup,
+    galaxyMode: state.options.galaxyMode,
+    planetSizing: state.options.planetSizing,
+    resolvedMotion: state.resolvedMotion,
+    selectedEdgeId: state.options.selectedEdgeId,
+    selectedNodeId: state.options.selectedNodeId,
+    showClusters: state.options.showClusters,
+    theme: state.options.theme,
+    ...overrides,
+  };
+}
+
 function patchRuntime<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: CoreState<NMeta, EMeta, CMeta>) {
   const runtime = state.runtime;
   if (!runtime) return;
 
-  runtime.updateActiveGroup(state.options.activeGroup);
-  runtime.updateClusterVisibility(state.options.showClusters);
-  runtime.updateGalaxyMode(state.options.galaxyMode);
-  runtime.updateMotionPreference(state.resolvedMotion);
-  runtime.updatePlanetSizing(state.options.planetSizing);
-  runtime.updateAccessors(state.options.accessors);
-  runtime.updateTheme(state.options.theme);
-  runtime.updateSelection(state.options.selectedNodeId, state.options.selectedEdgeId);
+  // Each in-place updater is O(nodes) or O(edges), so only invoke the ones whose
+  // input actually changed since the last patch. Object inputs (accessors,
+  // planetSizing, theme) are compared by reference; consumers memoize them.
+  const applied = state.appliedOptions;
+  const next = state.options;
 
-  const nonce = state.options.cameraCommand?.nonce ?? null;
+  if (!applied || applied.activeGroup !== next.activeGroup) runtime.updateActiveGroup(next.activeGroup);
+  if (!applied || applied.showClusters !== next.showClusters) runtime.updateClusterVisibility(next.showClusters);
+  if (!applied || applied.galaxyMode !== next.galaxyMode) runtime.updateGalaxyMode(next.galaxyMode);
+  if (!applied || applied.resolvedMotion !== state.resolvedMotion) runtime.updateMotionPreference(state.resolvedMotion);
+  if (!applied || applied.planetSizing !== next.planetSizing) runtime.updatePlanetSizing(next.planetSizing);
+  if (!applied || applied.accessors !== next.accessors) runtime.updateAccessors(next.accessors);
+  if (!applied || applied.theme !== next.theme) runtime.updateTheme(next.theme);
+  if (!applied || applied.selectedNodeId !== next.selectedNodeId || applied.selectedEdgeId !== next.selectedEdgeId) {
+    runtime.updateSelection(next.selectedNodeId, next.selectedEdgeId);
+  }
+
+  state.appliedOptions = snapshotAppliedState(state);
+
+  const nonce = next.cameraCommand?.nonce ?? null;
   if (nonce !== null && nonce !== state.lastCameraCommandNonce) {
-    applyCameraCommand(runtime, state.options.cameraCommand);
+    applyCameraCommand(runtime, next.cameraCommand);
     state.lastCameraCommandNonce = nonce;
   }
   if (nonce === null) state.lastCameraCommandNonce = null;
@@ -1551,6 +1553,7 @@ function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   state.runtime?.dispose();
   state.runtime = null;
+  state.appliedOptions = null;
   clearSceneDom(host as HTMLDivElement);
 
   if (!canUseDOM()) return;
@@ -1582,6 +1585,10 @@ function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       state.pausedRef,
       (nextFailure) => reportRendererFailure(host, state, nextFailure.reason, nextFailure.message, nextFailure.error),
     );
+    // createScene already applied every visual option except selection (built as
+    // null), so seed the diff baseline accordingly: the first patch then only
+    // applies the real selection and any pending camera command.
+    state.appliedOptions = snapshotAppliedState(state, { selectedNodeId: null, selectedEdgeId: null });
     patchRuntime(state);
     state.callbacks.onSceneReady?.();
   } catch (error) {
@@ -1601,6 +1608,7 @@ export function createGalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = u
   callbacks: GalaxyRendererCallbacks<NMeta, EMeta> = {},
 ): GalaxyRenderer<NMeta, EMeta, CMeta> {
   const state: CoreState<NMeta, EMeta, CMeta> = {
+    appliedOptions: null,
     callbacks,
     callbacksRef: { current: resolveRendererCallbacks(callbacks) },
     disposed: false,

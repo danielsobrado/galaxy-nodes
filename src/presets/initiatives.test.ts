@@ -4,12 +4,12 @@ import type { GalaxyGraphVisualizerProps } from '../GalaxyGraphVisualizer';
 import type { GraphAccessors } from '../types';
 import {
   CATEGORY_COLORS,
-  createMarketAccessors,
+  createInitiativeAccessors,
   generateGalaxyDataset,
-  MARKET_CATEGORIES,
-  type MarketClusterMeta,
-  type MarketNodeMeta,
-} from './markets';
+  INITIATIVE_CATEGORIES,
+  type InitiativeClusterMeta,
+  type InitiativeNodeMeta,
+} from './initiatives';
 
 describe('generateGalaxyDataset', () => {
   it('produces the requested number of nodes', () => {
@@ -30,9 +30,9 @@ describe('generateGalaxyDataset', () => {
     expect(typeof node.id).toBe('string');
     expect(node.position).toMatchObject({ x: expect.any(Number), y: expect.any(Number), z: expect.any(Number) });
     expect(typeof node.major).toBe('boolean');
-    expect(MARKET_CATEGORIES).toContain(node.group);
-    const meta = node.meta as MarketNodeMeta;
-    expect(MARKET_CATEGORIES).toContain(meta.category);
+    expect(INITIATIVE_CATEGORIES).toContain(node.group);
+    const meta = node.meta as InitiativeNodeMeta;
+    expect(INITIATIVE_CATEGORIES).toContain(meta.category);
     expect(['on-track', 'at-risk', 'watch']).toContain(meta.sentiment);
     expect(meta.metrics).toMatchObject({ annualImpact: expect.any(Number), deliveryRate: expect.any(Number) });
   });
@@ -63,43 +63,43 @@ describe('generateGalaxyDataset', () => {
   });
 });
 
-describe('createMarketAccessors', () => {
+describe('createInitiativeAccessors', () => {
   const dataset = generateGalaxyDataset(10_000);
   const major = dataset.nodes.find((node) => node.major)!;
   const point = dataset.nodes.find((node) => !node.major)!;
 
   it('colors by business status when sharpMoney is on', () => {
-    const accessors = createMarketAccessors({ sharpMoney: true });
-    const sentiment = (major.meta as MarketNodeMeta).sentiment;
+    const accessors = createInitiativeAccessors({ sharpMoney: true });
+    const sentiment = (major.meta as InitiativeNodeMeta).sentiment;
     const expected = sentiment === 'on-track' ? '#42f7bd' : sentiment === 'at-risk' ? '#ff6f86' : '#d7d7d7';
     expect(accessors.nodeColor!(major)).toBe(expected);
   });
 
   it('colors by category when sharpMoney is off', () => {
-    const accessors = createMarketAccessors({ sharpMoney: false });
-    expect(accessors.nodeColor!(major)).toBe(CATEGORY_COLORS[(major.meta as MarketNodeMeta).category]);
+    const accessors = createInitiativeAccessors({ sharpMoney: false });
+    expect(accessors.nodeColor!(major)).toBe(CATEGORY_COLORS[(major.meta as InitiativeNodeMeta).category]);
   });
 
   it('labels only major nodes', () => {
-    const accessors = createMarketAccessors();
+    const accessors = createInitiativeAccessors();
     expect(accessors.nodeLabel!(point)).toBeNull();
     expect(accessors.nodeLabel!(major)).toMatch(/%/);
   });
 });
 
-describe('market preset types', () => {
-  it('preserves market metadata through generic visualizer props', () => {
-    type Props = GalaxyGraphVisualizerProps<MarketNodeMeta, unknown, MarketClusterMeta>;
+describe('initiative preset types', () => {
+  it('preserves initiative metadata through generic visualizer props', () => {
+    type Props = GalaxyGraphVisualizerProps<InitiativeNodeMeta, unknown, InitiativeClusterMeta>;
 
-    expectTypeOf<NonNullable<Props['accessors']>>().toEqualTypeOf<GraphAccessors<MarketNodeMeta, unknown>>();
+    expectTypeOf<NonNullable<Props['accessors']>>().toEqualTypeOf<GraphAccessors<InitiativeNodeMeta, unknown>>();
 
     const renderNode: NonNullable<Props['renderNodeDetail']> = (node) => {
-      expectTypeOf(node.meta).toEqualTypeOf<MarketNodeMeta | undefined>();
+      expectTypeOf(node.meta).toEqualTypeOf<InitiativeNodeMeta | undefined>();
       return null;
     };
 
     const renderEdge: NonNullable<Props['renderEdgeDetail']> = (_edge, endpoints) => {
-      expectTypeOf(endpoints.source.node?.meta).toEqualTypeOf<MarketNodeMeta | undefined>();
+      expectTypeOf(endpoints.source.node?.meta).toEqualTypeOf<InitiativeNodeMeta | undefined>();
       return null;
     };
 
