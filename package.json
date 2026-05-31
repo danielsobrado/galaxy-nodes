@@ -1,0 +1,53 @@
+{
+  "name": "galaxy-nodes",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./dist/styles.css",
+    "*.css"
+  ],
+  "scripts": {
+    "build": "npm run build:lib",
+    "build:example": "tsc --noEmit -p examples/basic/tsconfig.json && vite build --config examples/basic/vite.config.ts",
+    "build:lib": "vite build && tsc -p tsconfig.build.json && node scripts/copy-styles.mjs",
+    "dev": "vite --config examples/basic/vite.config.ts --host 127.0.0.1",
+    "pack:dry": "npm pack --dry-run",
+    "preview": "vite preview --config examples/basic/vite.config.ts --host 127.0.0.1"
+  },
+  "dependencies": {
+    "lucide-react": "1.17.0"
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0 <20",
+    "react-dom": ">=18.2.0 <20",
+    "three": ">=0.160.0 <1"
+  },
+  "devDependencies": {
+    "@types/node": "25.9.1",
+    "@types/react": "19.2.15",
+    "@types/react-dom": "19.2.3",
+    "@types/three": "0.184.1",
+    "@vitejs/plugin-react": "6.0.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "three": "0.184.0",
+    "typescript": "6.0.3",
+    "vite": "8.0.14"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+examples/basic/dist/
+.npm-cache/
+*.local
+*.tsbuildinfo
+.DS_Store
