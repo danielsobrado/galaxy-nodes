@@ -108,10 +108,19 @@ app.get('/graph', async (request, response) => {
       { category },
     );
 
+    const nodes = nodeResult.records.map(asNode);
+    const clusters = clusterResult.records.map(asCluster);
+    // Nodes are capped by `limit` but edges are not, so an edge can reference a
+    // node beyond the cap. Drop those so the client never sees dangling edges.
+    const knownIds = new Set([...nodes.map((node) => node.id), ...clusters.map((cluster) => cluster.id)]);
+    const edges = edgeResult.records
+      .map(asEdge)
+      .filter((edge) => knownIds.has(edge.source) && knownIds.has(edge.target));
+
     response.json({
-      nodes: nodeResult.records.map(asNode),
-      clusters: clusterResult.records.map(asCluster),
-      edges: edgeResult.records.map(asEdge),
+      nodes,
+      clusters,
+      edges,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {

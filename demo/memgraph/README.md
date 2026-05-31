@@ -18,6 +18,8 @@ Services:
 
 The seed service recreates the demo graph on startup. Change `DEMO_NODE_COUNT` in `docker-compose.yml` if you want a larger or smaller Memgraph dataset.
 
+> **Local demo only.** The API enables CORS for all origins and Memgraph runs without authentication. Do not expose these services on an untrusted network or use this configuration in production.
+
 ## Use With The Visualizer
 
 In another terminal, run the Vite app with the API URL available to the frontend:

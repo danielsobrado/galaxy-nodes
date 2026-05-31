@@ -1,3 +1,8 @@
+// NOTE: This is a standalone copy of the generator in ../../../../src/data.ts,
+// kept self-contained so the demo container has no dependency on the library
+// source. It uses different cluster/major-node constants on purpose (smaller,
+// seed-oriented dataset). Keep the GraphDataset shape in sync if the library's
+// contract changes.
 const CATEGORIES = ['Crypto', 'Politics', 'Geopolitics', 'Finance', 'Tech', 'Sports', 'Culture', 'Social', 'Other'];
 
 const TOPICS = [

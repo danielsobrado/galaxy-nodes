@@ -113,4 +113,4 @@ interface GraphCluster {
 }
 ```
 
-Edges whose `source` and `target` match cluster ids render as large-scale galaxy filaments. Edges whose endpoints match node ids render as selectable graph relationships. Nodes marked `isMajor` become interactive planet nodes. Use the left rail buttons or keyboard movement (`WASD`/arrow keys, `Q`/`E`) to translate through the graph volume instead of only orbiting around it.
+Edges whose `source` and `target` match cluster ids render as large-scale galaxy filaments. Edges whose endpoints match node ids render as selectable graph relationships. Nodes marked `isMajor` become interactive planet nodes. Use the left rail buttons or keyboard movement (`WASD`/arrow keys, `Q`/`E`) to translate through the graph volume instead of only orbiting around it. Keyboard navigation is scoped to the scene — click the canvas once to focus it so the controls don't capture keys from the rest of your page.

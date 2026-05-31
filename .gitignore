@@ -4,4 +4,5 @@ examples/basic/dist/
 .npm-cache/
 *.local
 *.tsbuildinfo
+*.log
 .DS_Store

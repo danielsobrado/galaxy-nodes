@@ -20,6 +20,7 @@ export interface GalaxySceneProps {
   sharpMoney: boolean;
   theme?: GalaxyGraphTheme;
   cameraCommand: CameraCommand | null;
+  paused?: boolean;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
   onSelectNode: (node: GraphNode | null) => void;
@@ -237,6 +238,7 @@ function createScene(
   sharpMoney: boolean,
   theme: GalaxyGraphTheme | undefined,
   callbacksRef: MutableRefObject<SceneCallbacks>,
+  pausedRef: MutableRefObject<boolean>,
 ): SceneRuntime {
   const labelsRoot = document.createElement('div');
   labelsRoot.className = 'scene-labels';
@@ -276,6 +278,20 @@ function createScene(
   const rimLight = new THREE.PointLight(0x54ffe0, 2.2, 1900);
   rimLight.position.set(620, -120, -420);
   scene.add(rimLight);
+
+  // All spatial content lives in one rotating group so the point cloud,
+  // planets, edges and labels stay in sync when galaxy mode spins the scene.
+  const world = new THREE.Group();
+  scene.add(world);
+
+  // Make the host focusable so keyboard navigation is scoped to this scene
+  // instead of hijacking the embedding app's global key events.
+  host.tabIndex = 0;
+  host.style.outline = 'none';
+
+  // CanvasTextures are not freed when their material is disposed, so track the
+  // per-planet textures and dispose them explicitly on teardown.
+  const planetTextures: THREE.Texture[] = [];
 
   const visibleNodes = filteredNodes(dataset, activeCategory);
   const pointNodes = visibleNodes.filter((node) => !node.isMajor);
@@ -360,7 +376,7 @@ function createScene(
     `,
   });
   const pointCloud = new THREE.Points(pointsGeometry, pointsMaterial);
-  scene.add(pointCloud);
+  world.add(pointCloud);
 
   const starGeometry = new THREE.BufferGeometry();
   const starCount = galaxyMode ? 2400 : 1100;
@@ -381,7 +397,7 @@ function createScene(
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
-  scene.add(new THREE.Points(starGeometry, starMaterial));
+  world.add(new THREE.Points(starGeometry, starMaterial));
 
   const glowTexture = makeGlowTexture();
   const glowMaterial = new THREE.SpriteMaterial({
@@ -401,7 +417,7 @@ function createScene(
     sprite.position.set(cluster.center.x, cluster.center.y, cluster.center.z);
     const scale = cluster.radius * (galaxyMode ? 1.18 : 0.92);
     sprite.scale.set(scale, scale, 1);
-    scene.add(sprite);
+    world.add(sprite);
 
     if (showClusters && shouldShowClusterLabel(index, activeCategory)) {
       const label = makeLabel(cluster.label, 'cluster-label');
@@ -437,7 +453,7 @@ function createScene(
     visual.userData.baseOpacity = opacity;
     edgeVisuals.set(edgeId, visual);
     edgeLookup.set(edgeId, edge);
-    scene.add(visual);
+    world.add(visual);
 
     const hitGeometry = new THREE.TubeGeometry(curve, edge.kind === 'filament' ? 16 : 18, edge.kind === 'filament' ? 10 : 8, 6, false);
     const hitMaterial = new THREE.MeshBasicMaterial({
@@ -450,15 +466,17 @@ function createScene(
     hitMesh.userData.edgeId = edgeId;
     hitMesh.userData.type = 'edge';
     interactiveEdgeMeshes.push(hitMesh);
-    scene.add(hitMesh);
+    world.add(hitMesh);
   });
 
   const planetGeometry = new THREE.SphereGeometry(1, 36, 24);
   const ringGeometry = new THREE.RingGeometry(1.28, 1.34, 96);
 
   majorNodes.forEach((node, index) => {
+    const planetTexture = makePlanetTexture(node, theme);
+    planetTextures.push(planetTexture);
     const material = new THREE.MeshBasicMaterial({
-      map: makePlanetTexture(node, theme),
+      map: planetTexture,
       color: 0xffffff,
       transparent: true,
       opacity: 0.92,
@@ -472,7 +490,7 @@ function createScene(
     mesh.userData.type = 'node';
     interactiveNodeMeshes.push(mesh);
     nodeVisuals.set(node.id, mesh);
-    scene.add(mesh);
+    world.add(mesh);
 
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: new THREE.Color(
@@ -495,7 +513,7 @@ function createScene(
     ring.userData.baseScale = node.size * 1.05;
     ring.userData.baseOpacity = 0.16;
     nodeRings.set(node.id, ring);
-    scene.add(ring);
+    world.add(ring);
 
     if (shouldShowMajorLabel(node, index, activeCategory)) {
       const label = makeLabel(`${Math.round(node.score)}% ${node.sentiment.toUpperCase()}`, 'node-label');
@@ -514,6 +532,17 @@ function createScene(
   let animationFrame = 0;
   let frame = 0;
   const pressedKeys = new Set<string>();
+  // Drag-vs-click: only treat a pointer release as a selection when it barely
+  // moved, so orbiting the camera from empty space never clears the selection.
+  const CLICK_SLOP_SQ = 36;
+  let pointerDownX = 0;
+  let pointerDownY = 0;
+  let pointerDownValid = false;
+  // Hover is the hot path (a raycast against every node + edge mesh). Coalesce
+  // pointer moves to at most one raycast per rendered frame.
+  let pendingHoverX = 0;
+  let pendingHoverY = 0;
+  let hoverPending = false;
 
   function resize() {
     const nextWidth = host.clientWidth || window.innerWidth;
@@ -524,50 +553,79 @@ function createScene(
     pointsMaterial.uniforms.pixelRatio.value = renderer.getPixelRatio();
   }
 
-  function pickGraphObject(event: PointerEvent) {
+  function intersectAt(clientX: number, clientY: number) {
     const rect = renderer.domElement.getBoundingClientRect();
-    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(pointer, camera);
     const hit = raycaster.intersectObjects([...interactiveNodeMeshes, ...interactiveEdgeMeshes], false)[0];
-    const nodeId = hit?.object.userData.nodeId as string | undefined;
-    const edgeId = hit?.object.userData.edgeId as string | undefined;
-    const node = nodeId ? nodeLookup.get(nodeId) ?? null : null;
-    const edge = edgeId ? edgeLookup.get(edgeId) ?? null : null;
+    const nodeId = (hit?.object.userData.nodeId as string | undefined) ?? null;
+    const edgeId = (hit?.object.userData.edgeId as string | undefined) ?? null;
+    return {
+      nodeId,
+      edgeId,
+      node: nodeId ? nodeLookup.get(nodeId) ?? null : null,
+      edge: edgeId ? edgeLookup.get(edgeId) ?? null : null,
+    };
+  }
+
+  function processHover() {
+    hoverPending = false;
+    const { node, edge, nodeId, edgeId } = intersectAt(pendingHoverX, pendingHoverY);
     renderer.domElement.style.cursor = node || edge ? 'pointer' : 'grab';
-
-    if (event.type === 'pointermove') {
-      if ((node?.id ?? null) !== hoveredNodeId) {
-        hoveredNodeId = node?.id ?? null;
-        callbacksRef.current.onHoverNode(node);
-      }
-      if ((edgeId ?? null) !== hoveredEdgeId) {
-        hoveredEdgeId = edgeId ?? null;
-        callbacksRef.current.onHoverEdge(edge);
-      }
-      return;
+    if (nodeId !== hoveredNodeId) {
+      hoveredNodeId = nodeId;
+      callbacksRef.current.onHoverNode(node);
     }
+    if (edgeId !== hoveredEdgeId) {
+      hoveredEdgeId = edgeId;
+      callbacksRef.current.onHoverEdge(edge);
+    }
+  }
 
+  function processSelect(clientX: number, clientY: number) {
+    const { node, edge } = intersectAt(clientX, clientY);
     if (node) {
       callbacksRef.current.onSelectEdge(null);
       callbacksRef.current.onSelectNode(node);
       return;
     }
-
     if (edge) {
       callbacksRef.current.onSelectNode(null);
       callbacksRef.current.onSelectEdge(edge);
       return;
     }
-
     callbacksRef.current.onSelectNode(null);
     callbacksRef.current.onSelectEdge(null);
+  }
+
+  function handlePointerMove(event: PointerEvent) {
+    pendingHoverX = event.clientX;
+    pendingHoverY = event.clientY;
+    hoverPending = true;
+  }
+
+  function handlePointerDown(event: PointerEvent) {
+    host.focus();
+    pointerDownX = event.clientX;
+    pointerDownY = event.clientY;
+    pointerDownValid = true;
+  }
+
+  function handlePointerUp(event: PointerEvent) {
+    if (!pointerDownValid) return;
+    pointerDownValid = false;
+    const dx = event.clientX - pointerDownX;
+    const dy = event.clientY - pointerDownY;
+    if (dx * dx + dy * dy <= CLICK_SLOP_SQ) processSelect(event.clientX, event.clientY);
   }
 
   function focusNode(nodeId: string) {
     const node = nodeLookup.get(nodeId);
     if (!node) return;
-    const target = new THREE.Vector3(node.position.x, node.position.y, node.position.z);
+    // Nodes are authored in world-local space; apply the group's current
+    // rotation so focus aims at where the planet actually is on screen.
+    const target = new THREE.Vector3(node.position.x, node.position.y, node.position.z).applyQuaternion(world.quaternion);
     controls.target.copy(target);
     camera.position.copy(target).add(new THREE.Vector3(node.size * 6 + 60, node.size * 5 + 44, node.size * 9 + 150));
     controls.update();
@@ -580,14 +638,16 @@ function createScene(
     const target = resolveEndpoint(edge.target, nodeLookup, clusterLookup);
     if (!source || !target) return;
 
-    const midpoint = source.position.clone().lerp(target.position, 0.5);
-    const distance = Math.max(160, source.position.distanceTo(target.position));
+    const sourcePosition = source.position.clone().applyQuaternion(world.quaternion);
+    const targetPosition = target.position.clone().applyQuaternion(world.quaternion);
+    const midpoint = sourcePosition.clone().lerp(targetPosition, 0.5);
+    const distance = Math.max(160, sourcePosition.distanceTo(targetPosition));
     controls.target.copy(midpoint);
     camera.position.copy(midpoint).add(new THREE.Vector3(distance * 0.18 + 90, distance * 0.16 + 80, distance * 0.38 + 220));
     controls.update();
   }
 
-  function moveCamera(direction: SpaceDirection, multiplier = 1) {
+  function moveCamera(direction: SpaceDirection, multiplier = 1, skipUpdate = false) {
     camera.getWorldDirection(tmpDirection).normalize();
     tmpRight.crossVectors(tmpDirection, camera.up).normalize();
     tmpMove.set(0, 0, 0);
@@ -602,7 +662,9 @@ function createScene(
     const distance = 80 * multiplier;
     camera.position.addScaledVector(tmpMove, distance);
     controls.target.addScaledVector(tmpMove, distance);
-    controls.update();
+    // The animation loop calls controls.update() once per frame, so per-frame
+    // keyboard moves skip the redundant update.
+    if (!skipUpdate) controls.update();
   }
 
   function handleKeyDown(event: KeyboardEvent) {
@@ -624,37 +686,46 @@ function createScene(
     controls.update();
   }
 
-  renderer.domElement.addEventListener('pointermove', pickGraphObject);
-  renderer.domElement.addEventListener('pointerdown', pickGraphObject);
-  window.addEventListener('keydown', handleKeyDown);
-  window.addEventListener('keyup', handleKeyUp);
+  renderer.domElement.addEventListener('pointermove', handlePointerMove);
+  renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+  renderer.domElement.addEventListener('pointerup', handlePointerUp);
+  host.addEventListener('keydown', handleKeyDown);
+  host.addEventListener('keyup', handleKeyUp);
   window.addEventListener('resize', resize);
 
   function animate() {
     animationFrame = window.requestAnimationFrame(animate);
     frame += 1;
     const keySpeed = pressedKeys.has('shift') ? 2.2 : 1;
-    if (pressedKeys.has('w') || pressedKeys.has('arrowup')) moveCamera('forward', keySpeed * 0.28);
-    if (pressedKeys.has('s') || pressedKeys.has('arrowdown')) moveCamera('back', keySpeed * 0.28);
-    if (pressedKeys.has('a') || pressedKeys.has('arrowleft')) moveCamera('left', keySpeed * 0.28);
-    if (pressedKeys.has('d') || pressedKeys.has('arrowright')) moveCamera('right', keySpeed * 0.28);
-    if (pressedKeys.has('e')) moveCamera('up', keySpeed * 0.22);
-    if (pressedKeys.has('q')) moveCamera('down', keySpeed * 0.22);
+    if (pressedKeys.has('w') || pressedKeys.has('arrowup')) moveCamera('forward', keySpeed * 0.28, true);
+    if (pressedKeys.has('s') || pressedKeys.has('arrowdown')) moveCamera('back', keySpeed * 0.28, true);
+    if (pressedKeys.has('a') || pressedKeys.has('arrowleft')) moveCamera('left', keySpeed * 0.28, true);
+    if (pressedKeys.has('d') || pressedKeys.has('arrowright')) moveCamera('right', keySpeed * 0.28, true);
+    if (pressedKeys.has('e')) moveCamera('up', keySpeed * 0.22, true);
+    if (pressedKeys.has('q')) moveCamera('down', keySpeed * 0.22, true);
     controls.update();
-    pointCloud.rotation.y += galaxyMode ? 0.000035 : 0;
 
-    majorNodes.forEach((node, index) => {
-      const mesh = interactiveNodeMeshes[index];
-      if (mesh) {
-        mesh.rotation.y += 0.0022 + (node.score / 100) * 0.001;
-      }
-    });
+    const paused = pausedRef.current;
+    if (!paused && galaxyMode) world.rotation.y += 0.000035;
+
+    if (!paused) {
+      majorNodes.forEach((node, index) => {
+        const mesh = interactiveNodeMeshes[index];
+        if (mesh) {
+          mesh.rotation.y += 0.0022 + (node.score / 100) * 0.001;
+        }
+      });
+    }
+
+    if (hoverPending) processHover();
 
     if (frame % 2 === 0) {
       const currentWidth = host.clientWidth || window.innerWidth;
       const currentHeight = host.clientHeight || window.innerHeight;
       labels.forEach((label) => {
-        tmpVector.set(Number(label.dataset.x), Number(label.dataset.y), Number(label.dataset.z));
+        // Labels are anchored to world-local coordinates; rotate them with the
+        // group so they track the points and planets they annotate.
+        tmpVector.set(Number(label.dataset.x), Number(label.dataset.y), Number(label.dataset.z)).applyQuaternion(world.quaternion);
         setLabelPosition(label, tmpVector, camera, currentWidth, currentHeight);
       });
     }
@@ -686,10 +757,11 @@ function createScene(
     dispose: () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-      renderer.domElement.removeEventListener('pointermove', pickGraphObject);
-      renderer.domElement.removeEventListener('pointerdown', pickGraphObject);
+      host.removeEventListener('keydown', handleKeyDown);
+      host.removeEventListener('keyup', handleKeyUp);
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       controls.dispose();
       scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
@@ -698,6 +770,9 @@ function createScene(
         if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
         else material?.dispose();
       });
+      // Material.dispose() leaves bound textures on the GPU, so free them here.
+      planetTextures.forEach((texture) => texture.dispose());
+      glowMaterial.dispose();
       glowTexture.dispose();
       renderer.dispose();
       renderer.domElement.remove();
@@ -714,6 +789,7 @@ export default function GalaxyScene({
   sharpMoney,
   theme,
   cameraCommand,
+  paused = false,
   selectedNodeId,
   selectedEdgeId,
   onSelectNode,
@@ -735,6 +811,9 @@ export default function GalaxyScene({
     onSelectEdge,
     onSelectNode,
   };
+  // Kept in a ref so toggling pause never tears down and rebuilds the scene.
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
 
   const themeKey = getThemeKey(theme);
   const stableTheme = useMemo(() => theme, [themeKey]);
@@ -769,6 +848,7 @@ export default function GalaxyScene({
       sharpMoney,
       stableTheme,
       callbacksRef,
+      pausedRef,
     );
 
     return () => {

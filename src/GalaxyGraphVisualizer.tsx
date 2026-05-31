@@ -108,10 +108,6 @@ function findEndpoint(dataset: GraphDataset, id: string) {
   };
 }
 
-function edgeDisplayId(dataset: GraphDataset, edge: GraphEdge) {
-  return getEdgeId(edge, dataset.edges.indexOf(edge));
-}
-
 function themeStyle(theme: GalaxyGraphTheme | undefined) {
   return {
     '--gn-bg': theme?.background,
@@ -145,7 +141,6 @@ export default function GalaxyGraphVisualizer({
   const [galaxyMode, setGalaxyMode] = useState(options?.galaxyMode ?? true);
   const [sharpMoney, setSharpMoney] = useState(options?.sharpMoney ?? true);
   const [playing, setPlaying] = useState(true);
-  const [timeline, setTimeline] = useState(72);
   const [search, setSearch] = useState('');
   const [internalSelectedNode, setInternalSelectedNode] = useState<GraphNode | null>(null);
   const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
@@ -184,6 +179,21 @@ export default function GalaxyGraphVisualizer({
     return values;
   }, [dataset.clusters, dataset.nodes]);
 
+  // Precompute edge <-> display-id maps once per dataset. Resolving ids by
+  // scanning dataset.edges with indexOf on every lookup was O(n^2).
+  const { edgeDisplayIds, edgeByDisplayId } = useMemo(() => {
+    const byEdge = new Map<GraphEdge, string>();
+    const byId = new Map<string, GraphEdge>();
+    dataset.edges.forEach((edge, index) => {
+      const id = getEdgeId(edge, index);
+      byEdge.set(edge, id);
+      byId.set(id, edge);
+    });
+    return { edgeDisplayIds: byEdge, edgeByDisplayId: byId };
+  }, [dataset.edges]);
+
+  const displayEdgeId = useCallback((edge: GraphEdge) => edgeDisplayIds.get(edge) ?? getEdgeId(edge), [edgeDisplayIds]);
+
   const categoryEdges = useMemo(() => {
     if (activeCategory === 'All') return dataset.edges;
     return dataset.edges.filter(
@@ -197,9 +207,9 @@ export default function GalaxyGraphVisualizer({
   }, [dataset.nodes, internalSelectedNode, selectedNodeId]);
 
   const selectedEdge = useMemo(() => {
-    if (selectedEdgeId !== undefined) return dataset.edges.find((edge) => edgeDisplayId(dataset, edge) === selectedEdgeId) ?? null;
+    if (selectedEdgeId !== undefined) return (selectedEdgeId !== null && edgeByDisplayId.get(selectedEdgeId)) || null;
     return internalSelectedEdge && dataset.edges.includes(internalSelectedEdge) ? internalSelectedEdge : null;
-  }, [dataset, internalSelectedEdge, selectedEdgeId]);
+  }, [dataset.edges, edgeByDisplayId, internalSelectedEdge, selectedEdgeId]);
 
   const stats = useMemo(() => {
     const markets = new Set(categoryNodes.map((node) => node.category)).size;
@@ -291,7 +301,7 @@ export default function GalaxyGraphVisualizer({
   function focusEdge(edge: GraphEdge | null) {
     if (!edge) return;
     selectEdge(edge);
-    issueCameraCommand({ edgeId: edgeDisplayId(dataset, edge), type: 'focus-edge' });
+    issueCameraCommand({ edgeId: displayEdgeId(edge), type: 'focus-edge' });
   }
 
   function moveCamera(direction: SpaceDirection) {
@@ -306,7 +316,7 @@ export default function GalaxyGraphVisualizer({
   const inspectedNode = selectedNode ?? (selectedEdge ? null : hoverNode);
   const inspectedEdge = selectedNode ? null : selectedEdge ?? (!inspectedNode ? hoverEdge : null);
   const currentSelectedNodeId = selectedNode?.id ?? null;
-  const currentSelectedEdgeId = currentSelectedNodeId || !selectedEdge ? null : edgeDisplayId(dataset, selectedEdge);
+  const currentSelectedEdgeId = currentSelectedNodeId || !selectedEdge ? null : displayEdgeId(selectedEdge);
   const sourceEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.source) : null;
   const targetEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.target) : null;
 
@@ -318,6 +328,7 @@ export default function GalaxyGraphVisualizer({
         showClusters={showClusters}
         galaxyMode={galaxyMode}
         sharpMoney={sharpMoney}
+        paused={!playing}
         theme={theme}
         cameraCommand={cameraCommand}
         selectedNodeId={currentSelectedNodeId}
@@ -337,7 +348,7 @@ export default function GalaxyGraphVisualizer({
         {(options?.showCategoryNav ?? true) ? (
           <nav className="category-nav" aria-label="Categories">
             {categories.map((category) => (
-              <button key={category} className={category === activeCategory ? 'is-active' : ''} type="button" onClick={() => chooseCategory(category)}>
+              <button key={category} className={category === activeCategory ? 'is-active' : ''} type="button" aria-pressed={category === activeCategory} onClick={() => chooseCategory(category)}>
                 {category}
               </button>
             ))}
@@ -356,11 +367,11 @@ export default function GalaxyGraphVisualizer({
       {showControls ? (
         <section className="control-ribbon" aria-label="Graph controls">
           <div className="toggle-row">
-            <button type="button" className={sharpMoney ? 'toggle is-on' : 'toggle'} onClick={() => setSharpMoney((value) => !value)}>
+            <button type="button" className={sharpMoney ? 'toggle is-on' : 'toggle'} aria-pressed={sharpMoney} onClick={() => setSharpMoney((value) => !value)}>
               <Activity size={15} aria-hidden="true" />
               Sharp flow <span>{sharpMoney ? 'ON' : 'OFF'}</span>
             </button>
-            <button type="button" className={showClusters ? 'toggle is-on' : 'toggle'} onClick={() => setShowClusters((value) => !value)}>
+            <button type="button" className={showClusters ? 'toggle is-on' : 'toggle'} aria-pressed={showClusters} onClick={() => setShowClusters((value) => !value)}>
               <Layers3 size={15} aria-hidden="true" />
               Clusters <span>{showClusters ? 'ON' : 'OFF'}</span>
             </button>
@@ -368,13 +379,16 @@ export default function GalaxyGraphVisualizer({
 
           {(options?.showTimeline ?? true) ? (
             <div className="playback">
-              <button type="button" className="icon-button" onClick={() => setPlaying((value) => !value)} title="Play or pause">
+              <button
+                type="button"
+                className="icon-button"
+                onClick={() => setPlaying((value) => !value)}
+                title={playing ? 'Pause motion' : 'Play motion'}
+                aria-pressed={playing}
+              >
                 {playing ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
               </button>
-              <span>0.5x</span>
-              <b>1x</b>
-              <span>2x</span>
-              <input type="range" min="0" max="100" value={timeline} onChange={(event) => setTimeline(Number(event.target.value))} aria-label="Timeline" />
+              <span>{playing ? 'Motion on' : 'Paused'}</span>
             </div>
           ) : null}
 
@@ -413,7 +427,7 @@ export default function GalaxyGraphVisualizer({
             </div>
           ) : null}
 
-          <button type="button" className={galaxyMode ? 'pill-button is-active' : 'pill-button'} onClick={() => setGalaxyMode((value) => !value)}>
+          <button type="button" className={galaxyMode ? 'pill-button is-active' : 'pill-button'} aria-pressed={galaxyMode} onClick={() => setGalaxyMode((value) => !value)}>
             <Sparkles size={15} aria-hidden="true" />
             Galaxy
           </button>
@@ -524,7 +538,7 @@ export default function GalaxyGraphVisualizer({
           <dl>
             <div>
               <dt>Relationship id</dt>
-              <dd>{edgeDisplayId(dataset, inspectedEdge)}</dd>
+              <dd>{displayEdgeId(inspectedEdge)}</dd>
             </div>
             <div>
               <dt>Source</dt>

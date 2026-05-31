@@ -50,7 +50,8 @@
     "dev": "vite --config examples/basic/vite.config.ts --host 127.0.0.1",
     "pack:dry": "npm pack --dry-run",
     "prepublishOnly": "npm run build",
-    "preview": "vite preview --config examples/basic/vite.config.ts --host 127.0.0.1"
+    "preview": "vite preview --config examples/basic/vite.config.ts --host 127.0.0.1",
+    "test": "vitest run"
   },
   "dependencies": {
     "lucide-react": "1.17.0"
@@ -70,6 +71,7 @@
     "react-dom": "19.2.6",
     "three": "0.184.0",
     "typescript": "6.0.3",
-    "vite": "8.0.14"
+    "vite": "8.0.14",
+    "vitest": "3.2.4"
   }
 }
