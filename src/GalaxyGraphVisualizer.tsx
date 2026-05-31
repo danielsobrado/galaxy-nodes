@@ -1,6 +1,5 @@
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -21,19 +20,32 @@ import {
   Upload,
 } from 'lucide-react';
 import GalaxyScene, { type CameraCommand, type GalaxyGraphTheme } from './GalaxyScene';
-import { type DatasetSize, DATASET_SIZES, formatCompactNumber, generateGalaxyDataset, getEdgeId } from './data';
-import { CATEGORIES, type Category, type GraphDataset, type GraphEdge, type GraphNode, type SpaceDirection } from './types';
+import { formatCompactNumber, getEdgeId } from './data';
+import type { GraphLayoutInput } from './layout';
+import type {
+  EdgeEndpoint,
+  GraphAccessors,
+  GraphDataset,
+  GraphEdge,
+  GraphNode,
+  SpaceDirection,
+} from './types';
+
+export interface GraphStats {
+  nodes: number;
+  groups: number;
+  edges: number;
+  major: number;
+}
 
 export interface GalaxyGraphVisualizerOptions {
-  categories?: readonly Category[];
-  datasetSizes?: readonly DatasetSize[];
+  datasetSizes?: readonly number[];
   galaxyMode?: boolean;
-  sharpMoney?: boolean;
-  showCategoryNav?: boolean;
   showClusters?: boolean;
   showControls?: boolean;
   showDatasetSizeControls?: boolean;
   showDetailPanel?: boolean;
+  showGroupNav?: boolean;
   showLegend?: boolean;
   showNavigationControls?: boolean;
   showSearch?: boolean;
@@ -41,114 +53,132 @@ export interface GalaxyGraphVisualizerOptions {
   showTimeline?: boolean;
 }
 
-export interface GalaxyGraphVisualizerProps {
+export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  /** Visual accessors. Memoize so motion/selection don't rebuild the scene. */
+  accessors?: GraphAccessors<NMeta, EMeta>;
   brandLabel?: string;
   className?: string;
-  dataset: GraphDataset;
-  initialCategory?: Category;
-  onCategoryChange?: (category: Category) => void;
-  onDatasetChange?: (dataset: GraphDataset) => void;
-  onHoverEdge?: (edge: GraphEdge | null) => void;
-  onHoverNode?: (node: GraphNode | null) => void;
+  /** Extra toggles rendered in the control ribbon (e.g. domain-specific modes). */
+  controlActions?: ReactNode;
+  dataset: GraphDataset<NMeta, EMeta, CMeta>;
+  /** Group filter buttons. Defaults to the distinct `node.group` values. */
+  groups?: readonly string[];
+  initialGroup?: string | null;
+  /** Replaces the legend strip; nothing renders without it. */
+  legend?: ReactNode;
+  /** Optional built-in spatial layout. Omit for auto, pass false to require authored coordinates. */
+  layout?: GraphLayoutInput;
+  /** Called when a dataset-size button is pressed; supply a new dataset. */
+  onDatasetSizeChange?: (size: number) => void;
+  onGroupChange?: (group: string | null) => void;
+  onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
+  onHoverNode?: (node: GraphNode<NMeta> | null) => void;
   onNavigate?: (command: CameraCommand) => void;
-  onSelectEdge?: (edge: GraphEdge | null) => void;
-  onSelectNode?: (node: GraphNode | null) => void;
+  onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
+  onSelectNode?: (node: GraphNode<NMeta> | null) => void;
   options?: GalaxyGraphVisualizerOptions;
+  renderEdgeDetail?: (
+    edge: GraphEdge<EMeta>,
+    endpoints: { source: EdgeEndpoint<NMeta>; target: EdgeEndpoint<NMeta> },
+  ) => ReactNode;
+  renderNodeDetail?: (node: GraphNode<NMeta>) => ReactNode;
+  renderStats?: (stats: GraphStats) => ReactNode;
   selectedEdgeId?: string | null;
   selectedNodeId?: string | null;
   sideRailActions?: ReactNode;
   theme?: GalaxyGraphTheme;
 }
 
-function formatMoney(value: number) {
-  return `$${formatCompactNumber(value)}`;
+function distinctGroups<NMeta>(nodes: GraphNode<NMeta>[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const node of nodes) {
+    if (node.group && !seen.has(node.group)) {
+      seen.add(node.group);
+      out.push(node.group);
+    }
+  }
+  return out;
 }
 
-function findBestMatch(dataset: GraphDataset, query: string, activeCategory: Category) {
+function findBestMatch<NMeta, EMeta, CMeta>(
+  dataset: GraphDataset<NMeta, EMeta, CMeta>,
+  query: string,
+  activeGroup: string | null,
+): GraphNode<NMeta> | null {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return null;
 
   return (
     dataset.nodes.find((node) => {
-      if (activeCategory !== 'All' && node.category !== activeCategory) return false;
-      return node.label.toLowerCase().includes(normalized) || node.id.toLowerCase() === normalized;
+      if (activeGroup !== null && node.group !== activeGroup) return false;
+      return (node.label ?? node.id).toLowerCase().includes(normalized) || node.id.toLowerCase() === normalized;
     }) ?? null
   );
 }
 
-function findEndpoint(dataset: GraphDataset, id: string) {
+function findEndpoint<NMeta, EMeta, CMeta>(
+  dataset: GraphDataset<NMeta, EMeta, CMeta>,
+  id: string,
+): EdgeEndpoint<NMeta> {
   const node = dataset.nodes.find((entry) => entry.id === id);
   if (node) {
-    return {
-      category: node.category,
-      id: node.id,
-      isNode: true,
-      label: node.label,
-      node,
-    };
+    return { id: node.id, label: node.label ?? node.id, group: node.group, isNode: true, node };
   }
 
-  const cluster = dataset.clusters.find((entry) => entry.id === id);
+  const cluster = (dataset.clusters ?? []).find((entry) => entry.id === id);
   if (cluster) {
-    return {
-      category: cluster.category,
-      id: cluster.id,
-      isNode: false,
-      label: cluster.label,
-      node: null,
-    };
+    return { id: cluster.id, label: cluster.label, group: cluster.group, isNode: false, node: null };
   }
 
-  return {
-    category: 'Other' as const,
-    id,
-    isNode: false,
-    label: id,
-    node: null,
-  };
+  return { id, label: id, isNode: false, node: null };
 }
 
 function themeStyle(theme: GalaxyGraphTheme | undefined) {
   return {
     '--gn-bg': theme?.background,
-    '--gn-no': theme?.noColor,
     '--gn-panel-accent': theme?.panelAccentColor,
     '--gn-selected': theme?.selectedColor,
-    '--gn-yes': theme?.yesColor,
   } as CSSProperties;
 }
 
-export default function GalaxyGraphVisualizer({
+export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, CMeta = unknown>({
+  accessors,
   brandLabel = 'Galaxy Nodes',
   className,
+  controlActions,
   dataset,
-  initialCategory = 'All',
-  onCategoryChange,
-  onDatasetChange,
+  groups,
+  initialGroup = null,
+  legend,
+  layout,
+  onDatasetSizeChange,
+  onGroupChange,
   onHoverEdge,
   onHoverNode,
   onNavigate,
   onSelectEdge,
   onSelectNode,
   options,
+  renderEdgeDetail,
+  renderNodeDetail,
+  renderStats,
   selectedEdgeId,
   selectedNodeId,
   sideRailActions,
   theme,
-}: GalaxyGraphVisualizerProps) {
-  const [activeCategory, setActiveCategory] = useState<Category>(initialCategory);
+}: GalaxyGraphVisualizerProps<NMeta, EMeta, CMeta>) {
+  const [activeGroup, setActiveGroup] = useState<string | null>(initialGroup);
   const [showClusters, setShowClusters] = useState(options?.showClusters ?? true);
   const [galaxyMode, setGalaxyMode] = useState(options?.galaxyMode ?? true);
-  const [sharpMoney, setSharpMoney] = useState(options?.sharpMoney ?? true);
   const [playing, setPlaying] = useState(true);
   const [search, setSearch] = useState('');
-  const [internalSelectedNode, setInternalSelectedNode] = useState<GraphNode | null>(null);
-  const [hoverNode, setHoverNode] = useState<GraphNode | null>(null);
-  const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge | null>(null);
-  const [hoverEdge, setHoverEdge] = useState<GraphEdge | null>(null);
+  const [internalSelectedNode, setInternalSelectedNode] = useState<GraphNode<NMeta> | null>(null);
+  const [hoverNode, setHoverNode] = useState<GraphNode<NMeta> | null>(null);
+  const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge<EMeta> | null>(null);
+  const [hoverEdge, setHoverEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand | null>(null);
 
-  const categories = options?.categories ?? CATEGORIES;
   const showControls = options?.showControls ?? true;
   const showStats = options?.showStats ?? true;
   const showNavigationControls = options?.showNavigationControls ?? true;
@@ -163,27 +193,25 @@ export default function GalaxyGraphVisualizer({
     if (options?.galaxyMode !== undefined) setGalaxyMode(options.galaxyMode);
   }, [options?.galaxyMode]);
 
-  useEffect(() => {
-    if (options?.sharpMoney !== undefined) setSharpMoney(options.sharpMoney);
-  }, [options?.sharpMoney]);
+  const groupList = useMemo(() => (groups ? [...groups] : distinctGroups(dataset.nodes)), [groups, dataset.nodes]);
 
-  const categoryNodes = useMemo(() => {
-    if (activeCategory === 'All') return dataset.nodes;
-    return dataset.nodes.filter((node) => node.category === activeCategory);
-  }, [activeCategory, dataset.nodes]);
+  const groupNodes = useMemo(() => {
+    if (activeGroup === null) return dataset.nodes;
+    return dataset.nodes.filter((node) => node.group === activeGroup);
+  }, [activeGroup, dataset.nodes]);
 
-  const endpointCategories = useMemo(() => {
-    const values = new Map<string, Category>();
-    dataset.nodes.forEach((node) => values.set(node.id, node.category));
-    dataset.clusters.forEach((cluster) => values.set(cluster.id, cluster.category));
+  const endpointGroups = useMemo(() => {
+    const values = new Map<string, string | undefined>();
+    dataset.nodes.forEach((node) => values.set(node.id, node.group));
+    (dataset.clusters ?? []).forEach((cluster) => values.set(cluster.id, cluster.group));
     return values;
   }, [dataset.clusters, dataset.nodes]);
 
   // Precompute edge <-> display-id maps once per dataset. Resolving ids by
   // scanning dataset.edges with indexOf on every lookup was O(n^2).
   const { edgeDisplayIds, edgeByDisplayId } = useMemo(() => {
-    const byEdge = new Map<GraphEdge, string>();
-    const byId = new Map<string, GraphEdge>();
+    const byEdge = new Map<GraphEdge<EMeta>, string>();
+    const byId = new Map<string, GraphEdge<EMeta>>();
     dataset.edges.forEach((edge, index) => {
       const id = getEdgeId(edge, index);
       byEdge.set(edge, id);
@@ -192,14 +220,14 @@ export default function GalaxyGraphVisualizer({
     return { edgeDisplayIds: byEdge, edgeByDisplayId: byId };
   }, [dataset.edges]);
 
-  const displayEdgeId = useCallback((edge: GraphEdge) => edgeDisplayIds.get(edge) ?? getEdgeId(edge), [edgeDisplayIds]);
+  const displayEdgeId = useCallback((edge: GraphEdge<EMeta>) => edgeDisplayIds.get(edge) ?? getEdgeId(edge), [edgeDisplayIds]);
 
-  const categoryEdges = useMemo(() => {
-    if (activeCategory === 'All') return dataset.edges;
+  const groupEdges = useMemo(() => {
+    if (activeGroup === null) return dataset.edges;
     return dataset.edges.filter(
-      (edge) => endpointCategories.get(edge.source) === activeCategory || endpointCategories.get(edge.target) === activeCategory,
+      (edge) => endpointGroups.get(edge.source) === activeGroup || endpointGroups.get(edge.target) === activeGroup,
     );
-  }, [activeCategory, dataset.edges, endpointCategories]);
+  }, [activeGroup, dataset.edges, endpointGroups]);
 
   const selectedNode = useMemo(() => {
     if (selectedNodeId !== undefined) return dataset.nodes.find((node) => node.id === selectedNodeId) ?? null;
@@ -211,18 +239,16 @@ export default function GalaxyGraphVisualizer({
     return internalSelectedEdge && dataset.edges.includes(internalSelectedEdge) ? internalSelectedEdge : null;
   }, [dataset.edges, edgeByDisplayId, internalSelectedEdge, selectedEdgeId]);
 
-  const stats = useMemo(() => {
-    const markets = new Set(categoryNodes.map((node) => node.category)).size;
-    const positions = categoryNodes.reduce((sum, node) => sum + node.metrics.activeTraders, 0);
-    const major = categoryNodes.filter((node) => node.isMajor).length;
+  const stats = useMemo<GraphStats>(() => {
+    const groupCount = new Set(groupNodes.map((node) => node.group ?? '')).size;
+    const major = groupNodes.filter((node) => node.major).length;
     return {
-      connections: categoryEdges.length,
+      edges: groupEdges.length,
+      groups: groupCount,
       major,
-      markets,
-      nodes: categoryNodes.length,
-      positions,
+      nodes: groupNodes.length,
     };
-  }, [categoryEdges.length, categoryNodes]);
+  }, [groupEdges.length, groupNodes]);
 
   const issueCameraCommand = useCallback(
     (command: Omit<CameraCommand, 'nonce'>) => {
@@ -234,7 +260,7 @@ export default function GalaxyGraphVisualizer({
   );
 
   const selectNode = useCallback(
-    (node: GraphNode | null) => {
+    (node: GraphNode<NMeta> | null) => {
       if (selectedNodeId === undefined) setInternalSelectedNode(node);
       if (node) {
         if (selectedEdgeId === undefined) setInternalSelectedEdge(null);
@@ -246,7 +272,7 @@ export default function GalaxyGraphVisualizer({
   );
 
   const hover = useCallback(
-    (node: GraphNode | null) => {
+    (node: GraphNode<NMeta> | null) => {
       setHoverNode(node);
       onHoverNode?.(node);
     },
@@ -254,7 +280,7 @@ export default function GalaxyGraphVisualizer({
   );
 
   const selectEdge = useCallback(
-    (edge: GraphEdge | null) => {
+    (edge: GraphEdge<EMeta> | null) => {
       if (selectedEdgeId === undefined) setInternalSelectedEdge(edge);
       if (edge) {
         if (selectedNodeId === undefined) setInternalSelectedNode(null);
@@ -266,39 +292,40 @@ export default function GalaxyGraphVisualizer({
   );
 
   const hoverConnection = useCallback(
-    (edge: GraphEdge | null) => {
+    (edge: GraphEdge<EMeta> | null) => {
       setHoverEdge(edge);
       onHoverEdge?.(edge);
     },
     [onHoverEdge],
   );
 
-  function chooseCategory(category: Category) {
-    setActiveCategory(category);
+  function clearSelection() {
     if (selectedNodeId === undefined) setInternalSelectedNode(null);
     else if (selectedNodeId !== null) onSelectNode?.(null);
     if (selectedEdgeId === undefined) setInternalSelectedEdge(null);
     else if (selectedEdgeId !== null) onSelectEdge?.(null);
-    onCategoryChange?.(category);
   }
 
-  function updateDatasetSize(size: DatasetSize) {
-    onDatasetChange?.(generateGalaxyDataset(size));
-    if (selectedNodeId === undefined) setInternalSelectedNode(null);
-    else if (selectedNodeId !== null) onSelectNode?.(null);
+  function chooseGroup(group: string | null) {
+    setActiveGroup(group);
+    clearSelection();
+    onGroupChange?.(group);
+  }
+
+  function requestDatasetSize(size: number) {
+    onDatasetSizeChange?.(size);
+    clearSelection();
     setHoverNode(null);
-    if (selectedEdgeId === undefined) setInternalSelectedEdge(null);
-    else if (selectedEdgeId !== null) onSelectEdge?.(null);
     setHoverEdge(null);
   }
 
-  function focusNode(node: GraphNode | null) {
+  function focusNode(node: GraphNode<NMeta> | null) {
     if (!node) return;
     selectNode(node);
     issueCameraCommand({ nodeId: node.id, type: 'focus' });
   }
 
-  function focusEdge(edge: GraphEdge | null) {
+  function focusEdge(edge: GraphEdge<EMeta> | null) {
     if (!edge) return;
     selectEdge(edge);
     issueCameraCommand({ edgeId: displayEdgeId(edge), type: 'focus-edge' });
@@ -310,7 +337,7 @@ export default function GalaxyGraphVisualizer({
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    focusNode(findBestMatch(dataset, search, activeCategory));
+    focusNode(findBestMatch(dataset, search, activeGroup));
   }
 
   const inspectedNode = selectedNode ?? (selectedEdge ? null : hoverNode);
@@ -321,13 +348,14 @@ export default function GalaxyGraphVisualizer({
   const targetEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.target) : null;
 
   return (
-    <main className={['app-shell', 'galaxy-nodes-shell', className].filter(Boolean).join(' ')} style={themeStyle(theme)}>
-      <GalaxyScene
+    <main className={['galaxy-nodes', className].filter(Boolean).join(' ')} style={themeStyle(theme)}>
+      <GalaxyScene<NMeta, EMeta, CMeta>
         dataset={dataset}
-        activeCategory={activeCategory}
+        activeGroup={activeGroup}
         showClusters={showClusters}
         galaxyMode={galaxyMode}
-        sharpMoney={sharpMoney}
+        layout={layout}
+        accessors={accessors}
         paused={!playing}
         theme={theme}
         cameraCommand={cameraCommand}
@@ -345,11 +373,14 @@ export default function GalaxyGraphVisualizer({
           <span>{brandLabel}</span>
           <b>ALPHA</b>
         </div>
-        {(options?.showCategoryNav ?? true) ? (
-          <nav className="category-nav" aria-label="Categories">
-            {categories.map((category) => (
-              <button key={category} className={category === activeCategory ? 'is-active' : ''} type="button" aria-pressed={category === activeCategory} onClick={() => chooseCategory(category)}>
-                {category}
+        {(options?.showGroupNav ?? true) && groupList.length ? (
+          <nav className="category-nav" aria-label="Groups">
+            <button className={activeGroup === null ? 'is-active' : ''} type="button" aria-pressed={activeGroup === null} onClick={() => chooseGroup(null)}>
+              All
+            </button>
+            {groupList.map((group) => (
+              <button key={group} className={group === activeGroup ? 'is-active' : ''} type="button" aria-pressed={group === activeGroup} onClick={() => chooseGroup(group)}>
+                {group}
               </button>
             ))}
           </nav>
@@ -367,14 +398,11 @@ export default function GalaxyGraphVisualizer({
       {showControls ? (
         <section className="control-ribbon" aria-label="Graph controls">
           <div className="toggle-row">
-            <button type="button" className={sharpMoney ? 'toggle is-on' : 'toggle'} aria-pressed={sharpMoney} onClick={() => setSharpMoney((value) => !value)}>
-              <Activity size={15} aria-hidden="true" />
-              Sharp flow <span>{sharpMoney ? 'ON' : 'OFF'}</span>
-            </button>
             <button type="button" className={showClusters ? 'toggle is-on' : 'toggle'} aria-pressed={showClusters} onClick={() => setShowClusters((value) => !value)}>
               <Layers3 size={15} aria-hidden="true" />
               Clusters <span>{showClusters ? 'ON' : 'OFF'}</span>
             </button>
+            {controlActions}
           </div>
 
           {(options?.showTimeline ?? true) ? (
@@ -392,35 +420,31 @@ export default function GalaxyGraphVisualizer({
             </div>
           ) : null}
 
-          <div className="live">
-            <span />
-            LIVE
-          </div>
-
           {showStats ? (
-            <div className="stats">
-              <span>
-                <b>{stats.markets}</b> markets
-              </span>
-              <span>
-                <b>{formatCompactNumber(stats.nodes)}</b> nodes
-              </span>
-              <span>
-                <b>{formatCompactNumber(stats.positions)}</b> positions
-              </span>
-              <span>
-                <b>{stats.major}</b> planets
-              </span>
-              <span>
-                <b>{stats.connections}</b> links
-              </span>
-            </div>
+            renderStats ? (
+              renderStats(stats)
+            ) : (
+              <div className="stats">
+                <span>
+                  <b>{stats.groups}</b> groups
+                </span>
+                <span>
+                  <b>{formatCompactNumber(stats.nodes)}</b> nodes
+                </span>
+                <span>
+                  <b>{stats.edges}</b> edges
+                </span>
+                <span>
+                  <b>{stats.major}</b> major
+                </span>
+              </div>
+            )
           ) : null}
 
-          {showDatasetSizeControls && options?.datasetSizes?.length && onDatasetChange ? (
+          {showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange ? (
             <div className="segmented" aria-label="Dataset size">
               {options.datasetSizes.map((size) => (
-                <button key={size} type="button" className={dataset.nodes.length === size ? 'is-active' : ''} onClick={() => updateDatasetSize(size)}>
+                <button key={size} type="button" className={dataset.nodes.length === size ? 'is-active' : ''} aria-pressed={dataset.nodes.length === size} onClick={() => requestDatasetSize(size)}>
                   {formatCompactNumber(size)}
                 </button>
               ))}
@@ -473,46 +497,41 @@ export default function GalaxyGraphVisualizer({
         ) : null}
       </aside>
 
-      {(options?.showLegend ?? true) ? (
-        <div className="legend">
-          <span>Position</span>
-          <b className="yes">Above = YES</b>
-          <b className="no">Below = NO</b>
-          <span>Color = category / sentiment</span>
-        </div>
-      ) : null}
+      {(options?.showLegend ?? true) && legend ? <div className="legend">{legend}</div> : null}
 
       {showDetailPanel && inspectedNode ? (
         <aside className="detail-panel">
-          <div className="detail-heading">
-            <Radar size={18} aria-hidden="true" />
-            <div>
-              <span>{inspectedNode.category}</span>
-              <h2>{inspectedNode.label}</h2>
-            </div>
-          </div>
-          <div className="score-line">
-            <strong>{Math.round(inspectedNode.score)}%</strong>
-            <span>{inspectedNode.sentiment.toUpperCase()}</span>
-          </div>
-          <dl>
-            <div>
-              <dt>24h volume</dt>
-              <dd>{formatMoney(inspectedNode.metrics.volume)}</dd>
-            </div>
-            <div>
-              <dt>Active traders</dt>
-              <dd>{formatCompactNumber(inspectedNode.metrics.activeTraders)}</dd>
-            </div>
-            <div>
-              <dt>Market price</dt>
-              <dd>{inspectedNode.metrics.marketPrice.toFixed(1)}%</dd>
-            </div>
-            <div>
-              <dt>Win rate</dt>
-              <dd>{inspectedNode.metrics.winRate.toFixed(1)}%</dd>
-            </div>
-          </dl>
+          {renderNodeDetail ? (
+            renderNodeDetail(inspectedNode)
+          ) : (
+            <>
+              <div className="detail-heading">
+                <Radar size={18} aria-hidden="true" />
+                <div>
+                  {inspectedNode.group ? <span>{inspectedNode.group}</span> : null}
+                  <h2>{inspectedNode.label ?? inspectedNode.id}</h2>
+                </div>
+              </div>
+              <dl>
+                <div>
+                  <dt>Node id</dt>
+                  <dd>{inspectedNode.id}</dd>
+                </div>
+                {inspectedNode.group ? (
+                  <div>
+                    <dt>Group</dt>
+                    <dd>{inspectedNode.group}</dd>
+                  </div>
+                ) : null}
+                {inspectedNode.size !== undefined ? (
+                  <div>
+                    <dt>Size</dt>
+                    <dd>{inspectedNode.size.toFixed(1)}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </>
+          )}
           <button type="button" onClick={() => focusNode(inspectedNode)}>
             <Upload size={15} aria-hidden="true" />
             Navigate
@@ -522,37 +541,43 @@ export default function GalaxyGraphVisualizer({
 
       {showDetailPanel && inspectedEdge && sourceEndpoint && targetEndpoint ? (
         <aside className="detail-panel connection-panel">
-          <div className="detail-heading">
-            <GitBranch size={18} aria-hidden="true" />
-            <div>
-              <span>{inspectedEdge.kind} relationship</span>
-              <h2>
-                {sourceEndpoint.label} <small>to</small> {targetEndpoint.label}
-              </h2>
-            </div>
-          </div>
-          <div className="score-line">
-            <strong>{Math.round(inspectedEdge.weight * 100)}%</strong>
-            <span>STRENGTH</span>
-          </div>
-          <dl>
-            <div>
-              <dt>Relationship id</dt>
-              <dd>{displayEdgeId(inspectedEdge)}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd>{sourceEndpoint.category}</dd>
-            </div>
-            <div>
-              <dt>Target</dt>
-              <dd>{targetEndpoint.category}</dd>
-            </div>
-            <div>
-              <dt>Flow estimate</dt>
-              <dd>{formatMoney(((sourceEndpoint.node?.metrics.volume ?? 8_000_000) + (targetEndpoint.node?.metrics.volume ?? 8_000_000)) * inspectedEdge.weight * 0.5)}</dd>
-            </div>
-          </dl>
+          {renderEdgeDetail ? (
+            renderEdgeDetail(inspectedEdge, { source: sourceEndpoint, target: targetEndpoint })
+          ) : (
+            <>
+              <div className="detail-heading">
+                <GitBranch size={18} aria-hidden="true" />
+                <div>
+                  <span>{inspectedEdge.kind ?? 'relationship'}</span>
+                  <h2>
+                    {sourceEndpoint.label} <small>to</small> {targetEndpoint.label}
+                  </h2>
+                </div>
+              </div>
+              <div className="score-line">
+                <strong>{Math.round((inspectedEdge.weight ?? 0.5) * 100)}%</strong>
+                <span>STRENGTH</span>
+              </div>
+              <dl>
+                <div>
+                  <dt>Relationship id</dt>
+                  <dd>{displayEdgeId(inspectedEdge)}</dd>
+                </div>
+                {sourceEndpoint.group ? (
+                  <div>
+                    <dt>Source</dt>
+                    <dd>{sourceEndpoint.group}</dd>
+                  </div>
+                ) : null}
+                {targetEndpoint.group ? (
+                  <div>
+                    <dt>Target</dt>
+                    <dd>{targetEndpoint.group}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </>
+          )}
           <div className="detail-actions">
             <button type="button" onClick={() => focusEdge(inspectedEdge)}>
               <Navigation size={15} aria-hidden="true" />

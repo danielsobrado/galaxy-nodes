@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { getEdgeId, getNodeColor } from './data';
-import type { Category, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
+import { getEdgeId, resolveAccessors } from './data';
+import { resolveGraphLayout, type GraphLayoutInput } from './layout';
+import type { GraphAccessors, GraphDataset, GraphEdge, GraphNode, ResolvedAccessors, SpaceDirection, Vec3 } from './types';
 
 export interface CameraCommand {
   type: 'focus' | 'focus-edge' | 'move' | 'reset';
@@ -12,45 +13,51 @@ export interface CameraCommand {
   nonce: number;
 }
 
-export interface GalaxySceneProps {
-  dataset: GraphDataset;
-  activeCategory: Category;
+export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  dataset: GraphDataset<NMeta, EMeta, CMeta>;
+  /** Active group filter, or `null` to show everything. */
+  activeGroup: string | null;
   showClusters: boolean;
   galaxyMode: boolean;
-  sharpMoney: boolean;
+  layout?: GraphLayoutInput;
+  /** Visual accessors. Memoize this - a new identity rebuilds the scene. */
+  accessors?: GraphAccessors<NMeta, EMeta>;
   theme?: GalaxyGraphTheme;
   cameraCommand: CameraCommand | null;
   paused?: boolean;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
-  onSelectNode: (node: GraphNode | null) => void;
-  onHoverNode: (node: GraphNode | null) => void;
-  onSelectEdge: (edge: GraphEdge | null) => void;
-  onHoverEdge: (edge: GraphEdge | null) => void;
+  onSelectNode: (node: GraphNode<NMeta> | null) => void;
+  onHoverNode: (node: GraphNode<NMeta> | null) => void;
+  onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
+  onHoverEdge: (edge: GraphEdge<EMeta> | null) => void;
 }
 
-interface SceneCallbacks {
-  onHoverEdge: (edge: GraphEdge | null) => void;
-  onHoverNode: (node: GraphNode | null) => void;
-  onSelectEdge: (edge: GraphEdge | null) => void;
-  onSelectNode: (node: GraphNode | null) => void;
+interface SceneCallbacks<NMeta = unknown, EMeta = unknown> {
+  onHoverEdge: (edge: GraphEdge<EMeta> | null) => void;
+  onHoverNode: (node: GraphNode<NMeta> | null) => void;
+  onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
+  onSelectNode: (node: GraphNode<NMeta> | null) => void;
 }
 
-interface SceneRuntime {
+interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
   scene: THREE.Scene;
   labels: HTMLDivElement[];
-  edgeLookup: Map<string, GraphEdge>;
-  nodeLookup: Map<string, GraphNode>;
-  majorNodes: GraphNode[];
+  edgeLookup: Map<string, GraphEdge<EMeta>>;
+  edgeEndpoints: Map<string, EdgeEndpoints>;
+  nodeLookup: Map<string, GraphNode<NMeta>>;
+  majorNodes: GraphNode<NMeta>[];
   interactiveNodeMeshes: THREE.Object3D[];
   interactiveEdgeMeshes: THREE.Object3D[];
   edgeVisuals: Map<string, THREE.Mesh>;
   nodeRings: Map<string, THREE.Mesh>;
   nodeVisuals: Map<string, THREE.Mesh>;
+  endpointMarkers: [EndpointMarker, EndpointMarker];
   pointMaterial: THREE.ShaderMaterial;
+  accessors: ResolvedAccessors<NMeta, EMeta>;
   focusEdge: (edgeId: string) => void;
   focusNode: (nodeId: string) => void;
   moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
@@ -67,18 +74,29 @@ const tmpRight = new THREE.Vector3();
 const tmpMove = new THREE.Vector3();
 
 interface EdgeEndpoint {
-  category: Exclude<Category, 'All'>;
+  group?: string;
+  id: string;
   label: string;
   position: THREE.Vector3;
+  radius: number;
+}
+
+interface EdgeEndpoints {
+  source: EdgeEndpoint;
+  target: EdgeEndpoint;
+}
+
+interface EndpointMarker {
+  group: THREE.Group;
+  core: THREE.Mesh;
+  innerRing: THREE.Mesh;
+  outerRing: THREE.Mesh;
 }
 
 export interface GalaxyGraphTheme {
   background?: string;
-  categoryColors?: Partial<Record<Exclude<Category, 'All'>, string>>;
-  noColor?: string;
   panelAccentColor?: string;
   selectedColor?: string;
-  yesColor?: string;
 }
 
 function getThemeKey(theme?: GalaxyGraphTheme) {
@@ -86,11 +104,21 @@ function getThemeKey(theme?: GalaxyGraphTheme) {
 
   return JSON.stringify({
     background: theme.background,
-    categoryColors: Object.entries(theme.categoryColors ?? {}).sort(([left], [right]) => left.localeCompare(right)),
-    noColor: theme.noColor,
     panelAccentColor: theme.panelAccentColor,
     selectedColor: theme.selectedColor,
-    yesColor: theme.yesColor,
+  });
+}
+
+function getLayoutKey(layout?: GraphLayoutInput) {
+  if (layout === false) return 'off';
+  if (!layout) return 'auto';
+
+  return JSON.stringify({
+    clusterRadius: layout.clusterRadius,
+    preserveExistingPositions: layout.preserveExistingPositions,
+    seed: layout.seed,
+    spacing: layout.spacing,
+    strategy: layout.strategy,
   });
 }
 
@@ -109,15 +137,11 @@ function makeGlowTexture() {
   return new THREE.CanvasTexture(canvas);
 }
 
-function makePlanetTexture(node: GraphNode, theme?: GalaxyGraphTheme) {
+function makePlanetTexture(base: string) {
   const canvas = document.createElement('canvas');
   canvas.width = 256;
   canvas.height = 256;
   const context = canvas.getContext('2d')!;
-  const base = getNodeColor(node, false, theme?.categoryColors, {
-    no: theme?.noColor,
-    yes: theme?.yesColor,
-  });
   const gradient = context.createRadialGradient(92, 78, 14, 128, 128, 136);
   gradient.addColorStop(0, '#fbfff8');
   gradient.addColorStop(0.38, '#e8eee8');
@@ -182,64 +206,125 @@ function setLabelPosition(
   label.style.transform = `translate3d(${(tmpProjected.x * 0.5 + 0.5) * width}px, ${(-tmpProjected.y * 0.5 + 0.5) * height}px, 0)`;
 }
 
-function filteredNodes(dataset: GraphDataset, activeCategory: Category) {
-  if (activeCategory === 'All') return dataset.nodes;
-  return dataset.nodes.filter((node) => node.category === activeCategory);
+function filteredNodes<NMeta, EMeta, CMeta>(dataset: GraphDataset<NMeta, EMeta, CMeta>, activeGroup: string | null) {
+  if (activeGroup === null) return dataset.nodes;
+  return dataset.nodes.filter((node) => node.group === activeGroup);
 }
 
-function shouldShowMajorLabel(node: GraphNode, index: number, activeCategory: Category) {
-  if (activeCategory !== 'All') return index < 10 || (node.score > 86 && index % 3 === 0);
-  return index < 4 || (node.score > 94 && index % 11 === 0);
+function shouldShowMajorLabel(index: number, activeGroup: string | null) {
+  if (activeGroup !== null) return index < 12;
+  return index < 6 || index % 11 === 0;
 }
 
-function shouldShowClusterLabel(index: number, activeCategory: Category) {
-  if (activeCategory !== 'All') return index < 4;
+function shouldShowClusterLabel(index: number, activeGroup: string | null) {
+  if (activeGroup !== null) return index < 4;
   return index === 3 || index === 9;
 }
 
-function edgeColor(edge: GraphEdge) {
-  if (edge.kind === 'signal') return 0x46f4bc;
-  if (edge.kind === 'trade') return 0xff9d66;
-  return 0xaeb8c2;
-}
-
-function resolveEndpoint(
+function resolveEndpoint<NMeta, EMeta>(
   id: string,
-  nodeLookup: Map<string, GraphNode>,
+  nodeLookup: Map<string, GraphNode<NMeta>>,
+  nodePositions: Map<string, Vec3>,
   clusterLookup: Map<string, EdgeEndpoint>,
-) {
+  accessors: ResolvedAccessors<NMeta, EMeta>,
+): EdgeEndpoint | null {
   const node = nodeLookup.get(id);
-  if (node) {
+  const position = node ? nodePositions.get(node.id) : undefined;
+  if (node && position) {
+    const radius = Math.max(10, accessors.nodeSize(node) * (node.major ? 1.65 : 3.4));
     return {
-      category: node.category,
-      label: node.label,
-      position: new THREE.Vector3(node.position.x, node.position.y, node.position.z),
+      group: node.group,
+      id: node.id,
+      label: node.label ?? node.id,
+      position: new THREE.Vector3(position.x, position.y, position.z),
+      radius,
     };
   }
 
   return clusterLookup.get(id) ?? null;
 }
 
-function edgeMatchesCategory(edge: GraphEdge, source: EdgeEndpoint, target: EdgeEndpoint, activeCategory: Category) {
-  if (activeCategory === 'All') return true;
-  return source.category === activeCategory || target.category === activeCategory;
+function createEndpointMarker(color: string) {
+  const group = new THREE.Group();
+  group.visible = false;
+
+  const coreGeometry = new THREE.SphereGeometry(1, 24, 16);
+  const coreMaterial = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.72,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const core = new THREE.Mesh(coreGeometry, coreMaterial);
+  core.renderOrder = 31;
+  group.add(core);
+
+  const ringGeometry = new THREE.RingGeometry(1.18, 1.28, 96);
+  const innerRingMaterial = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.98,
+    side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const innerRing = new THREE.Mesh(ringGeometry, innerRingMaterial);
+  innerRing.renderOrder = 32;
+  innerRing.rotation.set(Math.PI * 0.54, Math.PI * 0.08, 0);
+  group.add(innerRing);
+
+  const outerRing = new THREE.Mesh(ringGeometry, innerRingMaterial.clone());
+  outerRing.renderOrder = 32;
+  outerRing.rotation.set(Math.PI * 0.5, Math.PI * 0.32, Math.PI * 0.33);
+  group.add(outerRing);
+
+  return { group, core, innerRing, outerRing };
+}
+
+function setMarkerColor(marker: EndpointMarker, color: string) {
+  (marker.core.material as THREE.MeshBasicMaterial).color.set(color);
+  (marker.innerRing.material as THREE.MeshBasicMaterial).color.set(color);
+  (marker.outerRing.material as THREE.MeshBasicMaterial).color.set(color);
+}
+
+function setMarkerVisible(marker: EndpointMarker, endpoint: EdgeEndpoint | null, color: string, scaleMultiplier: number) {
+  marker.group.visible = Boolean(endpoint);
+  if (!endpoint) return;
+
+  setMarkerColor(marker, color);
+  const scale = Math.max(20, endpoint.radius * scaleMultiplier);
+  marker.group.position.copy(endpoint.position);
+  marker.core.scale.setScalar(scale * 0.24);
+  marker.innerRing.scale.setScalar(scale);
+  marker.outerRing.scale.setScalar(scale * 1.34);
+}
+
+function edgeMatchesGroup(source: EdgeEndpoint, target: EdgeEndpoint, activeGroup: string | null) {
+  if (activeGroup === null) return true;
+  return source.group === activeGroup || target.group === activeGroup;
 }
 
 function isTypingTarget(target: EventTarget | null) {
   return target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 }
 
-function createScene(
+function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host: HTMLDivElement,
-  dataset: GraphDataset,
-  activeCategory: Category,
+  dataset: GraphDataset<NMeta, EMeta, CMeta>,
+  activeGroup: string | null,
   showClusters: boolean,
   galaxyMode: boolean,
-  sharpMoney: boolean,
+  layoutInput: GraphLayoutInput | undefined,
+  accessorsInput: GraphAccessors<NMeta, EMeta> | undefined,
   theme: GalaxyGraphTheme | undefined,
-  callbacksRef: MutableRefObject<SceneCallbacks>,
+  callbacksRef: MutableRefObject<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRefObject<boolean>,
-): SceneRuntime {
+): SceneRuntime<NMeta, EMeta> {
+  const accessors = resolveAccessors(accessorsInput);
+  const graphLayout = resolveGraphLayout(dataset, layoutInput);
   const labelsRoot = document.createElement('div');
   labelsRoot.className = 'scene-labels';
   host.appendChild(labelsRoot);
@@ -293,21 +378,25 @@ function createScene(
   // per-planet textures and dispose them explicitly on teardown.
   const planetTextures: THREE.Texture[] = [];
 
-  const visibleNodes = filteredNodes(dataset, activeCategory);
-  const pointNodes = visibleNodes.filter((node) => !node.isMajor);
-  const majorNodes = visibleNodes.filter((node) => node.isMajor).slice(0, activeCategory === 'All' ? 78 : 42);
-  const nodeLookup = new Map(dataset.nodes.map((node) => [node.id, node]));
+  const visibleNodes = filteredNodes(dataset, activeGroup);
+  const pointNodes = visibleNodes.filter((node) => !node.major);
+  const majorNodes = visibleNodes.filter((node) => node.major).slice(0, activeGroup === null ? 78 : 42);
+  const nodePositions = graphLayout.nodePositions;
+  const nodeLookup = graphLayout.nodeLookup;
   const clusterLookup = new Map<string, EdgeEndpoint>(
-    dataset.clusters.map((cluster) => [
+    graphLayout.clusters.map((cluster) => [
       cluster.id,
       {
-        category: cluster.category,
+        group: cluster.group,
+        id: cluster.id,
         label: cluster.label,
         position: new THREE.Vector3(cluster.center.x, cluster.center.y, cluster.center.z),
+        radius: Math.max(28, cluster.radius * 0.42),
       },
     ]),
   );
-  const edgeLookup = new Map<string, GraphEdge>();
+  const edgeLookup = new Map<string, GraphEdge<EMeta>>();
+  const edgeEndpoints = new Map<string, EdgeEndpoints>();
   const labels: HTMLDivElement[] = [];
   const interactiveNodeMeshes: THREE.Object3D[] = [];
   const interactiveEdgeMeshes: THREE.Object3D[] = [];
@@ -320,19 +409,15 @@ function createScene(
   const sizes = new Float32Array(pointNodes.length);
 
   pointNodes.forEach((node, index) => {
-    positions[index * 3] = node.position.x;
-    positions[index * 3 + 1] = node.position.y;
-    positions[index * 3 + 2] = node.position.z;
-    const [r, g, b] = colorToFloatTriplet(
-      getNodeColor(node, sharpMoney, theme?.categoryColors, {
-        no: theme?.noColor,
-        yes: theme?.yesColor,
-      }),
-    );
+    const position = nodePositions.get(node.id)!;
+    positions[index * 3] = position.x;
+    positions[index * 3 + 1] = position.y;
+    positions[index * 3 + 2] = position.z;
+    const [r, g, b] = colorToFloatTriplet(accessors.nodeColor(node));
     colors[index * 3] = r;
     colors[index * 3 + 1] = g;
     colors[index * 3 + 2] = b;
-    sizes[index] = node.size * (sharpMoney && node.score > 76 ? 1.5 : 1);
+    sizes[index] = accessors.nodeSize(node);
   });
 
   const pointsGeometry = new THREE.BufferGeometry();
@@ -408,9 +493,9 @@ function createScene(
     blending: THREE.AdditiveBlending,
   });
 
-  const activeClusters = activeCategory === 'All'
-    ? dataset.clusters
-    : dataset.clusters.filter((cluster) => cluster.category === activeCategory);
+  const activeClusters = activeGroup === null
+    ? graphLayout.clusters
+    : graphLayout.clusters.filter((cluster) => cluster.group === activeGroup);
 
   activeClusters.forEach((cluster, index) => {
     const sprite = new THREE.Sprite(glowMaterial.clone());
@@ -419,7 +504,7 @@ function createScene(
     sprite.scale.set(scale, scale, 1);
     world.add(sprite);
 
-    if (showClusters && shouldShowClusterLabel(index, activeCategory)) {
+    if (showClusters && shouldShowClusterLabel(index, activeGroup)) {
       const label = makeLabel(cluster.label, 'cluster-label');
       labelsRoot.appendChild(label);
       labels.push(label);
@@ -430,17 +515,19 @@ function createScene(
   });
 
   dataset.edges.forEach((edge, index) => {
-    const source = resolveEndpoint(edge.source, nodeLookup, clusterLookup);
-    const target = resolveEndpoint(edge.target, nodeLookup, clusterLookup);
-    if (!source || !target || !edgeMatchesCategory(edge, source, target, activeCategory)) return;
+    const source = resolveEndpoint(edge.source, nodeLookup, nodePositions, clusterLookup, accessors);
+    const target = resolveEndpoint(edge.target, nodeLookup, nodePositions, clusterLookup, accessors);
+    if (!source || !target || !edgeMatchesGroup(source, target, activeGroup)) return;
 
+    const isFilament = edge.kind === 'filament';
+    const weight = accessors.edgeWeight(edge);
     const edgeId = getEdgeId(edge, index);
-    const lift = edge.kind === 'filament' ? (galaxyMode ? 86 : 38) : 24 + edge.weight * 42;
+    const lift = isFilament ? (galaxyMode ? 86 : 38) : 24 + weight * 42;
     const curve = curvedEdgeCurve(source.position, target.position, lift);
-    const color = edgeColor(edge);
-    const radius = edge.kind === 'filament' ? 0.24 : 0.34 + edge.weight * 0.34;
-    const opacity = edge.kind === 'filament' ? (galaxyMode ? 0.045 : 0.032) : 0.075 + edge.weight * 0.1;
-    const geometry = new THREE.TubeGeometry(curve, edge.kind === 'filament' ? 36 : 28, radius, 6, false);
+    const color = accessors.edgeColor(edge);
+    const radius = isFilament ? 0.24 : 0.34 + weight * 0.34;
+    const opacity = isFilament ? (galaxyMode ? 0.045 : 0.032) : 0.075 + weight * 0.1;
+    const geometry = new THREE.TubeGeometry(curve, isFilament ? 36 : 28, radius, 6, false);
     const material = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -453,9 +540,10 @@ function createScene(
     visual.userData.baseOpacity = opacity;
     edgeVisuals.set(edgeId, visual);
     edgeLookup.set(edgeId, edge);
+    edgeEndpoints.set(edgeId, { source, target });
     world.add(visual);
 
-    const hitGeometry = new THREE.TubeGeometry(curve, edge.kind === 'filament' ? 16 : 18, edge.kind === 'filament' ? 10 : 8, 6, false);
+    const hitGeometry = new THREE.TubeGeometry(curve, isFilament ? 16 : 18, isFilament ? 10 : 8, 6, false);
     const hitMaterial = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -471,9 +559,17 @@ function createScene(
 
   const planetGeometry = new THREE.SphereGeometry(1, 36, 24);
   const ringGeometry = new THREE.RingGeometry(1.28, 1.34, 96);
+  const endpointMarkers: [EndpointMarker, EndpointMarker] = [
+    createEndpointMarker(theme?.selectedColor ?? '#ffffff'),
+    createEndpointMarker(theme?.panelAccentColor ?? '#46f4bc'),
+  ];
+  endpointMarkers.forEach((marker) => world.add(marker.group));
 
   majorNodes.forEach((node, index) => {
-    const planetTexture = makePlanetTexture(node, theme);
+    const nodeColor = accessors.nodeColor(node);
+    const nodeSize = accessors.nodeSize(node);
+    const position = nodePositions.get(node.id)!;
+    const planetTexture = makePlanetTexture(nodeColor);
     planetTextures.push(planetTexture);
     const material = new THREE.MeshBasicMaterial({
       map: planetTexture,
@@ -482,10 +578,10 @@ function createScene(
       opacity: 0.92,
     });
     const mesh = new THREE.Mesh(planetGeometry, material);
-    mesh.position.set(node.position.x, node.position.y, node.position.z);
-    mesh.scale.setScalar(node.size * 0.68);
+    mesh.position.set(position.x, position.y, position.z);
+    mesh.scale.setScalar(nodeSize * 0.68);
     mesh.userData.nodeId = node.id;
-    mesh.userData.baseScale = node.size * 0.68;
+    mesh.userData.baseScale = nodeSize * 0.68;
     mesh.userData.baseOpacity = 0.92;
     mesh.userData.type = 'node';
     interactiveNodeMeshes.push(mesh);
@@ -493,12 +589,7 @@ function createScene(
     world.add(mesh);
 
     const ringMaterial = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(
-        getNodeColor(node, sharpMoney, theme?.categoryColors, {
-          no: theme?.noColor,
-          yes: theme?.yesColor,
-        }),
-      ),
+      color: new THREE.Color(nodeColor),
       transparent: true,
       opacity: 0.16,
       side: THREE.DoubleSide,
@@ -508,20 +599,21 @@ function createScene(
     });
     const ring = new THREE.Mesh(ringGeometry, ringMaterial);
     ring.position.copy(mesh.position);
-    ring.scale.setScalar(node.size * 1.05);
-    ring.rotation.set(Math.PI * 0.55, Math.PI * 0.1, Math.PI * (node.score / 100));
-    ring.userData.baseScale = node.size * 1.05;
+    ring.scale.setScalar(nodeSize * 1.05);
+    ring.rotation.set(Math.PI * 0.55, Math.PI * 0.1, Math.PI * ((index % 16) / 16));
+    ring.userData.baseScale = nodeSize * 1.05;
     ring.userData.baseOpacity = 0.16;
     nodeRings.set(node.id, ring);
     world.add(ring);
 
-    if (shouldShowMajorLabel(node, index, activeCategory)) {
-      const label = makeLabel(`${Math.round(node.score)}% ${node.sentiment.toUpperCase()}`, 'node-label');
+    const labelText = accessors.nodeLabel(node);
+    if (labelText !== null && shouldShowMajorLabel(index, activeGroup)) {
+      const label = makeLabel(labelText, 'node-label');
       labelsRoot.appendChild(label);
       labels.push(label);
-      label.dataset.x = String(node.position.x);
-      label.dataset.y = String(node.position.y + node.size * 1.85);
-      label.dataset.z = String(node.position.z);
+      label.dataset.x = String(position.x);
+      label.dataset.y = String(position.y + nodeSize * 1.85);
+      label.dataset.z = String(position.z);
     }
   });
 
@@ -622,20 +714,22 @@ function createScene(
 
   function focusNode(nodeId: string) {
     const node = nodeLookup.get(nodeId);
-    if (!node) return;
+    const position = node ? nodePositions.get(node.id) : undefined;
+    if (!node || !position) return;
     // Nodes are authored in world-local space; apply the group's current
     // rotation so focus aims at where the planet actually is on screen.
-    const target = new THREE.Vector3(node.position.x, node.position.y, node.position.z).applyQuaternion(world.quaternion);
+    const target = new THREE.Vector3(position.x, position.y, position.z).applyQuaternion(world.quaternion);
+    const nodeSize = accessors.nodeSize(node);
     controls.target.copy(target);
-    camera.position.copy(target).add(new THREE.Vector3(node.size * 6 + 60, node.size * 5 + 44, node.size * 9 + 150));
+    camera.position.copy(target).add(new THREE.Vector3(nodeSize * 6 + 60, nodeSize * 5 + 44, nodeSize * 9 + 150));
     controls.update();
   }
 
   function focusEdge(edgeId: string) {
     const edge = edgeLookup.get(edgeId);
     if (!edge) return;
-    const source = resolveEndpoint(edge.source, nodeLookup, clusterLookup);
-    const target = resolveEndpoint(edge.target, nodeLookup, clusterLookup);
+    const source = resolveEndpoint(edge.source, nodeLookup, nodePositions, clusterLookup, accessors);
+    const target = resolveEndpoint(edge.target, nodeLookup, nodePositions, clusterLookup, accessors);
     if (!source || !target) return;
 
     const sourcePosition = source.position.clone().applyQuaternion(world.quaternion);
@@ -709,11 +803,14 @@ function createScene(
     if (!paused && galaxyMode) world.rotation.y += 0.000035;
 
     if (!paused) {
-      majorNodes.forEach((node, index) => {
+      for (let index = 0; index < interactiveNodeMeshes.length; index += 1) {
         const mesh = interactiveNodeMeshes[index];
-        if (mesh) {
-          mesh.rotation.y += 0.0022 + (node.score / 100) * 0.001;
-        }
+        if (mesh) mesh.rotation.y += 0.0022 + (index % 5) * 0.0003;
+      }
+      endpointMarkers.forEach((marker, index) => {
+        if (!marker.group.visible) return;
+        marker.innerRing.rotation.z += 0.006 + index * 0.001;
+        marker.outerRing.rotation.z -= 0.004 + index * 0.001;
       });
     }
 
@@ -742,6 +839,7 @@ function createScene(
     scene,
     labels,
     edgeLookup,
+    edgeEndpoints,
     nodeLookup,
     majorNodes,
     interactiveNodeMeshes,
@@ -749,7 +847,9 @@ function createScene(
     edgeVisuals,
     nodeRings,
     nodeVisuals,
+    endpointMarkers,
     pointMaterial: pointsMaterial,
+    accessors,
     focusEdge,
     focusNode,
     moveCamera,
@@ -781,12 +881,13 @@ function createScene(
   };
 }
 
-export default function GalaxyScene({
+export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>({
   dataset,
-  activeCategory,
+  activeGroup,
   showClusters,
   galaxyMode,
-  sharpMoney,
+  layout,
+  accessors,
   theme,
   cameraCommand,
   paused = false,
@@ -796,10 +897,10 @@ export default function GalaxyScene({
   onHoverNode,
   onSelectEdge,
   onHoverEdge,
-}: GalaxySceneProps) {
+}: GalaxySceneProps<NMeta, EMeta, CMeta>) {
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const runtimeRef = useRef<SceneRuntime | null>(null);
-  const callbacksRef = useRef<SceneCallbacks>({
+  const runtimeRef = useRef<SceneRuntime<NMeta, EMeta> | null>(null);
+  const callbacksRef = useRef<SceneCallbacks<NMeta, EMeta>>({
     onHoverEdge,
     onHoverNode,
     onSelectEdge,
@@ -817,6 +918,8 @@ export default function GalaxyScene({
 
   const themeKey = getThemeKey(theme);
   const stableTheme = useMemo(() => theme, [themeKey]);
+  const layoutKey = getLayoutKey(layout);
+  const stableLayout = useMemo(() => layout, [layoutKey]);
 
   const sceneKey = useMemo(
     () =>
@@ -824,14 +927,24 @@ export default function GalaxyScene({
         dataset.generatedAt,
         dataset.nodes.length,
         dataset.edges.length,
-        dataset.clusters.length,
-        activeCategory,
+        dataset.clusters?.length ?? 0,
+        activeGroup ?? '*',
         showClusters,
         galaxyMode,
-        sharpMoney,
         themeKey,
+        layoutKey,
       ].join(':'),
-    [activeCategory, dataset.clusters.length, dataset.edges.length, dataset.generatedAt, dataset.nodes.length, galaxyMode, sharpMoney, showClusters, themeKey],
+    [
+      activeGroup,
+      dataset.clusters?.length,
+      dataset.edges.length,
+      dataset.generatedAt,
+      dataset.nodes.length,
+      galaxyMode,
+      layoutKey,
+      showClusters,
+      themeKey,
+    ],
   );
 
   useEffect(() => {
@@ -842,10 +955,11 @@ export default function GalaxyScene({
     runtimeRef.current = createScene(
       host,
       dataset,
-      activeCategory,
+      activeGroup,
       showClusters,
       galaxyMode,
-      sharpMoney,
+      stableLayout,
+      accessors,
       stableTheme,
       callbacksRef,
       pausedRef,
@@ -855,7 +969,8 @@ export default function GalaxyScene({
       runtimeRef.current?.dispose();
       runtimeRef.current = null;
     };
-  }, [sceneKey, dataset, activeCategory, showClusters, galaxyMode, sharpMoney, stableTheme]);
+    // `accessors` identity controls visual rebuilds; memoize it upstream.
+  }, [sceneKey, dataset, activeGroup, showClusters, galaxyMode, stableLayout, accessors, stableTheme]);
 
   useEffect(() => {
     if (!cameraCommand || !runtimeRef.current) return;
@@ -869,33 +984,35 @@ export default function GalaxyScene({
     const runtime = runtimeRef.current;
     if (!runtime) return;
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
+    const edgeEndpoints = selectedEdgeId ? runtime.edgeEndpoints.get(selectedEdgeId) ?? null : null;
     runtime.pointMaterial.uniforms.globalOpacity.value = hasSelection ? 0.24 : 1;
 
     runtime.interactiveNodeMeshes.forEach((mesh) => {
       const nodeId = mesh.userData.nodeId as string;
       const selected = selectedNodeId === nodeId;
+      const relatedToSelectedEdge = Boolean(
+        edgeEndpoints && (edgeEndpoints.source.id === nodeId || edgeEndpoints.target.id === nodeId),
+      );
+      const emphasized = selected || relatedToSelectedEdge;
       const baseScale = Number(mesh.userData.baseScale ?? 1);
       const material = (mesh as THREE.Mesh).material as THREE.MeshBasicMaterial;
-      mesh.scale.setScalar(baseScale * (selected ? 1.52 : 1));
-      mesh.renderOrder = selected ? 20 : 0;
-      material.depthTest = !selected;
-      material.opacity = hasSelection && !selected ? 0.2 : Number(mesh.userData.baseOpacity ?? 0.92);
-      material.color.set(selected ? 0xffffff : hasSelection ? 0x808987 : 0xffffff);
+      mesh.scale.setScalar(baseScale * (selected ? 1.52 : relatedToSelectedEdge ? 1.42 : 1));
+      mesh.renderOrder = emphasized ? 20 : 0;
+      material.depthTest = !emphasized;
+      material.opacity = hasSelection && !emphasized ? 0.16 : Number(mesh.userData.baseOpacity ?? 0.92);
+      material.color.set(emphasized ? 0xffffff : hasSelection ? 0x6f7977 : 0xffffff);
 
       const ring = runtime.nodeRings.get(nodeId);
       if (ring) {
         const ringMaterial = ring.material as THREE.MeshBasicMaterial;
-        ring.scale.setScalar(Number(ring.userData.baseScale ?? 1) * (selected ? 2.28 : 1));
-        ring.renderOrder = selected ? 21 : 0;
+        ring.scale.setScalar(Number(ring.userData.baseScale ?? 1) * (selected ? 2.28 : relatedToSelectedEdge ? 2.08 : 1));
+        ring.renderOrder = emphasized ? 21 : 0;
         ringMaterial.color.set(
-          selected
-            ? stableTheme?.selectedColor ?? 0xffffff
-            : getNodeColor(runtime.nodeLookup.get(nodeId)!, true, stableTheme?.categoryColors, {
-                no: stableTheme?.noColor,
-                yes: stableTheme?.yesColor,
-              }),
+          emphasized
+            ? stableTheme?.selectedColor ?? '#ffffff'
+            : runtime.accessors.nodeColor(runtime.nodeLookup.get(nodeId)!),
         );
-        ringMaterial.opacity = selected ? 0.96 : hasSelection ? 0.035 : Number(ring.userData.baseOpacity ?? 0.16);
+        ringMaterial.opacity = emphasized ? 0.96 : hasSelection ? 0.03 : Number(ring.userData.baseOpacity ?? 0.16);
       }
     });
   }, [selectedEdgeId, selectedNodeId, stableTheme]);
@@ -904,19 +1021,33 @@ export default function GalaxyScene({
     const runtime = runtimeRef.current;
     if (!runtime) return;
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
+    const edgeEndpoints = selectedEdgeId ? runtime.edgeEndpoints.get(selectedEdgeId) ?? null : null;
     runtime.pointMaterial.uniforms.globalOpacity.value = hasSelection ? 0.24 : 1;
+
+    setMarkerVisible(
+      runtime.endpointMarkers[0],
+      edgeEndpoints?.source ?? null,
+      stableTheme?.selectedColor ?? '#ffffff',
+      edgeEndpoints?.source.id === selectedNodeId ? 1.18 : 1,
+    );
+    setMarkerVisible(
+      runtime.endpointMarkers[1],
+      edgeEndpoints?.target ?? null,
+      stableTheme?.panelAccentColor ?? '#46f4bc',
+      edgeEndpoints?.target.id === selectedNodeId ? 1.18 : 1,
+    );
 
     runtime.edgeVisuals.forEach((mesh, edgeId) => {
       const material = mesh.material as THREE.MeshBasicMaterial;
       const baseOpacity = Number(mesh.userData.baseOpacity ?? 0.18);
       const selected = selectedEdgeId === edgeId;
-      material.opacity = selected ? Math.min(0.66, baseOpacity + 0.38) : hasSelection ? baseOpacity * 0.24 : baseOpacity;
+      material.opacity = selected ? Math.min(0.86, baseOpacity + 0.56) : hasSelection ? baseOpacity * 0.18 : baseOpacity;
       material.depthTest = !selected;
-      material.color.set(selected ? 0xffffff : edgeColor(runtime.edgeLookup.get(edgeId)!));
+      material.color.set(selected ? '#ffffff' : runtime.accessors.edgeColor(runtime.edgeLookup.get(edgeId)!));
       mesh.renderOrder = selected ? 18 : 0;
-      mesh.scale.setScalar(selected ? 1.06 : 1);
+      mesh.scale.setScalar(selected ? 1.12 : 1);
     });
-  }, [selectedEdgeId, selectedNodeId]);
+  }, [selectedEdgeId, selectedNodeId, stableTheme]);
 
   return <div ref={hostRef} className="galaxy-scene" />;
 }

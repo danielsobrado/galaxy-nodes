@@ -1,26 +1,33 @@
 export { default as GalaxyGraphVisualizer } from './GalaxyGraphVisualizer';
-export type { GalaxyGraphVisualizerOptions, GalaxyGraphVisualizerProps } from './GalaxyGraphVisualizer';
+export type {
+  GalaxyGraphVisualizerOptions,
+  GalaxyGraphVisualizerProps,
+  GraphStats,
+} from './GalaxyGraphVisualizer';
 export { default as GalaxyScene } from './GalaxyScene';
 export type { CameraCommand, GalaxyGraphTheme, GalaxySceneProps } from './GalaxyScene';
 export {
-  DATASET_SIZES,
+  defaultEdgeColor,
+  defaultEdgeWeight,
+  defaultNodeColor,
+  defaultNodeLabel,
+  defaultNodeSize,
   formatCompactNumber,
-  generateGalaxyDataset,
   getEdgeId,
-  getNodeColor,
   parseGraphDataset,
-  type DatasetSize,
+  resolveAccessors,
 } from './data';
-export {
-  CATEGORIES,
-  CATEGORY_COLORS,
-  type Category,
-  type GraphCluster,
-  type GraphDataset,
-  type GraphEdge,
-  type GraphMetrics,
-  type GraphNode,
-  type Sentiment,
-  type SpaceDirection,
-  type Vec3,
+export type { ParsedGraphDataset } from './data';
+export { resolveGraphLayout } from './layout';
+export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from './layout';
+export type {
+  EdgeEndpoint,
+  GraphAccessors,
+  GraphCluster,
+  GraphDataset,
+  GraphEdge,
+  GraphNode,
+  ResolvedAccessors,
+  SpaceDirection,
+  Vec3,
 } from './types';

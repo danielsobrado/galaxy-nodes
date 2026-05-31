@@ -1,59 +1,21 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
+  defaultEdgeColor,
+  defaultEdgeWeight,
+  defaultNodeColor,
+  defaultNodeLabel,
+  defaultNodeSize,
   formatCompactNumber,
-  generateGalaxyDataset,
   getEdgeId,
-  getNodeColor,
   parseGraphDataset,
+  resolveAccessors,
 } from './data';
-import { CATEGORY_COLORS, type GraphNode } from './types';
+import type { GraphDataset, GraphNode } from './types';
 
 const sampleNode = (overrides: Partial<GraphNode> = {}): GraphNode => ({
   id: 'node-1',
-  label: 'Crypto liquidity surge 1A',
-  category: 'Crypto',
-  clusterId: 'cluster-0',
   position: { x: 1, y: 2, z: 3 },
-  size: 4,
-  score: 80,
-  sentiment: 'yes',
-  metrics: { volume: 1, activeTraders: 2, marketPrice: 3, winRate: 4 },
-  isMajor: true,
   ...overrides,
-});
-
-describe('generateGalaxyDataset', () => {
-  it('produces the requested number of nodes', () => {
-    expect(generateGalaxyDataset(10_000).nodes).toHaveLength(10_000);
-  });
-
-  it('is deterministic for a given size (ignoring the generated timestamp)', () => {
-    const first = generateGalaxyDataset(10_000);
-    const second = generateGalaxyDataset(10_000);
-    expect(second.nodes).toEqual(first.nodes);
-    expect(second.edges).toEqual(first.edges);
-    expect(second.clusters).toEqual(first.clusters);
-  });
-
-  it('only emits edges that reference existing nodes or clusters', () => {
-    const dataset = generateGalaxyDataset(10_000);
-    const ids = new Set([
-      ...dataset.nodes.map((node) => node.id),
-      ...dataset.clusters.map((cluster) => cluster.id),
-    ]);
-    for (const edge of dataset.edges) {
-      expect(ids.has(edge.source)).toBe(true);
-      expect(ids.has(edge.target)).toBe(true);
-    }
-  });
-
-  it('round-trips through parseGraphDataset', () => {
-    const dataset = generateGalaxyDataset(10_000);
-    const parsed = parseGraphDataset(JSON.parse(JSON.stringify(dataset)));
-    expect(parsed.nodes).toEqual(dataset.nodes);
-    expect(parsed.edges).toEqual(dataset.edges);
-    expect(parsed.clusters).toEqual(dataset.clusters);
-  });
 });
 
 describe('parseGraphDataset', () => {
@@ -61,54 +23,125 @@ describe('parseGraphDataset', () => {
     expect(() => parseGraphDataset(null)).toThrow(/JSON object/);
   });
 
-  it('rejects a payload missing the required arrays', () => {
-    expect(() => parseGraphDataset({ nodes: [] })).toThrow(/nodes, edges, and clusters/);
+  it('rejects a payload missing the required node or edge arrays', () => {
+    expect(() => parseGraphDataset({ nodes: [] })).toThrow(/nodes and edges/);
+    expect(() => parseGraphDataset({ edges: [] })).toThrow(/nodes and edges/);
   });
 
-  it('reports the offending path for an invalid category', () => {
-    const dataset = generateGalaxyDataset(10_000);
-    const broken = JSON.parse(JSON.stringify(dataset));
-    broken.nodes[0].category = 'Nope';
-    expect(() => parseGraphDataset(broken)).toThrow(/nodes\[0\]\.category/);
+  it('accepts a minimal node (id only) and passes meta through untouched', () => {
+    const parsed = parseGraphDataset({
+      nodes: [{ id: 'a', meta: { anything: [1, 2] } }],
+      edges: [],
+    });
+    expect(parsed.nodes[0]).toEqual({ id: 'a', meta: { anything: [1, 2] } });
+    expect(parsed.clusters).toEqual([]);
   });
 
-  it('rejects non-finite numbers', () => {
-    const dataset = generateGalaxyDataset(10_000);
-    const broken = JSON.parse(JSON.stringify(dataset));
-    broken.nodes[0].score = Number.POSITIVE_INFINITY;
-    // JSON.stringify turns Infinity into null, which also fails the number check.
-    expect(() => parseGraphDataset(broken)).toThrow(/nodes\[0\]\.score/);
+  it('rejects non-array clusters when provided', () => {
+    expect(() => parseGraphDataset({ nodes: [], edges: [], clusters: 'nope' })).toThrow(/clusters/);
+  });
+
+  it('keeps optional fields when present', () => {
+    const parsed = parseGraphDataset({
+      nodes: [{ id: 'a', position: { x: 0, y: 0, z: 0 }, label: 'A', size: 4, major: true, group: 'g', color: '#fff' }],
+      edges: [],
+      clusters: [],
+    });
+    expect(parsed.nodes[0]).toMatchObject({ label: 'A', size: 4, major: true, group: 'g', color: '#fff' });
+  });
+
+  it('rejects malformed positions when provided', () => {
+    expect(() =>
+      parseGraphDataset({ nodes: [{ id: 'a', position: { x: 0, y: 'nope', z: 0 } }], edges: [], clusters: [] }),
+    ).toThrow(/nodes\[0\]\.position\.y/);
+  });
+
+  it('rejects malformed cluster centers when provided', () => {
+    expect(() =>
+      parseGraphDataset({ nodes: [], edges: [], clusters: [{ id: 'cluster-a', label: 'A', center: { x: 0, z: 0 } }] }),
+    ).toThrow(/clusters\[0\]\.center\.y/);
+  });
+
+  it('rejects malformed cluster radii when provided', () => {
+    expect(() =>
+      parseGraphDataset({ nodes: [], edges: [], clusters: [{ id: 'cluster-a', label: 'A', radius: 0 }] }),
+    ).toThrow(/clusters\[0\]\.radius/);
+  });
+
+  it('reports the offending path for an invalid optional field', () => {
+    expect(() =>
+      parseGraphDataset({ nodes: [{ id: 'a', position: { x: 0, y: 0, z: 0 }, size: 'big' }], edges: [], clusters: [] }),
+    ).toThrow(/nodes\[0\]\.size/);
+  });
+
+  it('requires edge source and target', () => {
+    expect(() => parseGraphDataset({ nodes: [], edges: [{ source: 'a' }], clusters: [] })).toThrow(/edges\[0\]\.target/);
   });
 
   it('defaults generatedAt when absent', () => {
-    const parsed = parseGraphDataset({ nodes: [], edges: [], clusters: [] });
+    const parsed = parseGraphDataset({ nodes: [], edges: [] });
     expect(typeof parsed.generatedAt).toBe('string');
     expect(parsed.generatedAt.length).toBeGreaterThan(0);
+  });
+
+  it('allows typed datasets without coordinates or clusters', () => {
+    type Meta = { kind: 'person' };
+    const dataset: GraphDataset<Meta> = {
+      nodes: [{ id: 'a', meta: { kind: 'person' } }],
+      edges: [],
+    };
+
+    expectTypeOf(dataset.nodes[0].meta).toEqualTypeOf<Meta | undefined>();
+    expect(dataset.clusters).toBeUndefined();
+  });
+});
+
+describe('default accessors', () => {
+  it('honours an explicit node color over the group hash', () => {
+    expect(defaultNodeColor(sampleNode({ color: '#123456', group: 'x' }))).toBe('#123456');
+  });
+
+  it('hashes the same group to a stable color', () => {
+    const a = defaultNodeColor(sampleNode({ group: 'alpha' }));
+    const b = defaultNodeColor(sampleNode({ group: 'alpha' }));
+    expect(a).toBe(b);
+    expect(a).toMatch(/^#/);
+  });
+
+  it('falls back to a neutral color without a group', () => {
+    expect(defaultNodeColor(sampleNode())).toBe('#9ca3af');
+  });
+
+  it('defaults size, label, and edge weight', () => {
+    expect(defaultNodeSize(sampleNode())).toBe(1);
+    expect(defaultNodeSize(sampleNode({ size: 7 }))).toBe(7);
+    expect(defaultNodeLabel(sampleNode())).toBeNull();
+    expect(defaultNodeLabel(sampleNode({ label: 'hi' }))).toBe('hi');
+    expect(defaultEdgeWeight({ source: 'a', target: 'b' })).toBe(0.5);
+  });
+
+  it('colors filament edges differently from relationships', () => {
+    expect(defaultEdgeColor({ source: 'a', target: 'b', kind: 'filament' })).toBe('#aeb8c2');
+    expect(defaultEdgeColor({ source: 'a', target: 'b' })).toBe('#6bd7ff');
+    expect(defaultEdgeColor({ source: 'a', target: 'b', color: '#abc' })).toBe('#abc');
+  });
+
+  it('resolveAccessors fills every slot, preferring overrides', () => {
+    const resolved = resolveAccessors({ nodeSize: () => 99 });
+    expect(resolved.nodeSize(sampleNode())).toBe(99);
+    expect(resolved.nodeColor(sampleNode({ color: '#000' }))).toBe('#000');
+    expect(typeof resolved.edgeColor({ source: 'a', target: 'b' })).toBe('string');
   });
 });
 
 describe('getEdgeId', () => {
   it('prefers an explicit id', () => {
-    expect(getEdgeId({ id: 'edge-x', source: 'a', target: 'b', weight: 1, kind: 'trade' })).toBe('edge-x');
+    expect(getEdgeId({ id: 'edge-x', source: 'a', target: 'b', kind: 'trade' })).toBe('edge-x');
   });
 
   it('falls back to a composite id using the index', () => {
-    expect(getEdgeId({ source: 'a', target: 'b', weight: 1, kind: 'signal' }, 7)).toBe('signal:a->b:7');
-  });
-});
-
-describe('getNodeColor', () => {
-  it('uses sentiment colors when sharpMoney is on', () => {
-    expect(getNodeColor(sampleNode({ sentiment: 'yes' }), true)).toBe('#42f7bd');
-    expect(getNodeColor(sampleNode({ sentiment: 'no' }), true)).toBe('#ff6f86');
-  });
-
-  it('honours sentiment color overrides', () => {
-    expect(getNodeColor(sampleNode({ sentiment: 'yes' }), true, undefined, { yes: '#abcabc' })).toBe('#abcabc');
-  });
-
-  it('uses category colors when sharpMoney is off', () => {
-    expect(getNodeColor(sampleNode({ category: 'Tech' }), false)).toBe(CATEGORY_COLORS.Tech);
+    expect(getEdgeId({ source: 'a', target: 'b', kind: 'signal' }, 7)).toBe('signal:a->b:7');
+    expect(getEdgeId({ source: 'a', target: 'b' }, 2)).toBe('edge:a->b:2');
   });
 });
 

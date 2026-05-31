@@ -1,22 +1,39 @@
-import { useRef, useState } from 'react';
-import { Database, Import } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { Activity, Database, Import } from 'lucide-react';
+import { GalaxyGraphVisualizer, parseGraphDataset, type GraphDataset } from 'galaxy-nodes';
 import {
+  createMarketAccessors,
   DATASET_SIZES,
-  GalaxyGraphVisualizer,
   generateGalaxyDataset,
-  parseGraphDataset,
-  type GraphDataset,
-} from 'galaxy-nodes';
+  MARKET_CATEGORIES,
+  renderMarketEdgeDetail,
+  renderMarketNodeDetail,
+  type MarketClusterMeta,
+  type MarketNodeMeta,
+} from 'galaxy-nodes/presets/markets';
+
+const marketLegend = (
+  <>
+    <span>Color</span>
+    <b className="yes">YES</b>
+    <b className="no">NO</b>
+    <span>by sentiment / category</span>
+  </>
+);
 
 export default function App() {
   const graphApiUrl = (import.meta.env.VITE_GRAPH_API_URL as string | undefined) ?? 'http://127.0.0.1:8787';
-  const [dataset, setDataset] = useState<GraphDataset>(() => generateGalaxyDataset(75_000));
+  const [dataset, setDataset] = useState<GraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>>(() => generateGalaxyDataset(75_000));
+  const [sharpMoney, setSharpMoney] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Memoize so toggling Sharp flow swaps accessors (one scene rebuild) instead
+  // of rebuilding on every render.
+  const accessors = useMemo(() => createMarketAccessors({ sharpMoney }), [sharpMoney]);
+
   async function importDataset(file: File) {
-    const imported = parseGraphDataset(JSON.parse(await file.text()));
-    setDataset(imported);
+    setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(JSON.parse(await file.text())));
     setDbStatus('idle');
   }
 
@@ -25,7 +42,7 @@ export default function App() {
     try {
       const response = await fetch(`${graphApiUrl.replace(/\/$/, '')}/graph`);
       if (!response.ok) throw new Error(`Graph API returned ${response.status}`);
-      setDataset(parseGraphDataset(await response.json()));
+      setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(await response.json()));
       setDbStatus('loaded');
     } catch {
       setDbStatus('error');
@@ -35,11 +52,27 @@ export default function App() {
   return (
     <GalaxyGraphVisualizer
       dataset={dataset}
-      onDatasetChange={setDataset}
+      accessors={accessors}
+      groups={MARKET_CATEGORIES}
+      legend={marketLegend}
+      renderNodeDetail={renderMarketNodeDetail}
+      renderEdgeDetail={renderMarketEdgeDetail}
+      onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
       options={{
         datasetSizes: DATASET_SIZES,
         showDatasetSizeControls: true,
       }}
+      controlActions={
+        <button
+          type="button"
+          className={sharpMoney ? 'toggle is-on' : 'toggle'}
+          aria-pressed={sharpMoney}
+          onClick={() => setSharpMoney((value) => !value)}
+        >
+          <Activity size={15} aria-hidden="true" />
+          Sharp flow <span>{sharpMoney ? 'ON' : 'OFF'}</span>
+        </button>
+      }
       sideRailActions={
         <>
           <button

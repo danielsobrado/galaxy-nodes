@@ -7,28 +7,33 @@ const port = Number(process.env.PORT ?? 8787);
 
 app.use(cors());
 
+// Emits the generic galaxy-nodes shape: structural fields at the top level and
+// the domain payload under `meta`, matching the markets preset's MarketNodeMeta.
 function asNode(record) {
   const properties = record.get('n').properties;
   return {
     id: properties.id,
     label: properties.label,
-    category: properties.category,
-    clusterId: properties.clusterId,
     position: {
       x: Number(properties.x),
       y: Number(properties.y),
       z: Number(properties.z),
     },
     size: Number(properties.size),
-    score: Number(properties.score),
-    sentiment: properties.sentiment,
-    metrics: {
-      volume: Number(properties.volume),
-      activeTraders: Number(properties.activeTraders),
-      marketPrice: Number(properties.marketPrice),
-      winRate: Number(properties.winRate),
+    major: Boolean(properties.isMajor),
+    group: properties.category,
+    meta: {
+      category: properties.category,
+      clusterId: properties.clusterId,
+      score: Number(properties.score),
+      sentiment: properties.sentiment,
+      metrics: {
+        volume: Number(properties.volume),
+        activeTraders: Number(properties.activeTraders),
+        marketPrice: Number(properties.marketPrice),
+        winRate: Number(properties.winRate),
+      },
     },
-    isMajor: Boolean(properties.isMajor),
   };
 }
 
@@ -37,15 +42,18 @@ function asCluster(record) {
   return {
     id: properties.id,
     label: properties.label,
-    category: properties.category,
     center: {
       x: Number(properties.centerX),
       y: Number(properties.centerY),
       z: Number(properties.centerZ),
     },
     radius: Number(properties.radius),
-    nodeCount: Number(properties.nodeCount),
-    score: Number(properties.score),
+    group: properties.category,
+    meta: {
+      category: properties.category,
+      nodeCount: Number(properties.nodeCount),
+      score: Number(properties.score),
+    },
   };
 }
 
