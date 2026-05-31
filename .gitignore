@@ -6,3 +6,4 @@ examples/basic/dist/
 *.tsbuildinfo
 *.log
 .DS_Store
+.history/
