@@ -271,8 +271,22 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
   const preserveExistingPositions = config.preserveExistingPositions ?? true;
   const spacing = config.spacing ?? DEFAULT_SPACING;
   const clusterRadius = config.clusterRadius ?? DEFAULT_CLUSTER_RADIUS;
-  const seed = config.seed ?? defaultLayoutSeed(dataset);
   const sourceClusters = dataset.clusters ?? [];
+
+  // Deriving the default seed sorts and concatenates every node and edge id into
+  // one large string, which is wasteful when nothing needs generating (authored
+  // positions + clusters). Resolve it lazily so it only runs when a coordinate
+  // is actually generated.
+  let resolvedSeed: string | number | undefined;
+  let seedResolved = false;
+  const getSeed = (): string | number | undefined => {
+    if (config.seed !== undefined) return config.seed;
+    if (!seedResolved) {
+      resolvedSeed = defaultLayoutSeed(dataset);
+      seedResolved = true;
+    }
+    return resolvedSeed;
+  };
 
   dataset.nodes.forEach((node, index) => validateOptionalVec3(node.position, `nodes[${index}].position`));
   sourceClusters.forEach((cluster, index) => {
@@ -308,7 +322,7 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
   groups.forEach((group, index) => {
     groupCenters.set(
       group,
-      cloneVec3(authoredGroupCenter.get(group) ?? groupCenter(index, groups.length, spacing, seed, group)),
+      cloneVec3(authoredGroupCenter.get(group) ?? groupCenter(index, groups.length, spacing, getSeed(), group)),
     );
   });
 
@@ -324,7 +338,7 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
         return;
       }
       generatedNodePositions = true;
-      nodePositions.set(node.id, nodePosition(node, index, nodes.length, center, clusterRadius, seed));
+      nodePositions.set(node.id, nodePosition(node, index, nodes.length, center, clusterRadius, getSeed()));
     });
   }
 
@@ -334,8 +348,8 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
 
   sourceClusters.forEach((cluster, index) => {
     const fallbackCenter = cluster.group
-      ? (groupCenters.get(cluster.group) ?? groupCenter(index, sourceClusters.length, spacing, seed, cluster.id))
-      : groupCenter(groups.length + index, groups.length + sourceClusters.length, spacing, seed, cluster.id);
+      ? (groupCenters.get(cluster.group) ?? groupCenter(index, sourceClusters.length, spacing, getSeed(), cluster.id))
+      : groupCenter(groups.length + index, groups.length + sourceClusters.length, spacing, getSeed(), cluster.id);
     const groupNodes = cluster.group ? (nodesByGroup.get(cluster.group) ?? []) : [];
     const center =
       preserveExistingPositions && cluster.center

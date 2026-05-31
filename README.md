@@ -182,6 +182,39 @@ For remote graphs, keep `largeGraph.enabled` off until you want URL-backed detai
 
 Expansion callbacks return a `GraphDatasetPatch`, which can be merged with `mergeGraphDataset(base, patch, { edgeBudget: 12_000 })`. The merge upserts nodes, clusters, and edges, preserves filaments first, and keeps the highest-weight relationship edges inside the budget.
 
+Keep auth in your host app by wrapping the callback transport. The visualizer passes an `AbortSignal` into each callback so authenticated requests can still be cancelled when the selection or expansion target changes:
+
+```tsx
+function graphApiHeaders(jwt: string, headers?: HeadersInit) {
+  const nextHeaders = new Headers(headers);
+  nextHeaders.set('Authorization', `Bearer ${jwt}`);
+  return nextHeaders;
+}
+
+const fetchGraphApi = (input: string | URL, init: RequestInit = {}) => {
+  return fetch(input, {
+    ...init,
+    headers: graphApiHeaders(jwt, init.headers),
+  });
+};
+
+const largeGraph = {
+  enabled: true,
+  async expandGraph(request, signal) {
+    const response = await fetchGraphApi(`/graph/expand/node/${request.nodeId}`, { signal });
+    if (!response.ok) throw new Error(`Graph expansion returned ${response.status}`);
+    return response.json();
+  },
+  async loadNodeDetail(node, signal) {
+    const response = await fetchGraphApi(`/graph/node/${node.id}/detail`, { signal });
+    if (!response.ok) throw new Error(`Node detail returned ${response.status}`);
+    return response.json();
+  },
+};
+```
+
+The bundled example also accepts `VITE_GRAPH_API_TOKEN` for local testing. Browser-exposed Vite variables are not a secure place for production secrets; production apps should obtain JWTs from their normal client auth flow and enforce them on the graph API.
+
 ## Layout
 
 Coordinates are optional. When any node positions or cluster spatial fields are missing, Galaxy Nodes computes a deterministic 3D galaxy layout from stable node ids, node `group` values, and connected components. Authored node positions, cluster centers, and cluster radii are preserved by default.
@@ -198,6 +231,47 @@ import { resolveGraphLayout } from 'galaxy-nodes';
 const resolved = resolveGraphLayout(dataset, { seed: 'docs-demo' });
 const adaPosition = resolved.nodePositions.get('ada');
 ```
+
+## Styling And Colors
+
+Layout is spatial only. Use `layout` for coordinates, spacing, cluster radius, and deterministic seeds; use `accessors` and `theme` for colors, sizes, labels, and scene chrome. Accessor and theme changes update the existing renderer in place when the dataset topology and layout are unchanged.
+
+Nodes and edges can carry direct `color` fields. Without custom accessors, node colors prefer `node.color`, then hash `node.group` into the built-in palette, then fall back to a neutral gray. Edge colors prefer `edge.color`, with separate defaults for normal relationships and filament edges.
+
+For product palettes or data-driven styling, provide `GraphAccessors`:
+
+```tsx
+import { GalaxyGraphVisualizer, defaultNodeColor, type GraphAccessors, type GraphDataset } from 'galaxy-nodes';
+
+const paletteByGroup: Record<string, string> = {
+  Product: '#facc15',
+  Platform: '#38bdf8',
+  Security: '#fb7185',
+};
+
+const accessors: GraphAccessors = {
+  nodeColor: (node) => node.color ?? paletteByGroup[node.group ?? ''] ?? defaultNodeColor(node),
+  edgeColor: (edge) => edge.color ?? (edge.weight && edge.weight > 0.75 ? '#f5cf5b' : '#6bd7ff'),
+  nodeSize: (node) => node.size ?? (node.major ? 3 : 1),
+  nodeLabel: (node) => node.label ?? null,
+};
+
+export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
+  return (
+    <GalaxyGraphVisualizer
+      dataset={dataset}
+      accessors={accessors}
+      theme={{
+        background: '#07090d',
+        panelAccentColor: '#67e8c9',
+        selectedColor: '#f8fafc',
+      }}
+    />
+  );
+}
+```
+
+`theme.background` controls the WebGL clear color and app background. `theme.panelAccentColor` controls HUD accents and secondary selection markers. `theme.selectedColor` controls selected/highlighted scene elements. There is no separate `palette` prop; keep palette logic in `nodeColor` or domain-specific accessor helpers.
 
 ## Corporate Demo Preset
 

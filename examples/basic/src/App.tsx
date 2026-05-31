@@ -29,10 +29,19 @@ const marketLegend = (
   </>
 );
 
+const INITIAL_DATASET_SIZE = DATASET_SIZES[0];
+
+function graphApiHeaders(token: string | undefined, headers?: HeadersInit): Headers {
+  const nextHeaders = new Headers(headers);
+  if (token && !nextHeaders.has('Authorization')) nextHeaders.set('Authorization', `Bearer ${token}`);
+  return nextHeaders;
+}
+
 export default function App() {
   const graphApiUrl = (import.meta.env.VITE_GRAPH_API_URL as string | undefined) ?? 'http://127.0.0.1:8787';
+  const graphApiToken = import.meta.env.VITE_GRAPH_API_TOKEN as string | undefined;
   const [dataset, setDataset] = useState<GraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>>(() =>
-    generateGalaxyDataset(75_000),
+    generateGalaxyDataset(INITIAL_DATASET_SIZE),
   );
   const [sharpMoney, setSharpMoney] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
@@ -41,6 +50,15 @@ export default function App() {
   // Memoize so parent renders do not force redundant color/size buffer refreshes.
   const accessors = useMemo(() => createMarketAccessors({ sharpMoney }), [sharpMoney]);
   const apiBase = graphApiUrl.replace(/\/$/, '');
+  const fetchGraphApi = useMemo(
+    () =>
+      (input: string | URL, init: RequestInit = {}) =>
+        fetch(input, {
+          ...init,
+          headers: graphApiHeaders(graphApiToken, init.headers),
+        }),
+    [graphApiToken],
+  );
   const largeGraph = useMemo<LargeGraphOptions<MarketNodeMeta, unknown, MarketClusterMeta>>(
     () => ({
       enabled: dbStatus === 'loaded',
@@ -65,22 +83,24 @@ export default function App() {
           url.searchParams.set('dz', String(request.directionVector.z));
         }
 
-        const response = await fetch(url, { signal });
+        const response = await fetchGraphApi(url, { signal });
         if (!response.ok) throw new Error(`Graph expansion returned ${response.status}`);
         return (await response.json()) as GraphDatasetPatch<MarketNodeMeta, unknown, MarketClusterMeta>;
       },
       async loadEdgeDetail(edge, _endpoints, signal) {
-        const response = await fetch(`${apiBase}/graph/edge/${encodeURIComponent(getEdgeId(edge))}/detail`, { signal });
+        const response = await fetchGraphApi(`${apiBase}/graph/edge/${encodeURIComponent(getEdgeId(edge))}/detail`, {
+          signal,
+        });
         if (!response.ok) throw new Error(`Edge detail returned ${response.status}`);
         return response.json();
       },
       async loadNodeDetail(node, signal) {
-        const response = await fetch(`${apiBase}/graph/node/${encodeURIComponent(node.id)}/detail`, { signal });
+        const response = await fetchGraphApi(`${apiBase}/graph/node/${encodeURIComponent(node.id)}/detail`, { signal });
         if (!response.ok) throw new Error(`Node detail returned ${response.status}`);
         return response.json();
       },
     }),
-    [apiBase, dbStatus],
+    [apiBase, dbStatus, fetchGraphApi],
   );
 
   async function importDataset(file: File) {
@@ -91,7 +111,7 @@ export default function App() {
   async function loadDatabaseGraph() {
     setDbStatus('loading');
     try {
-      const response = await fetch(`${apiBase}/graph`);
+      const response = await fetchGraphApi(`${apiBase}/graph`);
       if (!response.ok) throw new Error(`Graph API returned ${response.status}`);
       setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(await response.json()));
       setDbStatus('loaded');

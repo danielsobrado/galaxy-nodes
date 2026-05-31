@@ -158,17 +158,37 @@ export function TypedGraph() {
 }
 ```
 
-## Custom Theme
+## Custom Colors And Theme
+
+`layout` controls coordinates only. Put palette rules, data-driven node and edge colors, labels, and sizes in `accessors`; put scene background and selection colors in `theme`.
 
 ```tsx
-<GalaxyGraphVisualizer
-  dataset={dataset}
-  theme={{
-    background: '#07090d',
-    panelAccentColor: '#67e8c9',
-    selectedColor: '#f8fafc',
-  }}
-/>
+import { GalaxyGraphVisualizer, defaultNodeColor, type GraphAccessors, type GraphDataset } from 'galaxy-nodes';
+
+const paletteByGroup: Record<string, string> = {
+  Product: '#facc15',
+  Platform: '#38bdf8',
+  Security: '#fb7185',
+};
+
+const accessors: GraphAccessors = {
+  nodeColor: (node) => node.color ?? paletteByGroup[node.group ?? ''] ?? defaultNodeColor(node),
+  edgeColor: (edge) => edge.color ?? (edge.weight && edge.weight > 0.75 ? '#f5cf5b' : '#6bd7ff'),
+};
+
+export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
+  return (
+    <GalaxyGraphVisualizer
+      dataset={dataset}
+      accessors={accessors}
+      theme={{
+        background: '#07090d',
+        panelAccentColor: '#67e8c9',
+        selectedColor: '#f8fafc',
+      }}
+    />
+  );
+}
 ```
 
 ## Scene Only / No HUD
