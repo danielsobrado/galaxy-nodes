@@ -1,15 +1,7 @@
 import type { ReactNode } from 'react';
 import { GitBranch, Radar } from 'lucide-react';
 import { formatCompactNumber, getEdgeId } from '../data';
-import type {
-  EdgeEndpoint,
-  GraphAccessors,
-  GraphCluster,
-  GraphDataset,
-  GraphEdge,
-  GraphNode,
-  Vec3,
-} from '../types';
+import type { EdgeEndpoint, GraphAccessors, GraphCluster, GraphDataset, GraphEdge, GraphNode, Vec3 } from '../types';
 
 /**
  * Prediction-market preset. This is the original galaxy-nodes flavor, rebuilt on
@@ -179,7 +171,9 @@ function buildClusters(count: number, rand: () => number): ClusterBuild[] {
 }
 
 function makeNodeLabel(category: Category, rand: () => number) {
-  const suffix = Math.floor(randBetween(rand, 100, 9999)).toString(36).toUpperCase();
+  const suffix = Math.floor(randBetween(rand, 100, 9999))
+    .toString(36)
+    .toUpperCase();
   return `${category} ${pick(rand, NODE_TOPICS)} ${suffix}`;
 }
 
@@ -277,8 +271,8 @@ function nodeMeta(node: GraphNode<MarketNodeMeta> | null): MarketNodeMeta | unde
 
 /**
  * Build the color/size/label accessors for the markets preset. Memoize the
- * result - a new identity rebuilds the scene. The accessors read the generic
- * `node.meta` payload, so they plug straight into the engine.
+ * result to avoid redundant buffer refreshes on parent renders. The accessors
+ * read the generic `node.meta` payload, so they plug straight into the engine.
  */
 export function createMarketAccessors(options: MarketAccessorOptions = {}): GraphAccessors<MarketNodeMeta> {
   const sharpMoney = options.sharpMoney ?? true;

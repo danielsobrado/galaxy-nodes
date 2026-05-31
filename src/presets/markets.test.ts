@@ -39,10 +39,7 @@ describe('generateGalaxyDataset', () => {
 
   it('only references existing node or cluster ids in edges', () => {
     const dataset = generateGalaxyDataset(10_000);
-    const ids = new Set([
-      ...dataset.nodes.map((node) => node.id),
-      ...dataset.clusters.map((cluster) => cluster.id),
-    ]);
+    const ids = new Set([...dataset.nodes.map((node) => node.id), ...dataset.clusters.map((cluster) => cluster.id)]);
     for (const edge of dataset.edges) {
       expect(ids.has(edge.source)).toBe(true);
       expect(ids.has(edge.target)).toBe(true);

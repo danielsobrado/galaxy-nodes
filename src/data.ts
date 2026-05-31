@@ -8,7 +8,11 @@ import type {
   Vec3,
 } from './types';
 
-export type ParsedGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown> = GraphDataset<NMeta, EMeta, CMeta> & {
+export type ParsedGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown> = GraphDataset<
+  NMeta,
+  EMeta,
+  CMeta
+> & {
   clusters: GraphCluster<CMeta>[];
   generatedAt: string;
 };
@@ -221,7 +225,8 @@ export function parseGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unkn
     nodes: raw.nodes.map(parseNode<NMeta>),
     edges: raw.edges.map(parseEdge<EMeta>),
     clusters: clusters.map(parseCluster<CMeta>),
-    generatedAt: typeof raw.generatedAt === 'string' && raw.generatedAt.length > 0 ? raw.generatedAt : new Date().toISOString(),
+    generatedAt:
+      typeof raw.generatedAt === 'string' && raw.generatedAt.length > 0 ? raw.generatedAt : new Date().toISOString(),
   };
 }
 

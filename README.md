@@ -65,6 +65,63 @@ export function GraphView() {
 
 Lower-level scene-only embedding is available through `GalaxyScene` when you want to provide your own HUD, panels, and data controls.
 
+## Reduced Motion
+
+Galaxy Nodes respects `prefers-reduced-motion` by default. With the default `motionPreference: 'system'`, ambient galaxy rotation, planet spin, and selection marker spin are paused for users who request reduced motion while direct interactions such as orbiting, keyboard navigation, search focus, and selection remain available.
+
+Override the system preference only when your product has its own motion setting:
+
+```tsx
+<GalaxyGraphVisualizer dataset={dataset} options={{ motionPreference: 'reduced' }} />
+```
+
+Use `motionPreference: 'full'` to force ambient motion, or omit the option to follow the user's OS/browser preference.
+
+## WebGL Fallback
+
+If WebGL is unavailable, scene initialization fails, or the browser loses the WebGL context, the component renders an accessible fallback panel with dataset counts. Scene-only controls are disabled while the renderer is unavailable, and recoverable failures include a retry button.
+
+```tsx
+<GalaxyGraphVisualizer
+  dataset={dataset}
+  onSceneFailure={(failure) => {
+    console.warn(failure.reason, failure.message);
+  }}
+/>
+```
+
+The failure reason is one of `'webgl-unavailable'`, `'context-lost'`, or `'scene-error'`.
+
+## Next.js
+
+Galaxy Nodes is a client-rendered React component. In the App Router, put the graph in a client component and import the stylesheet there or from a client-side wrapper:
+
+```tsx
+'use client';
+
+import { GalaxyGraphVisualizer, type GraphDataset } from 'galaxy-nodes';
+import 'galaxy-nodes/styles.css';
+
+export function GraphClient({ dataset }: { dataset: GraphDataset }) {
+  return <GalaxyGraphVisualizer dataset={dataset} />;
+}
+```
+
+The package guards browser-only work so server rendering can safely encounter the component tree, but the WebGL scene starts only after hydration. For very large graphs, `next/dynamic(() => import('./GraphClient'), { ssr: false })` can still be useful to defer client bundle work; it is not required for correctness.
+
+## Performance Envelope
+
+The built-in renderer is tuned for sparse, large graph exploration:
+
+- Target envelope: up to about 100k nodes and 500 sparse edges on a modern desktop GPU.
+- Nodes are always kept in one GPU point cloud, including nodes marked `major`.
+- Major nodes get a capped instanced planet/ring overlay for inspection; the point cloud still represents every node.
+- Group filters, cluster toggles, galaxy mode, selection, theme changes, and accessor changes update existing buffers, uniforms, materials, and visibility in place instead of rebuilding the renderer.
+- Dataset identity/topology changes and layout option changes can still rebuild the scene because they alter coordinates, lookup maps, and edge geometry.
+- Edges use sparse TubeGeometry for visual quality. Dense edge graphs need a separate line-buffer or level-of-detail renderer.
+
+For best results, keep the `dataset`, `layout`, and accessor objects stable with `useMemo` when their inputs have not changed.
+
 ## Layout
 
 Coordinates are optional. When any node positions or cluster spatial fields are missing, Galaxy Nodes computes a deterministic 3D galaxy layout from stable node ids, node `group` values, and connected components. Authored node positions, cluster centers, and cluster radii are preserved by default.
@@ -170,6 +227,20 @@ The dev server runs `examples/basic`, which imports the library through the pack
 npm run build
 npm run build:example
 ```
+
+Run the full contribution gate locally with:
+
+```bash
+npm run ci
+```
+
+API documentation is generated with TypeDoc:
+
+```bash
+npm run docs:api
+```
+
+Focused examples are in [docs/examples.md](docs/examples.md), covering a minimal graph, custom data shape, custom theme, scene-only/no-HUD usage, and Next.js client components. GitHub Actions builds the package, example app, tests, lint, format check, and generated API docs on every PR. The Pages workflow publishes the live demo and API docs from `main`.
 
 ## Memgraph Demo
 

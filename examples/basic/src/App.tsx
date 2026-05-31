@@ -23,13 +23,14 @@ const marketLegend = (
 
 export default function App() {
   const graphApiUrl = (import.meta.env.VITE_GRAPH_API_URL as string | undefined) ?? 'http://127.0.0.1:8787';
-  const [dataset, setDataset] = useState<GraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>>(() => generateGalaxyDataset(75_000));
+  const [dataset, setDataset] = useState<GraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>>(() =>
+    generateGalaxyDataset(75_000),
+  );
   const [sharpMoney, setSharpMoney] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Memoize so toggling Sharp flow swaps accessors (one scene rebuild) instead
-  // of rebuilding on every render.
+  // Memoize so parent renders do not force redundant color/size buffer refreshes.
   const accessors = useMemo(() => createMarketAccessors({ sharpMoney }), [sharpMoney]);
 
   async function importDataset(file: File) {
@@ -77,7 +78,9 @@ export default function App() {
         <>
           <button
             type="button"
-            className={dbStatus === 'loaded' || dbStatus === 'loading' ? 'is-active' : dbStatus === 'error' ? 'is-error' : ''}
+            className={
+              dbStatus === 'loaded' || dbStatus === 'loading' ? 'is-active' : dbStatus === 'error' ? 'is-error' : ''
+            }
             title={`Load from Memgraph API (${graphApiUrl})`}
             onClick={() => void loadDatabaseGraph()}
           >

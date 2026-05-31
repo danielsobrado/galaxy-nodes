@@ -1,0 +1,9 @@
+{
+  "entryPoints": ["src/index.ts", "src/presets/markets.tsx"],
+  "entryPointStrategy": "expand",
+  "out": "docs/api",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "readme": "README.md",
+  "plugin": []
+}

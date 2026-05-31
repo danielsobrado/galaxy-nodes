@@ -98,7 +98,9 @@ async function seed() {
       }
     }
 
-    console.log(`Seeded ${dataset.nodes.length} nodes, ${dataset.clusters.length} clusters, ${dataset.edges.length} relationships.`);
+    console.log(
+      `Seeded ${dataset.nodes.length} nodes, ${dataset.clusters.length} clusters, ${dataset.edges.length} relationships.`,
+    );
   } finally {
     await session.close();
     await closeDriver();

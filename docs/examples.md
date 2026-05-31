@@ -1,0 +1,114 @@
+# Focused Examples
+
+These examples are intentionally small. They show the integration shapes people usually need before adopting a visualization package.
+
+## Minimal Graph
+
+```tsx
+import { GalaxyGraphVisualizer, type GraphDataset } from 'galaxy-nodes';
+import 'galaxy-nodes/styles.css';
+
+const dataset: GraphDataset = {
+  nodes: [
+    { id: 'api', label: 'API', group: 'Services', major: true },
+    { id: 'worker', label: 'Worker', group: 'Services' },
+  ],
+  edges: [{ source: 'api', target: 'worker', weight: 0.7 }],
+};
+
+export function MinimalGraph() {
+  return <GalaxyGraphVisualizer dataset={dataset} layout={{ seed: 'minimal' }} />;
+}
+```
+
+## Custom Data Shape
+
+```tsx
+import { GalaxyGraphVisualizer, type GraphAccessors, type GraphDataset } from 'galaxy-nodes';
+
+interface ServiceMeta {
+  latencyMs: number;
+  tier: 'frontend' | 'backend';
+}
+
+const dataset: GraphDataset<ServiceMeta> = {
+  nodes: [
+    { id: 'web', label: 'Web', group: 'Product', major: true, meta: { latencyMs: 42, tier: 'frontend' } },
+    { id: 'api', label: 'API', group: 'Platform', meta: { latencyMs: 87, tier: 'backend' } },
+  ],
+  edges: [{ source: 'web', target: 'api', weight: 0.9 }],
+};
+
+const accessors: GraphAccessors<ServiceMeta> = {
+  nodeColor: (node) => (node.meta?.tier === 'frontend' ? '#facc15' : '#38bdf8'),
+  nodeSize: (node) => (node.meta?.latencyMs ?? 1) / 10,
+};
+
+export function TypedGraph() {
+  return <GalaxyGraphVisualizer dataset={dataset} accessors={accessors} />;
+}
+```
+
+## Custom Theme
+
+```tsx
+<GalaxyGraphVisualizer
+  dataset={dataset}
+  theme={{
+    background: '#07090d',
+    panelAccentColor: '#67e8c9',
+    selectedColor: '#f8fafc',
+  }}
+/>
+```
+
+## Scene Only / No HUD
+
+Use `GalaxyScene` when your app owns the controls, panels, and selection state.
+
+```tsx
+import { useState } from 'react';
+import { GalaxyScene, type CameraCommand, type GraphDataset, type GraphEdge, type GraphNode } from 'galaxy-nodes';
+
+export function SceneOnly({ dataset }: { dataset: GraphDataset }) {
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [selectedEdge, setSelectedEdge] = useState<GraphEdge | null>(null);
+  const [cameraCommand] = useState<CameraCommand | null>(null);
+
+  return (
+    <GalaxyScene
+      dataset={dataset}
+      activeGroup={null}
+      showClusters
+      galaxyMode
+      cameraCommand={cameraCommand}
+      selectedNodeId={selectedNode?.id ?? null}
+      selectedEdgeId={selectedEdge?.id ?? null}
+      onSelectNode={setSelectedNode}
+      onHoverNode={() => undefined}
+      onSelectEdge={setSelectedEdge}
+      onHoverEdge={() => undefined}
+    />
+  );
+}
+```
+
+## Next.js
+
+Galaxy Nodes needs browser APIs, so load it from a client component.
+
+```tsx
+'use client';
+
+import dynamic from 'next/dynamic';
+import type { GraphDataset } from 'galaxy-nodes';
+import 'galaxy-nodes/styles.css';
+
+const GalaxyGraphVisualizer = dynamic(() => import('galaxy-nodes').then((module) => module.GalaxyGraphVisualizer), {
+  ssr: false,
+});
+
+export function GalaxyNodesClient({ dataset }: { dataset: GraphDataset }) {
+  return <GalaxyGraphVisualizer dataset={dataset} layout={{ seed: 'nextjs' }} />;
+}
+```

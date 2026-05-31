@@ -41,6 +41,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "docs/images/demo1_v0.1.jpg",
     "LICENSE"
   ],
@@ -52,7 +53,13 @@
     "build": "npm run build:lib",
     "build:example": "tsc --noEmit -p examples/basic/tsconfig.json && vite build --config examples/basic/vite.config.ts",
     "build:lib": "vite build && tsc -p tsconfig.build.json && node scripts/copy-styles.mjs",
+    "ci": "npm run lint && npm run format:check && npm test && npm run build && npm run build:example && npm run docs:api",
     "dev": "vite --config examples/basic/vite.config.ts --host 127.0.0.1",
+    "docs:api": "typedoc",
+    "docs:site": "node scripts/build-pages-site.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
     "pack:dry": "npm pack --dry-run",
     "prepublishOnly": "npm run build",
     "preview": "vite preview --config examples/basic/vite.config.ts --host 127.0.0.1",
@@ -67,15 +74,24 @@
     "three": ">=0.160.0 <1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "25.9.1",
     "@types/react": "19.2.15",
     "@types/react-dom": "19.2.3",
     "@types/three": "0.184.1",
     "@vitejs/plugin-react": "6.0.2",
+    "eslint": "^10.4.1",
+    "globals": "^17.6.0",
+    "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "three": "0.184.0",
+    "typedoc": "^0.28.19",
     "typescript": "6.0.3",
+    "typescript-eslint": "^8.60.0",
     "vite": "8.0.14",
     "vitest": "3.2.4"
   }

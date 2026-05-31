@@ -4,17 +4,17 @@ services:
   memgraph:
     image: memgraph/memgraph-platform:latest
     ports:
-      - "7687:7687"
-      - "3000:3000"
-      - "7444:7444"
+      - '7687:7687'
+      - '3000:3000'
+      - '7444:7444'
     volumes:
       - memgraph_lib:/var/lib/memgraph
       - memgraph_log:/var/log/memgraph
       - memgraph_etc:/etc/memgraph
     environment:
-      MEMGRAPH: "--log-level=INFO"
+      MEMGRAPH: '--log-level=INFO'
     healthcheck:
-      test: ["CMD-SHELL", "echo 'RETURN 1;' | mgconsole --host 127.0.0.1 --port 7687 >/dev/null 2>&1 || exit 1"]
+      test: ['CMD-SHELL', "echo 'RETURN 1;' | mgconsole --host 127.0.0.1 --port 7687 >/dev/null 2>&1 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 24
@@ -27,8 +27,8 @@ services:
         condition: service_healthy
     environment:
       MEMGRAPH_URI: bolt://memgraph:7687
-      DEMO_NODE_COUNT: "8000"
-    command: ["npm", "run", "seed"]
+      DEMO_NODE_COUNT: '8000'
+    command: ['npm', 'run', 'seed']
 
   api:
     build:
@@ -40,10 +40,10 @@ services:
         condition: service_completed_successfully
     environment:
       MEMGRAPH_URI: bolt://memgraph:7687
-      PORT: "8787"
+      PORT: '8787'
     ports:
-      - "8787:8787"
-    command: ["npm", "start"]
+      - '8787:8787'
+    command: ['npm', 'start']
 
 volumes:
   memgraph_lib:

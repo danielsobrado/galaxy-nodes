@@ -43,11 +43,14 @@ describe('scene data helpers', () => {
   });
 
   it('caps major overlays separately from point rendering', () => {
-    const manyMajorNodes = Array.from({ length: 120 }, (_, index): GraphNode => ({
-      id: `node-${index}`,
-      group: index % 2 === 0 ? 'Even' : 'Odd',
-      major: true,
-    }));
+    const manyMajorNodes = Array.from(
+      { length: 120 },
+      (_, index): GraphNode => ({
+        id: `node-${index}`,
+        group: index % 2 === 0 ? 'Even' : 'Odd',
+        major: true,
+      }),
+    );
     const index = buildSceneNodeIndex(manyMajorNodes);
 
     expect(selectMajorOverlayNodes(index, null).length).toBe(96);

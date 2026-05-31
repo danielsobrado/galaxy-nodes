@@ -46,12 +46,12 @@ function hasVec3(value: unknown): value is Vec3 {
   const vec = value as Vec3 | undefined;
   return Boolean(
     vec &&
-      typeof vec.x === 'number' &&
-      Number.isFinite(vec.x) &&
-      typeof vec.y === 'number' &&
-      Number.isFinite(vec.y) &&
-      typeof vec.z === 'number' &&
-      Number.isFinite(vec.z),
+    typeof vec.x === 'number' &&
+    Number.isFinite(vec.x) &&
+    typeof vec.y === 'number' &&
+    Number.isFinite(vec.y) &&
+    typeof vec.z === 'number' &&
+    Number.isFinite(vec.z),
   );
 }
 
@@ -82,7 +82,10 @@ function seededSigned(seed: string | number | undefined, key: string) {
 }
 
 function defaultLayoutSeed<NMeta, EMeta, CMeta>(dataset: GraphDataset<NMeta, EMeta, CMeta>) {
-  const nodeKey = dataset.nodes.map((node) => node.id).sort((a, b) => a.localeCompare(b)).join('|');
+  const nodeKey = dataset.nodes
+    .map((node) => node.id)
+    .sort((a, b) => a.localeCompare(b))
+    .join('|');
   const edgeKey = dataset.edges
     .map((edge, index) => `${getEdgeId(edge, index)}:${edge.source}->${edge.target}`)
     .sort((a, b) => a.localeCompare(b))
@@ -95,7 +98,10 @@ function groupLabelForComponent(index: number) {
 }
 
 function clusterIdForGroup(group: string) {
-  const safe = group.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const safe = group
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
   return `layout-${safe || hashString(group).toString(36)}`;
 }
 
@@ -169,7 +175,13 @@ function radiusForNodes(nodes: GraphNode[], positions: Map<string, Vec3>, center
   return radius;
 }
 
-function groupCenter(index: number, count: number, spacing: number, seed: string | number | undefined, key: string): Vec3 {
+function groupCenter(
+  index: number,
+  count: number,
+  spacing: number,
+  seed: string | number | undefined,
+  key: string,
+): Vec3 {
   if (count <= 1) return { x: 0, y: 0, z: 0 };
   const angle = index * GOLDEN_ANGLE + seededUnit(seed, `${key}:angle`) * Math.PI * 0.4;
   const distance = spacing * (0.45 + Math.sqrt(index + 1) * 0.78);
@@ -294,7 +306,10 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
 
   const groupCenters = new Map<string, Vec3>();
   groups.forEach((group, index) => {
-    groupCenters.set(group, cloneVec3(authoredGroupCenter.get(group) ?? groupCenter(index, groups.length, spacing, seed, group)));
+    groupCenters.set(
+      group,
+      cloneVec3(authoredGroupCenter.get(group) ?? groupCenter(index, groups.length, spacing, seed, group)),
+    );
   });
 
   const nodePositions = new Map<string, Vec3>();
@@ -319,15 +334,17 @@ export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unk
 
   sourceClusters.forEach((cluster, index) => {
     const fallbackCenter = cluster.group
-      ? groupCenters.get(cluster.group) ?? groupCenter(index, sourceClusters.length, spacing, seed, cluster.id)
+      ? (groupCenters.get(cluster.group) ?? groupCenter(index, sourceClusters.length, spacing, seed, cluster.id))
       : groupCenter(groups.length + index, groups.length + sourceClusters.length, spacing, seed, cluster.id);
-    const groupNodes = cluster.group ? nodesByGroup.get(cluster.group) ?? [] : [];
-    const center = preserveExistingPositions && cluster.center
-      ? cloneVec3(cluster.center)
-      : averagePosition(groupNodes, nodePositions, fallbackCenter);
-    const radius = preserveExistingPositions && cluster.radius !== undefined
-      ? cluster.radius
-      : radiusForNodes(groupNodes, nodePositions, center, clusterRadius);
+    const groupNodes = cluster.group ? (nodesByGroup.get(cluster.group) ?? []) : [];
+    const center =
+      preserveExistingPositions && cluster.center
+        ? cloneVec3(cluster.center)
+        : averagePosition(groupNodes, nodePositions, fallbackCenter);
+    const radius =
+      preserveExistingPositions && cluster.radius !== undefined
+        ? cluster.radius
+        : radiusForNodes(groupNodes, nodePositions, center, clusterRadius);
 
     if (!cluster.center || cluster.radius === undefined || !preserveExistingPositions) generatedClusters = true;
 

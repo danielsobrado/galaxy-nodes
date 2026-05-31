@@ -1,0 +1,7 @@
+dist/
+docs/api/
+examples/basic/dist/
+node_modules/
+package-lock.json
+*.tsbuildinfo
+*.log

@@ -86,7 +86,9 @@ function buildClusters(count, rand) {
 }
 
 function makeNodeLabel(index, category, rand) {
-  const suffix = Math.floor(randBetween(rand, 100, 9999)).toString(36).toUpperCase();
+  const suffix = Math.floor(randBetween(rand, 100, 9999))
+    .toString(36)
+    .toUpperCase();
   return `${category} ${pick(rand, TOPICS)} ${suffix}`;
 }
 

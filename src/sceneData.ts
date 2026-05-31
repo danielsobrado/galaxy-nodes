@@ -69,7 +69,7 @@ export function selectMajorOverlayNodes<NMeta = unknown>(
   limitAll = MAJOR_PLANET_LIMIT_ALL,
   limitGroup = MAJOR_PLANET_LIMIT_GROUP,
 ): GraphNode<NMeta>[] {
-  const nodes = activeGroup === null ? nodeIndex.majorNodesAll : nodeIndex.majorNodesByGroup.get(activeGroup) ?? [];
+  const nodes = activeGroup === null ? nodeIndex.majorNodesAll : (nodeIndex.majorNodesByGroup.get(activeGroup) ?? []);
   return nodes.slice(0, activeGroup === null ? limitAll : limitGroup);
 }
 

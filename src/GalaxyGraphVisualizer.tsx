@@ -19,17 +19,15 @@ import {
   Sparkles,
   Upload,
 } from 'lucide-react';
-import GalaxyScene, { type CameraCommand, type GalaxyGraphTheme } from './GalaxyScene';
+import GalaxyScene, {
+  type CameraCommand,
+  type GalaxyGraphTheme,
+  type GalaxyMotionPreference,
+  type GalaxySceneFailure,
+} from './GalaxyScene';
 import { formatCompactNumber, getEdgeId } from './data';
 import type { GraphLayoutInput } from './layout';
-import type {
-  EdgeEndpoint,
-  GraphAccessors,
-  GraphDataset,
-  GraphEdge,
-  GraphNode,
-  SpaceDirection,
-} from './types';
+import type { EdgeEndpoint, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
 
 export interface GraphStats {
   nodes: number;
@@ -41,6 +39,7 @@ export interface GraphStats {
 export interface GalaxyGraphVisualizerOptions {
   datasetSizes?: readonly number[];
   galaxyMode?: boolean;
+  motionPreference?: GalaxyMotionPreference;
   showClusters?: boolean;
   showControls?: boolean;
   showDatasetSizeControls?: boolean;
@@ -54,7 +53,7 @@ export interface GalaxyGraphVisualizerOptions {
 }
 
 export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  /** Visual accessors. Memoize so motion/selection don't rebuild the scene. */
+  /** Visual accessors. Memoize to avoid unnecessary buffer refreshes on parent renders. */
   accessors?: GraphAccessors<NMeta, EMeta>;
   brandLabel?: string;
   className?: string;
@@ -74,6 +73,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onHoverNode?: (node: GraphNode<NMeta> | null) => void;
   onNavigate?: (command: CameraCommand) => void;
+  onSceneFailure?: (failure: GalaxySceneFailure) => void;
   onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onSelectNode?: (node: GraphNode<NMeta> | null) => void;
   options?: GalaxyGraphVisualizerOptions;
@@ -157,6 +157,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   onHoverEdge,
   onHoverNode,
   onNavigate,
+  onSceneFailure,
   onSelectEdge,
   onSelectNode,
   options,
@@ -178,6 +179,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [hoverEdge, setHoverEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand | null>(null);
+  const [sceneReady, setSceneReady] = useState(true);
 
   const showControls = options?.showControls ?? true;
   const showStats = options?.showStats ?? true;
@@ -220,7 +222,10 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     return { edgeDisplayIds: byEdge, edgeByDisplayId: byId };
   }, [dataset.edges]);
 
-  const displayEdgeId = useCallback((edge: GraphEdge<EMeta>) => edgeDisplayIds.get(edge) ?? getEdgeId(edge), [edgeDisplayIds]);
+  const displayEdgeId = useCallback(
+    (edge: GraphEdge<EMeta>) => edgeDisplayIds.get(edge) ?? getEdgeId(edge),
+    [edgeDisplayIds],
+  );
 
   const groupEdges = useMemo(() => {
     if (activeGroup === null) return dataset.edges;
@@ -280,15 +285,16 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   );
 
   const selectEdge = useCallback(
-    (edge: GraphEdge<EMeta> | null) => {
+    (edge: GraphEdge<EMeta> | null, focusSelection = false) => {
       if (selectedEdgeId === undefined) setInternalSelectedEdge(edge);
       if (edge) {
         if (selectedNodeId === undefined) setInternalSelectedNode(null);
         if (selectedNode) onSelectNode?.(null);
+        if (focusSelection) issueCameraCommand({ edgeId: displayEdgeId(edge), type: 'focus-edge' });
       }
       onSelectEdge?.(edge);
     },
-    [onSelectEdge, onSelectNode, selectedEdgeId, selectedNode, selectedNodeId],
+    [displayEdgeId, issueCameraCommand, onSelectEdge, onSelectNode, selectedEdgeId, selectedNode, selectedNodeId],
   );
 
   const hoverConnection = useCallback(
@@ -320,18 +326,19 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   }
 
   function focusNode(node: GraphNode<NMeta> | null) {
-    if (!node) return;
+    if (!node || !sceneReady) return;
     selectNode(node);
     issueCameraCommand({ nodeId: node.id, type: 'focus' });
   }
 
   function focusEdge(edge: GraphEdge<EMeta> | null) {
-    if (!edge) return;
+    if (!edge || !sceneReady) return;
     selectEdge(edge);
     issueCameraCommand({ edgeId: displayEdgeId(edge), type: 'focus-edge' });
   }
 
   function moveCamera(direction: SpaceDirection) {
+    if (!sceneReady) return;
     issueCameraCommand({ direction, type: 'move' });
   }
 
@@ -341,11 +348,12 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   }
 
   const inspectedNode = selectedNode ?? (selectedEdge ? null : hoverNode);
-  const inspectedEdge = selectedNode ? null : selectedEdge ?? (!inspectedNode ? hoverEdge : null);
+  const inspectedEdge = selectedNode ? null : (selectedEdge ?? (!inspectedNode ? hoverEdge : null));
   const currentSelectedNodeId = selectedNode?.id ?? null;
   const currentSelectedEdgeId = currentSelectedNodeId || !selectedEdge ? null : displayEdgeId(selectedEdge);
   const sourceEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.source) : null;
   const targetEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.target) : null;
+  const sceneControlDisabled = !sceneReady;
 
   return (
     <main className={['galaxy-nodes', className].filter(Boolean).join(' ')} style={themeStyle(theme)}>
@@ -357,13 +365,19 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         layout={layout}
         accessors={accessors}
         paused={!playing}
+        motionPreference={options?.motionPreference}
         theme={theme}
         cameraCommand={cameraCommand}
         selectedNodeId={currentSelectedNodeId}
         selectedEdgeId={currentSelectedEdgeId}
+        onSceneFailure={(failure) => {
+          setSceneReady(false);
+          onSceneFailure?.(failure);
+        }}
+        onSceneReady={() => setSceneReady(true)}
         onSelectNode={selectNode}
         onHoverNode={hover}
-        onSelectEdge={selectEdge}
+        onSelectEdge={(edge) => selectEdge(edge, true)}
         onHoverEdge={hoverConnection}
       />
 
@@ -375,11 +389,22 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         </div>
         {(options?.showGroupNav ?? true) && groupList.length ? (
           <nav className="category-nav" aria-label="Groups">
-            <button className={activeGroup === null ? 'is-active' : ''} type="button" aria-pressed={activeGroup === null} onClick={() => chooseGroup(null)}>
+            <button
+              className={activeGroup === null ? 'is-active' : ''}
+              type="button"
+              aria-pressed={activeGroup === null}
+              onClick={() => chooseGroup(null)}
+            >
               All
             </button>
             {groupList.map((group) => (
-              <button key={group} className={group === activeGroup ? 'is-active' : ''} type="button" aria-pressed={group === activeGroup} onClick={() => chooseGroup(group)}>
+              <button
+                key={group}
+                className={group === activeGroup ? 'is-active' : ''}
+                type="button"
+                aria-pressed={group === activeGroup}
+                onClick={() => chooseGroup(group)}
+              >
                 {group}
               </button>
             ))}
@@ -390,7 +415,12 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
             <button type="submit" title="Focus matching node">
               <Search size={15} aria-hidden="true" />
             </button>
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search node" aria-label="Search nodes" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search node"
+              aria-label="Search nodes"
+            />
           </form>
         ) : null}
       </header>
@@ -398,7 +428,12 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
       {showControls ? (
         <section className="control-ribbon" aria-label="Graph controls">
           <div className="toggle-row">
-            <button type="button" className={showClusters ? 'toggle is-on' : 'toggle'} aria-pressed={showClusters} onClick={() => setShowClusters((value) => !value)}>
+            <button
+              type="button"
+              className={showClusters ? 'toggle is-on' : 'toggle'}
+              aria-pressed={showClusters}
+              onClick={() => setShowClusters((value) => !value)}
+            >
               <Layers3 size={15} aria-hidden="true" />
               Clusters <span>{showClusters ? 'ON' : 'OFF'}</span>
             </button>
@@ -444,14 +479,25 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
           {showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange ? (
             <div className="segmented" aria-label="Dataset size">
               {options.datasetSizes.map((size) => (
-                <button key={size} type="button" className={dataset.nodes.length === size ? 'is-active' : ''} aria-pressed={dataset.nodes.length === size} onClick={() => requestDatasetSize(size)}>
+                <button
+                  key={size}
+                  type="button"
+                  className={dataset.nodes.length === size ? 'is-active' : ''}
+                  aria-pressed={dataset.nodes.length === size}
+                  onClick={() => requestDatasetSize(size)}
+                >
                   {formatCompactNumber(size)}
                 </button>
               ))}
             </div>
           ) : null}
 
-          <button type="button" className={galaxyMode ? 'pill-button is-active' : 'pill-button'} aria-pressed={galaxyMode} onClick={() => setGalaxyMode((value) => !value)}>
+          <button
+            type="button"
+            className={galaxyMode ? 'pill-button is-active' : 'pill-button'}
+            aria-pressed={galaxyMode}
+            onClick={() => setGalaxyMode((value) => !value)}
+          >
             <Sparkles size={15} aria-hidden="true" />
             Galaxy
           </button>
@@ -459,12 +505,18 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
       ) : null}
 
       <aside className="side-rail" aria-label="Scene tools">
-        <button type="button" title="Reset camera" onClick={() => issueCameraCommand({ type: 'reset' })}>
+        <button
+          type="button"
+          title="Reset camera"
+          disabled={sceneControlDisabled}
+          onClick={() => issueCameraCommand({ type: 'reset' })}
+        >
           <RotateCcw size={17} aria-hidden="true" />
         </button>
         <button
           type="button"
           title="Focus selection"
+          disabled={sceneControlDisabled || (!inspectedEdge && !inspectedNode)}
           onClick={() => {
             if (inspectedEdge) focusEdge(inspectedEdge);
             else focusNode(inspectedNode);
@@ -475,22 +527,37 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         {sideRailActions}
         {showNavigationControls ? (
           <div className="nav-pad" aria-label="Space navigation">
-            <button type="button" title="Move up" onClick={() => moveCamera('up')}>
+            <button type="button" title="Move up" disabled={sceneControlDisabled} onClick={() => moveCamera('up')}>
               <ChevronUp size={15} aria-hidden="true" />
             </button>
-            <button type="button" title="Move forward" onClick={() => moveCamera('forward')}>
+            <button
+              type="button"
+              title="Move forward"
+              disabled={sceneControlDisabled}
+              onClick={() => moveCamera('forward')}
+            >
               <ArrowUp size={15} aria-hidden="true" />
             </button>
-            <button type="button" title="Move left" onClick={() => moveCamera('left')}>
+            <button type="button" title="Move left" disabled={sceneControlDisabled} onClick={() => moveCamera('left')}>
               <ArrowLeft size={15} aria-hidden="true" />
             </button>
-            <button type="button" title="Move right" onClick={() => moveCamera('right')}>
+            <button
+              type="button"
+              title="Move right"
+              disabled={sceneControlDisabled}
+              onClick={() => moveCamera('right')}
+            >
               <ArrowRight size={15} aria-hidden="true" />
             </button>
-            <button type="button" title="Move backward" onClick={() => moveCamera('back')}>
+            <button
+              type="button"
+              title="Move backward"
+              disabled={sceneControlDisabled}
+              onClick={() => moveCamera('back')}
+            >
               <ArrowDown size={15} aria-hidden="true" />
             </button>
-            <button type="button" title="Move down" onClick={() => moveCamera('down')}>
+            <button type="button" title="Move down" disabled={sceneControlDisabled} onClick={() => moveCamera('down')}>
               <ChevronDown size={15} aria-hidden="true" />
             </button>
           </div>
@@ -532,7 +599,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
               </dl>
             </>
           )}
-          <button type="button" onClick={() => focusNode(inspectedNode)}>
+          <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(inspectedNode)}>
             <Upload size={15} aria-hidden="true" />
             Navigate
           </button>
@@ -579,17 +646,17 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
             </>
           )}
           <div className="detail-actions">
-            <button type="button" onClick={() => focusEdge(inspectedEdge)}>
+            <button type="button" disabled={sceneControlDisabled} onClick={() => focusEdge(inspectedEdge)}>
               <Navigation size={15} aria-hidden="true" />
               Trace link
             </button>
             {sourceEndpoint.node ? (
-              <button type="button" onClick={() => focusNode(sourceEndpoint.node)}>
+              <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(sourceEndpoint.node)}>
                 Source
               </button>
             ) : null}
             {targetEndpoint.node ? (
-              <button type="button" onClick={() => focusNode(targetEndpoint.node)}>
+              <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(targetEndpoint.node)}>
                 Target
               </button>
             ) : null}

@@ -75,7 +75,9 @@ describe('parseGraphDataset', () => {
   });
 
   it('requires edge source and target', () => {
-    expect(() => parseGraphDataset({ nodes: [], edges: [{ source: 'a' }], clusters: [] })).toThrow(/edges\[0\]\.target/);
+    expect(() => parseGraphDataset({ nodes: [], edges: [{ source: 'a' }], clusters: [] })).toThrow(
+      /edges\[0\]\.target/,
+    );
   });
 
   it('defaults generatedAt when absent', () => {
