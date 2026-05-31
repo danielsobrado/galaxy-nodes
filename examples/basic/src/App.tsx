@@ -1,6 +1,14 @@
 import { useMemo, useRef, useState } from 'react';
 import { Activity, Database, Import } from 'lucide-react';
-import { GalaxyGraphVisualizer, parseGraphDataset, type GraphDataset } from 'galaxy-nodes';
+import {
+  GalaxyGraphVisualizer,
+  getEdgeId,
+  parseGraphDataset,
+  type GraphDataset,
+  type GraphDatasetPatch,
+  type LargeGraphExpandRequest,
+  type LargeGraphOptions,
+} from 'galaxy-nodes';
 import {
   createMarketAccessors,
   DATASET_SIZES,
@@ -32,6 +40,48 @@ export default function App() {
 
   // Memoize so parent renders do not force redundant color/size buffer refreshes.
   const accessors = useMemo(() => createMarketAccessors({ sharpMoney }), [sharpMoney]);
+  const apiBase = graphApiUrl.replace(/\/$/, '');
+  const largeGraph = useMemo<LargeGraphOptions<MarketNodeMeta, unknown, MarketClusterMeta>>(
+    () => ({
+      enabled: dbStatus === 'loaded',
+      async expandGraph(
+        request: LargeGraphExpandRequest,
+        signal: AbortSignal,
+      ): Promise<GraphDatasetPatch<MarketNodeMeta, unknown, MarketClusterMeta>> {
+        const url = new URL(
+          request.type === 'node' && request.nodeId
+            ? `${apiBase}/graph/expand/node/${encodeURIComponent(request.nodeId)}`
+            : `${apiBase}/graph/expand/direction`,
+        );
+        url.searchParams.set('limit', '1500');
+        url.searchParams.set('edgeLimit', '3000');
+        if (request.activeGroup) url.searchParams.set('category', request.activeGroup);
+        if (request.type === 'direction' && request.camera && request.directionVector) {
+          url.searchParams.set('x', String(request.camera.position.x));
+          url.searchParams.set('y', String(request.camera.position.y));
+          url.searchParams.set('z', String(request.camera.position.z));
+          url.searchParams.set('dx', String(request.directionVector.x));
+          url.searchParams.set('dy', String(request.directionVector.y));
+          url.searchParams.set('dz', String(request.directionVector.z));
+        }
+
+        const response = await fetch(url, { signal });
+        if (!response.ok) throw new Error(`Graph expansion returned ${response.status}`);
+        return (await response.json()) as GraphDatasetPatch<MarketNodeMeta, unknown, MarketClusterMeta>;
+      },
+      async loadEdgeDetail(edge, _endpoints, signal) {
+        const response = await fetch(`${apiBase}/graph/edge/${encodeURIComponent(getEdgeId(edge))}/detail`, { signal });
+        if (!response.ok) throw new Error(`Edge detail returned ${response.status}`);
+        return response.json();
+      },
+      async loadNodeDetail(node, signal) {
+        const response = await fetch(`${apiBase}/graph/node/${encodeURIComponent(node.id)}/detail`, { signal });
+        if (!response.ok) throw new Error(`Node detail returned ${response.status}`);
+        return response.json();
+      },
+    }),
+    [apiBase, dbStatus],
+  );
 
   async function importDataset(file: File) {
     setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(JSON.parse(await file.text())));
@@ -41,7 +91,7 @@ export default function App() {
   async function loadDatabaseGraph() {
     setDbStatus('loading');
     try {
-      const response = await fetch(`${graphApiUrl.replace(/\/$/, '')}/graph`);
+      const response = await fetch(`${apiBase}/graph`);
       if (!response.ok) throw new Error(`Graph API returned ${response.status}`);
       setDataset(parseGraphDataset<MarketNodeMeta, unknown, MarketClusterMeta>(await response.json()));
       setDbStatus('loaded');
@@ -58,6 +108,7 @@ export default function App() {
       legend={marketLegend}
       renderNodeDetail={renderMarketNodeDetail}
       renderEdgeDetail={renderMarketEdgeDetail}
+      largeGraph={largeGraph}
       onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
       options={{
         datasetSizes: DATASET_SIZES,

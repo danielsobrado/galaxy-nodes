@@ -167,14 +167,20 @@ The package guards browser-only work so server rendering can safely encounter th
 
 The built-in renderer is tuned for sparse, large graph exploration:
 
-- Target envelope: up to about 100k nodes and 500 sparse edges on a modern desktop GPU.
+- Target envelope: up to about 100k nodes with a sampled sparse relationship layer. The bundled corporate demo caps generated relationships at 12k.
 - Nodes are always kept in one GPU point cloud, including nodes marked `major`.
 - Major nodes get a capped instanced planet/ring overlay for inspection; the point cloud still represents every node.
 - Group filters, cluster toggles, galaxy mode, selection, theme changes, and accessor changes update existing buffers, uniforms, materials, and visibility in place instead of rebuilding the renderer.
 - Dataset identity/topology changes and layout option changes can still rebuild the scene because they alter coordinates, lookup maps, and edge geometry.
-- Edges use sparse TubeGeometry for visual quality. Dense edge graphs need a separate line-buffer or level-of-detail renderer.
+- Edges use sparse TubeGeometry for visual quality. Full dense enterprise graphs need a separate line-buffer or level-of-detail renderer.
 
 For best results, keep the `dataset`, `layout`, and accessor objects stable with `useMemo` when their inputs have not changed.
+
+## Optional Large Graph Loading
+
+For remote graphs, keep `largeGraph.enabled` off until you want URL-backed detail and explicit expansion controls. The component calls host-provided callbacks for node details, edge details, and graph expansion; it does not own URLs, auth, or caching.
+
+Expansion callbacks return a `GraphDatasetPatch`, which can be merged with `mergeGraphDataset(base, patch, { edgeBudget: 12_000 })`. The merge upserts nodes, clusters, and edges, preserves filaments first, and keeps the highest-weight relationship edges inside the budget.
 
 ## Layout
 
@@ -228,6 +234,13 @@ export function MarketGraph() {
 interface GraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   nodes: GraphNode<NMeta>[];
   edges: GraphEdge<EMeta>[];
+  clusters?: GraphCluster<CMeta>[];
+  generatedAt?: string;
+}
+
+interface GraphDatasetPatch<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  nodes?: GraphNode<NMeta>[];
+  edges?: GraphEdge<EMeta>[];
   clusters?: GraphCluster<CMeta>[];
   generatedAt?: string;
 }

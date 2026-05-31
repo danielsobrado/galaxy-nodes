@@ -6,6 +6,14 @@ export interface Vec3 {
   z: number;
 }
 
+export interface GalaxyCameraView {
+  direction: Vec3;
+  position: Vec3;
+  right: Vec3;
+  target: Vec3;
+  up: Vec3;
+}
+
 /**
  * A renderable graph node. Only `id` is required; if `position` is omitted the
  * built-in layout generates a stable 3D coordinate. Everything else is optional
@@ -20,12 +28,16 @@ export interface GraphNode<TMeta = unknown> {
   label?: string;
   /** World-space size; the renderer defaults to 1. */
   size?: number;
-  /** Major nodes render as interactive "planets" with rings and labels. */
+  /** Major nodes render as interactive "planets" with labels. */
   major?: boolean;
   /** Grouping / filter key used by the category nav and cluster association. */
   group?: string;
   /** Explicit color override; wins over the accessor default. */
   color?: string;
+  /** Optional image URL rendered on the node's planet overlay. */
+  image?: string;
+  /** Opt-in orbit/donut ring around this node. Defaults to false. */
+  ring?: boolean;
   /** Arbitrary domain payload. */
   meta?: TMeta;
 }
@@ -61,6 +73,13 @@ export interface GraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown>
   generatedAt?: string;
 }
 
+export interface GraphDatasetPatch<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  nodes?: GraphNode<NMeta>[];
+  edges?: GraphEdge<EMeta>[];
+  clusters?: GraphCluster<CMeta>[];
+  generatedAt?: string;
+}
+
 /**
  * Functions the renderer uses to derive visual properties from your nodes and
  * edges. All are optional - {@link resolveAccessors} fills in sensible defaults
@@ -73,6 +92,10 @@ export interface GraphAccessors<NMeta = unknown, EMeta = unknown> {
   nodeSize?: (node: GraphNode<NMeta>) => number;
   /** Floating planet label; return `null` to hide it. */
   nodeLabel?: (node: GraphNode<NMeta>) => string | null;
+  /** Optional planet image URL; useful for type-based icons or thumbnails. */
+  nodeImage?: (node: GraphNode<NMeta>) => string | null;
+  /** Whether this node should render the optional orbit/donut ring. */
+  nodeRing?: (node: GraphNode<NMeta>) => boolean;
   /** Color for an edge. */
   edgeColor?: (edge: GraphEdge<EMeta>) => string;
   /** Strength in the 0..1 range, driving edge thickness/opacity. */

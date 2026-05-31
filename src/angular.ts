@@ -1,7 +1,7 @@
 import { createGalaxyRenderer } from './core';
 import type { GalaxyRendererCallbacks, GalaxyRendererOptions } from './core';
 
-export { createGalaxyRenderer };
+export { createGalaxyRenderer, DEFAULT_GRAPH_EDGE_BUDGET, mergeGraphDataset } from './core';
 
 export function createGalaxyAngularRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host: HTMLElement,
@@ -21,9 +21,11 @@ export type {
   GalaxyRendererOptions,
   GalaxySceneFailure,
   GalaxySceneFailureReason,
+  GalaxyCameraView,
   GraphAccessors,
   GraphCluster,
   GraphDataset,
+  GraphDatasetPatch,
   GraphEdge,
   GraphNode,
   SpaceDirection,

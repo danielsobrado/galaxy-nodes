@@ -30,6 +30,9 @@ const TOPICS = [
   'service expansion',
 ];
 
+const MAX_RELATIONSHIP_EDGES = 12_000;
+const RELATIONSHIP_EDGE_RATIO = 0.16;
+
 function mulberry32(seed) {
   return () => {
     let t = (seed += 0x6d2b79f5);
@@ -66,6 +69,20 @@ function sentimentFor(score, rand) {
   if (score > 66 && rand() > 0.22) return 'on-track';
   if (score < 42 && rand() > 0.24) return 'at-risk';
   return 'watch';
+}
+
+function relationshipTargetCount(count) {
+  return Math.min(MAX_RELATIONSHIP_EDGES, Math.max(800, Math.round(count * RELATIONSHIP_EDGE_RATIO)));
+}
+
+function relationshipKind(rand) {
+  const roll = rand();
+  if (roll < 0.34) return 'depends_on';
+  if (roll < 0.56) return 'supports';
+  if (roll < 0.74) return 'impacts';
+  if (roll < 0.88) return 'owned_by';
+  if (roll < 0.96) return 'blocks';
+  return 'signal';
 }
 
 function buildClusters(count, rand) {
@@ -136,6 +153,14 @@ export function generateDemoGraph(count = 8000) {
 
   const majorNodes = nodes.filter((node) => node.isMajor);
   const edges = [];
+  const relationshipKeys = new Set();
+  const nodesByCluster = new Map();
+
+  for (const node of nodes) {
+    const clusterNodes = nodesByCluster.get(node.clusterId) ?? [];
+    clusterNodes.push(node);
+    nodesByCluster.set(node.clusterId, clusterNodes);
+  }
 
   for (let index = 0; index < clusters.length - 1; index += 1) {
     edges.push({
@@ -147,16 +172,50 @@ export function generateDemoGraph(count = 8000) {
     });
   }
 
-  for (let index = 0; index < majorNodes.length; index += 1) {
-    const source = majorNodes[index];
-    const target = majorNodes[(index + 1 + Math.floor(rand() * 7)) % majorNodes.length];
+  function pickRelatedNode(source) {
+    if (rand() < 0.58) {
+      const clusterNodes = nodesByCluster.get(source.clusterId) ?? nodes;
+      return pick(rand, clusterNodes);
+    }
+
+    if (rand() < 0.38 && majorNodes.length > 0) {
+      return pick(rand, majorNodes);
+    }
+
+    return pick(rand, nodes);
+  }
+
+  function addRelationship(source, target, prefix) {
+    if (source.id === target.id) return false;
+    const key = `${source.id}->${target.id}`;
+    if (relationshipKeys.has(key)) return false;
+
+    relationshipKeys.add(key);
     edges.push({
-      id: `edge-${index}`,
+      id: `edge-${prefix}-${relationshipKeys.size}`,
       source: source.id,
       target: target.id,
-      weight: randBetween(rand, 0.35, 1),
-      kind: rand() > 0.46 ? 'signal' : 'dependency',
+      weight: randBetween(rand, 0.22, 1),
+      kind: relationshipKind(rand),
     });
+    return true;
+  }
+
+  for (let index = 0; index < majorNodes.length; index += 1) {
+    const source = majorNodes[index];
+    const linkCount = 2 + Math.floor(rand() * 7);
+    for (let link = 0; link < linkCount; link += 1) {
+      addRelationship(source, pickRelatedNode(source), `major-${index}`);
+    }
+  }
+
+  const targetRelationships = relationshipTargetCount(count);
+  let attempts = 0;
+  const maxAttempts = targetRelationships * 12;
+  while (relationshipKeys.size < targetRelationships && attempts < maxAttempts) {
+    attempts += 1;
+    const source = pick(rand, nodes);
+    addRelationship(source, pickRelatedNode(source), 'sample');
   }
 
   return {

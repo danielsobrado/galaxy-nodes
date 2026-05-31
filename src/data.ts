@@ -1,6 +1,7 @@
 import type {
   GraphCluster,
   GraphDataset,
+  GraphDatasetPatch,
   GraphEdge,
   GraphNode,
   GraphAccessors,
@@ -32,6 +33,7 @@ const DEFAULT_PALETTE = [
 const FALLBACK_NODE_COLOR = '#9ca3af';
 const DEFAULT_EDGE_COLOR = '#6bd7ff';
 const FILAMENT_EDGE_COLOR = '#aeb8c2';
+export const DEFAULT_GRAPH_EDGE_BUDGET = 12_000;
 
 function hashString(value: string) {
   let hash = 2166136261;
@@ -56,6 +58,14 @@ export function defaultNodeLabel(node: GraphNode): string | null {
   return node.label ?? null;
 }
 
+export function defaultNodeImage(node: GraphNode): string | null {
+  return node.image ?? null;
+}
+
+export function defaultNodeRing(node: GraphNode): boolean {
+  return node.ring ?? false;
+}
+
 export function defaultEdgeColor(edge: GraphEdge): string {
   if (edge.color) return edge.color;
   return edge.kind === 'filament' ? FILAMENT_EDGE_COLOR : DEFAULT_EDGE_COLOR;
@@ -73,6 +83,8 @@ export function resolveAccessors<NMeta = unknown, EMeta = unknown>(
     nodeColor: accessors?.nodeColor ?? (defaultNodeColor as ResolvedAccessors<NMeta, EMeta>['nodeColor']),
     nodeSize: accessors?.nodeSize ?? (defaultNodeSize as ResolvedAccessors<NMeta, EMeta>['nodeSize']),
     nodeLabel: accessors?.nodeLabel ?? (defaultNodeLabel as ResolvedAccessors<NMeta, EMeta>['nodeLabel']),
+    nodeImage: accessors?.nodeImage ?? (defaultNodeImage as ResolvedAccessors<NMeta, EMeta>['nodeImage']),
+    nodeRing: accessors?.nodeRing ?? (defaultNodeRing as ResolvedAccessors<NMeta, EMeta>['nodeRing']),
     edgeColor: accessors?.edgeColor ?? (defaultEdgeColor as ResolvedAccessors<NMeta, EMeta>['edgeColor']),
     edgeWeight: accessors?.edgeWeight ?? (defaultEdgeWeight as ResolvedAccessors<NMeta, EMeta>['edgeWeight']),
   };
@@ -152,6 +164,10 @@ function parseNode<TMeta = unknown>(value: unknown, index: number): GraphNode<TM
   if (group !== undefined) node.group = group;
   const color = readOptionalString(value, 'color', path);
   if (color !== undefined) node.color = color;
+  const image = readOptionalString(value, 'image', path);
+  if (image !== undefined) node.image = image;
+  const ring = readOptionalBoolean(value, 'ring', path);
+  if (ring !== undefined) node.ring = ring;
   if (value.meta !== undefined) node.meta = value.meta as TMeta;
 
   return node;
@@ -239,4 +255,52 @@ export function formatCompactNumber(value: number) {
 
 export function getEdgeId(edge: GraphEdge, index = 0) {
   return edge.id ?? `${edge.kind ?? 'edge'}:${edge.source}->${edge.target}:${index}`;
+}
+
+export interface MergeGraphDatasetOptions {
+  edgeBudget?: number;
+}
+
+function edgeMergeKey(edge: GraphEdge) {
+  return edge.id ?? `${edge.kind ?? 'edge'}:${edge.source}->${edge.target}`;
+}
+
+function trimEdges<EMeta>(edges: GraphEdge<EMeta>[], edgeBudget: number) {
+  if (edgeBudget <= 0) return [];
+  if (edges.length <= edgeBudget) return edges;
+
+  const filaments = edges.filter((edge) => edge.kind === 'filament');
+  const relationshipBudget = Math.max(0, edgeBudget - filaments.length);
+  const relationships = edges
+    .filter((edge) => edge.kind !== 'filament')
+    .sort((left, right) => (right.weight ?? 0.5) - (left.weight ?? 0.5))
+    .slice(0, relationshipBudget);
+
+  return [...filaments, ...relationships];
+}
+
+export function mergeGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
+  base: GraphDataset<NMeta, EMeta, CMeta>,
+  patch: GraphDatasetPatch<NMeta, EMeta, CMeta>,
+  options: MergeGraphDatasetOptions = {},
+): GraphDataset<NMeta, EMeta, CMeta> {
+  const nodeMap = new Map(base.nodes.map((node) => [node.id, node]));
+  for (const node of patch.nodes ?? []) nodeMap.set(node.id, node);
+
+  const clusterMap = new Map((base.clusters ?? []).map((cluster) => [cluster.id, cluster]));
+  for (const cluster of patch.clusters ?? []) clusterMap.set(cluster.id, cluster);
+
+  const edgeMap = new Map(base.edges.map((edge) => [edgeMergeKey(edge), edge]));
+  for (const edge of patch.edges ?? []) edgeMap.set(edgeMergeKey(edge), edge);
+
+  const nodes = Array.from(nodeMap.values());
+  const clusters = Array.from(clusterMap.values());
+  const edges = trimEdges(Array.from(edgeMap.values()), options.edgeBudget ?? DEFAULT_GRAPH_EDGE_BUDGET);
+
+  return {
+    nodes,
+    edges,
+    clusters,
+    generatedAt: patch.generatedAt ?? base.generatedAt ?? new Date().toISOString(),
+  };
 }

@@ -46,6 +46,15 @@ describe('generateGalaxyDataset', () => {
     }
   });
 
+  it('samples a meaningful business relationship layer', () => {
+    const dataset = generateGalaxyDataset(10_000);
+    const relationshipEdges = dataset.edges.filter((edge) => edge.kind !== 'filament');
+    expect(relationshipEdges.length).toBeGreaterThan(1_000);
+    expect(Array.from(new Set(relationshipEdges.map((edge) => edge.kind)))).toEqual(
+      expect.arrayContaining(['depends_on', 'supports', 'impacts', 'owned_by', 'blocks', 'signal']),
+    );
+  });
+
   it('survives a round-trip through the generic parser', () => {
     const dataset = generateGalaxyDataset(10_000);
     const parsed = parseGraphDataset(JSON.parse(JSON.stringify(dataset)));

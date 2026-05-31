@@ -2,9 +2,13 @@ import { generateDemoGraph } from './graph-demo.js';
 import { closeDriver, driver, waitForMemgraph } from './memgraph.js';
 
 const relationshipTypes = {
+  blocks: 'BLOCKS',
+  depends_on: 'DEPENDS_ON',
   filament: 'FILAMENT',
+  impacts: 'IMPACTS',
+  owned_by: 'OWNED_BY',
   signal: 'SIGNAL',
-  dependency: 'DEPENDENCY',
+  supports: 'SUPPORTS',
 };
 
 function chunk(values, size) {

@@ -6,7 +6,7 @@ import {
   type GalaxyRendererOptions,
 } from './core';
 import { createSceneFallbackViewModel, type GalaxySceneFailure } from './sceneFallback';
-import type { GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
+import type { GalaxyCameraView, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
 
 export type { CameraCommand, GalaxyGraphTheme, GalaxyMotionPreference, GalaxyPlanetSizingOptions } from './core';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
@@ -18,6 +18,7 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
 > {
   onSceneFailure?: (failure: GalaxySceneFailure) => void;
   onSceneReady?: () => void;
+  onCameraViewChange?: (view: GalaxyCameraView) => void;
   onSelectNode: (node: GraphNode<NMeta> | null) => void;
   onHoverNode: (node: GraphNode<NMeta> | null) => void;
   onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
@@ -36,6 +37,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   motionPreference = 'system',
   onSceneFailure,
   onSceneReady,
+  onCameraViewChange,
   paused = false,
   planetSizing,
   selectedNodeId,
@@ -86,6 +88,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
     () => ({
       onHoverEdge,
       onHoverNode,
+      onCameraViewChange,
       onSceneFailure: (nextFailure) => {
         setFailure(nextFailure);
         onSceneFailure?.(nextFailure);
@@ -97,7 +100,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       onSelectEdge,
       onSelectNode,
     }),
-    [onHoverEdge, onHoverNode, onSceneFailure, onSceneReady, onSelectEdge, onSelectNode],
+    [onCameraViewChange, onHoverEdge, onHoverNode, onSceneFailure, onSceneReady, onSelectEdge, onSelectNode],
   );
 
   const optionsRef = useRef(options);
@@ -163,4 +166,4 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   );
 }
 
-export type { GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection };
+export type { GalaxyCameraView, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection };

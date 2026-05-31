@@ -101,6 +101,8 @@ const SENTIMENT_YES_COLOR = '#42f7bd';
 const SENTIMENT_NO_COLOR = '#ff6f86';
 const SENTIMENT_MIXED_COLOR = '#d7d7d7';
 const FALLBACK_CATEGORY_COLOR = '#9ca3af';
+const MAX_RELATIONSHIP_EDGES = 12_000;
+const RELATIONSHIP_EDGE_RATIO = 0.16;
 
 function mulberry32(seed: number) {
   return () => {
@@ -191,6 +193,20 @@ function sentimentFor(score: number, rand: () => number): Sentiment {
   return 'watch';
 }
 
+function relationshipTargetCount(count: number) {
+  return Math.min(MAX_RELATIONSHIP_EDGES, Math.max(800, Math.round(count * RELATIONSHIP_EDGE_RATIO)));
+}
+
+function relationshipKind(rand: () => number) {
+  const roll = rand();
+  if (roll < 0.34) return 'depends_on';
+  if (roll < 0.56) return 'supports';
+  if (roll < 0.74) return 'impacts';
+  if (roll < 0.88) return 'owned_by';
+  if (roll < 0.96) return 'blocks';
+  return 'signal';
+}
+
 /** Generate a deterministic, seeded galaxy of corporate initiatives. */
 export function generateGalaxyDataset(count: DatasetSize | number = 75_000): MarketDataset {
   const rand = mulberry32(count * 97 + 42);
@@ -228,6 +244,14 @@ export function generateGalaxyDataset(count: DatasetSize | number = 75_000): Mar
 
   const majorNodes = nodes.filter((node) => node.major);
   const edges: GraphEdge[] = [];
+  const relationshipKeys = new Set<string>();
+  const nodesByCluster = new Map<string, MarketNode[]>();
+
+  for (const node of nodes) {
+    const clusterNodes = nodesByCluster.get(node.meta!.clusterId) ?? [];
+    clusterNodes.push(node);
+    nodesByCluster.set(node.meta!.clusterId, clusterNodes);
+  }
 
   for (let index = 0; index < builds.length - 1; index += 1) {
     edges.push({
@@ -239,16 +263,50 @@ export function generateGalaxyDataset(count: DatasetSize | number = 75_000): Mar
     });
   }
 
-  for (let index = 0; index < majorNodes.length; index += 1) {
-    const node = majorNodes[index];
-    const target = majorNodes[(index + 1 + Math.floor(rand() * 7)) % majorNodes.length];
+  function pickRelatedNode(source: MarketNode): MarketNode {
+    if (rand() < 0.58) {
+      const clusterNodes = nodesByCluster.get(source.meta!.clusterId) ?? nodes;
+      return pick(rand, clusterNodes);
+    }
+
+    if (rand() < 0.38 && majorNodes.length > 0) {
+      return pick(rand, majorNodes);
+    }
+
+    return pick(rand, nodes);
+  }
+
+  function addRelationship(source: MarketNode, target: MarketNode, prefix: string) {
+    if (source.id === target.id) return false;
+    const key = `${source.id}->${target.id}`;
+    if (relationshipKeys.has(key)) return false;
+
+    relationshipKeys.add(key);
     edges.push({
-      id: `edge-${index}`,
-      source: node.id,
+      id: `edge-${prefix}-${relationshipKeys.size}`,
+      source: source.id,
       target: target.id,
-      weight: randBetween(rand, 0.35, 1),
-      kind: rand() > 0.46 ? 'signal' : 'dependency',
+      weight: randBetween(rand, 0.22, 1),
+      kind: relationshipKind(rand),
     });
+    return true;
+  }
+
+  for (let index = 0; index < majorNodes.length; index += 1) {
+    const source = majorNodes[index];
+    const linkCount = 2 + Math.floor(rand() * 7);
+    for (let link = 0; link < linkCount; link += 1) {
+      addRelationship(source, pickRelatedNode(source), `major-${index}`);
+    }
+  }
+
+  const targetRelationships = relationshipTargetCount(count);
+  let attempts = 0;
+  const maxAttempts = targetRelationships * 12;
+  while (relationshipKeys.size < targetRelationships && attempts < maxAttempts) {
+    attempts += 1;
+    const source = pick(rand, nodes);
+    addRelationship(source, pickRelatedNode(source), 'sample');
   }
 
   return {
@@ -298,7 +356,11 @@ export function createMarketAccessors(options: MarketAccessorOptions = {}): Grap
     },
     edgeColor: (edge) => {
       if (edge.kind === 'signal') return SENTIMENT_YES_COLOR;
-      if (edge.kind === 'dependency') return '#ff9d66';
+      if (edge.kind === 'depends_on') return '#ff9d66';
+      if (edge.kind === 'blocks') return SENTIMENT_NO_COLOR;
+      if (edge.kind === 'supports') return '#6bd7ff';
+      if (edge.kind === 'impacts') return '#f5cf5b';
+      if (edge.kind === 'owned_by') return '#a78bfa';
       return '#aeb8c2';
     },
     edgeWeight: (edge) => edge.weight ?? 0.5,

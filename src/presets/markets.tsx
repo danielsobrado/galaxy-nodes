@@ -14,10 +14,30 @@ function formatStatus(status: MarketNodeMeta['sentiment']) {
   return status.replace('-', ' ').toUpperCase();
 }
 
+function formatRelationshipKind(kind: GraphEdge['kind']) {
+  return (kind ?? 'relationship').replaceAll('_', ' ');
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function degreeSummary(detail: unknown) {
+  const degree = record(record(detail)?.degree);
+  const incoming = typeof degree?.incoming === 'number' ? degree.incoming : null;
+  const outgoing = typeof degree?.outgoing === 'number' ? degree.outgoing : null;
+  if (incoming === null || outgoing === null) return null;
+  return `${formatCompactNumber(incoming)} in / ${formatCompactNumber(outgoing)} out`;
+}
+
 /** Rich node detail-panel body for the corporate demo preset. */
-export function renderMarketNodeDetail(node: GraphNode<MarketNodeMeta>): ReactNode {
+export function renderMarketNodeDetail(
+  node: GraphNode<MarketNodeMeta>,
+  context?: { detail: unknown; error: unknown; loading: boolean },
+): ReactNode {
   const meta = nodeMeta(node);
   if (!meta) return null;
+  const degree = degreeSummary(context?.detail);
   return (
     <>
       <div className="detail-heading">
@@ -48,6 +68,24 @@ export function renderMarketNodeDetail(node: GraphNode<MarketNodeMeta>): ReactNo
           <dt>Delivery rate</dt>
           <dd>{meta.metrics.deliveryRate.toFixed(1)}%</dd>
         </div>
+        {context?.loading ? (
+          <div>
+            <dt>Remote detail</dt>
+            <dd>Loading</dd>
+          </div>
+        ) : null}
+        {context?.error ? (
+          <div>
+            <dt>Remote detail</dt>
+            <dd>Unavailable</dd>
+          </div>
+        ) : null}
+        {degree ? (
+          <div>
+            <dt>Relationships</dt>
+            <dd>{degree}</dd>
+          </div>
+        ) : null}
       </dl>
     </>
   );
@@ -57,6 +95,7 @@ export function renderMarketNodeDetail(node: GraphNode<MarketNodeMeta>): ReactNo
 export function renderMarketEdgeDetail(
   edge: GraphEdge,
   endpoints: { source: EdgeEndpoint<MarketNodeMeta>; target: EdgeEndpoint<MarketNodeMeta> },
+  context?: { error: unknown; loading: boolean },
 ): ReactNode {
   const { source, target } = endpoints;
   const sourceImpact = nodeMeta(source.node)?.metrics.annualImpact ?? 8_000_000;
@@ -68,7 +107,7 @@ export function renderMarketEdgeDetail(
       <div className="detail-heading">
         <GitBranch size={18} aria-hidden="true" />
         <div>
-          <span>{edge.kind ?? 'relationship'} relationship</span>
+          <span>{formatRelationshipKind(edge.kind)} relationship</span>
           <h2>
             {source.label} <small>to</small> {target.label}
           </h2>
@@ -95,6 +134,18 @@ export function renderMarketEdgeDetail(
           <dt>Impact estimate</dt>
           <dd>{formatMarketMoney(impact)}</dd>
         </div>
+        {context?.loading ? (
+          <div>
+            <dt>Remote detail</dt>
+            <dd>Loading</dd>
+          </div>
+        ) : null}
+        {context?.error ? (
+          <div>
+            <dt>Remote detail</dt>
+            <dd>Unavailable</dd>
+          </div>
+        ) : null}
       </dl>
     </>
   );

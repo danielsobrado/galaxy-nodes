@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowLeft,
@@ -26,9 +26,19 @@ import GalaxyScene, {
   type GalaxyPlanetSizingOptions,
   type GalaxySceneFailure,
 } from './GalaxyScene';
-import { formatCompactNumber, getEdgeId } from './data';
+import { DEFAULT_GRAPH_EDGE_BUDGET, formatCompactNumber, getEdgeId, mergeGraphDataset } from './data';
 import type { GraphLayoutInput } from './layout';
-import type { EdgeEndpoint, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
+import type {
+  EdgeEndpoint,
+  GalaxyCameraView,
+  GraphAccessors,
+  GraphDataset,
+  GraphDatasetPatch,
+  GraphEdge,
+  GraphNode,
+  SpaceDirection,
+  Vec3,
+} from './types';
 
 export interface GraphStats {
   nodes: number;
@@ -54,6 +64,40 @@ export interface GalaxyGraphVisualizerOptions {
   showTimeline?: boolean;
 }
 
+export interface LargeGraphDetailContext {
+  detail: unknown;
+  error: unknown;
+  expand: () => void;
+  loading: boolean;
+  reload: () => void;
+}
+
+export interface LargeGraphExpandRequest {
+  activeGroup: string | null;
+  camera?: GalaxyCameraView;
+  direction?: SpaceDirection;
+  directionVector?: Vec3;
+  loadedEdgeIds: string[];
+  loadedNodeIds: string[];
+  nodeId?: string;
+  type: 'direction' | 'node';
+}
+
+export interface LargeGraphOptions<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  edgeBudget?: number;
+  enabled?: boolean;
+  expandGraph?: (
+    request: LargeGraphExpandRequest,
+    signal: AbortSignal,
+  ) => Promise<GraphDatasetPatch<NMeta, EMeta, CMeta>>;
+  loadEdgeDetail?: (
+    edge: GraphEdge<EMeta>,
+    endpoints: { source: EdgeEndpoint<NMeta>; target: EdgeEndpoint<NMeta> },
+    signal: AbortSignal,
+  ) => Promise<unknown>;
+  loadNodeDetail?: (node: GraphNode<NMeta>, signal: AbortSignal) => Promise<unknown>;
+}
+
 export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   /** Visual accessors. Memoize to avoid unnecessary buffer refreshes on parent renders. */
   accessors?: GraphAccessors<NMeta, EMeta>;
@@ -69,6 +113,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   legend?: ReactNode;
   /** Optional built-in spatial layout. Omit for auto, pass false to require authored coordinates. */
   layout?: GraphLayoutInput;
+  largeGraph?: LargeGraphOptions<NMeta, EMeta, CMeta>;
   /** Called when a dataset-size button is pressed; supply a new dataset. */
   onDatasetSizeChange?: (size: number) => void;
   onGroupChange?: (group: string | null) => void;
@@ -82,8 +127,9 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   renderEdgeDetail?: (
     edge: GraphEdge<EMeta>,
     endpoints: { source: EdgeEndpoint<NMeta>; target: EdgeEndpoint<NMeta> },
+    context?: LargeGraphDetailContext,
   ) => ReactNode;
-  renderNodeDetail?: (node: GraphNode<NMeta>) => ReactNode;
+  renderNodeDetail?: (node: GraphNode<NMeta>, context?: LargeGraphDetailContext) => ReactNode;
   renderStats?: (stats: GraphStats) => ReactNode;
   selectedEdgeId?: string | null;
   selectedNodeId?: string | null;
@@ -144,6 +190,32 @@ function themeStyle(theme: GalaxyGraphTheme | undefined) {
   } as CSSProperties;
 }
 
+function vectorForDirection(view: GalaxyCameraView | null, direction: SpaceDirection): Vec3 | undefined {
+  if (!view) return undefined;
+  if (direction === 'forward') return view.direction;
+  if (direction === 'back') return { x: -view.direction.x, y: -view.direction.y, z: -view.direction.z };
+  if (direction === 'right') return view.right;
+  if (direction === 'left') return { x: -view.right.x, y: -view.right.y, z: -view.right.z };
+  if (direction === 'up') return view.up;
+  return { x: -view.up.x, y: -view.up.y, z: -view.up.z };
+}
+
+interface AsyncDetailState {
+  detail: unknown;
+  error: unknown;
+  key: string | null;
+  loading: boolean;
+  reloadToken: number;
+}
+
+const EMPTY_DETAIL_STATE: AsyncDetailState = {
+  detail: undefined,
+  error: null,
+  key: null,
+  loading: false,
+  reloadToken: 0,
+};
+
 export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, CMeta = unknown>({
   accessors,
   brandLabel = 'Galaxy Nodes',
@@ -154,6 +226,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   initialGroup = null,
   legend,
   layout,
+  largeGraph,
   onDatasetSizeChange,
   onGroupChange,
   onHoverEdge,
@@ -181,13 +254,34 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [hoverEdge, setHoverEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand | null>(null);
+  const [cameraView, setCameraView] = useState<GalaxyCameraView | null>(null);
+  const [augmentedDataset, setAugmentedDataset] = useState<GraphDataset<NMeta, EMeta, CMeta>>(dataset);
+  const [nodeDetail, setNodeDetail] = useState<AsyncDetailState>(EMPTY_DETAIL_STATE);
+  const [edgeDetail, setEdgeDetail] = useState<AsyncDetailState>(EMPTY_DETAIL_STATE);
+  const [expanding, setExpanding] = useState(false);
+  const [expandError, setExpandError] = useState<unknown>(null);
   const [sceneReady, setSceneReady] = useState(true);
+  const expansionAbortRef = useRef<AbortController | null>(null);
 
   const showControls = options?.showControls ?? true;
   const showStats = options?.showStats ?? true;
   const showNavigationControls = options?.showNavigationControls ?? true;
   const showDetailPanel = options?.showDetailPanel ?? true;
   const showDatasetSizeControls = options?.showDatasetSizeControls ?? Boolean(options?.datasetSizes?.length);
+  const largeGraphEnabled = Boolean(largeGraph?.enabled);
+  const graphDataset = largeGraphEnabled ? augmentedDataset : dataset;
+  const edgeBudget = largeGraph?.edgeBudget ?? DEFAULT_GRAPH_EDGE_BUDGET;
+  const expandGraph = largeGraph?.expandGraph;
+  const loadEdgeDetail = largeGraph?.loadEdgeDetail;
+  const loadNodeDetail = largeGraph?.loadNodeDetail;
+  const canExpandGraph = largeGraphEnabled && Boolean(expandGraph);
+
+  useEffect(() => {
+    setAugmentedDataset(largeGraphEnabled ? mergeGraphDataset(dataset, {}, { edgeBudget }) : dataset);
+    expansionAbortRef.current?.abort();
+    setExpandError(null);
+    setExpanding(false);
+  }, [dataset, edgeBudget, largeGraphEnabled]);
 
   useEffect(() => {
     if (options?.showClusters !== undefined) setShowClusters(options.showClusters);
@@ -197,32 +291,35 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     if (options?.galaxyMode !== undefined) setGalaxyMode(options.galaxyMode);
   }, [options?.galaxyMode]);
 
-  const groupList = useMemo(() => (groups ? [...groups] : distinctGroups(dataset.nodes)), [groups, dataset.nodes]);
+  const groupList = useMemo(
+    () => (groups ? [...groups] : distinctGroups(graphDataset.nodes)),
+    [groups, graphDataset.nodes],
+  );
 
   const groupNodes = useMemo(() => {
-    if (activeGroup === null) return dataset.nodes;
-    return dataset.nodes.filter((node) => node.group === activeGroup);
-  }, [activeGroup, dataset.nodes]);
+    if (activeGroup === null) return graphDataset.nodes;
+    return graphDataset.nodes.filter((node) => node.group === activeGroup);
+  }, [activeGroup, graphDataset.nodes]);
 
   const endpointGroups = useMemo(() => {
     const values = new Map<string, string | undefined>();
-    dataset.nodes.forEach((node) => values.set(node.id, node.group));
-    (dataset.clusters ?? []).forEach((cluster) => values.set(cluster.id, cluster.group));
+    graphDataset.nodes.forEach((node) => values.set(node.id, node.group));
+    (graphDataset.clusters ?? []).forEach((cluster) => values.set(cluster.id, cluster.group));
     return values;
-  }, [dataset.clusters, dataset.nodes]);
+  }, [graphDataset.clusters, graphDataset.nodes]);
 
   // Precompute edge <-> display-id maps once per dataset. Resolving ids by
   // scanning dataset.edges with indexOf on every lookup was O(n^2).
   const { edgeDisplayIds, edgeByDisplayId } = useMemo(() => {
     const byEdge = new Map<GraphEdge<EMeta>, string>();
     const byId = new Map<string, GraphEdge<EMeta>>();
-    dataset.edges.forEach((edge, index) => {
+    graphDataset.edges.forEach((edge, index) => {
       const id = getEdgeId(edge, index);
       byEdge.set(edge, id);
       byId.set(id, edge);
     });
     return { edgeDisplayIds: byEdge, edgeByDisplayId: byId };
-  }, [dataset.edges]);
+  }, [graphDataset.edges]);
 
   const displayEdgeId = useCallback(
     (edge: GraphEdge<EMeta>) => edgeDisplayIds.get(edge) ?? getEdgeId(edge),
@@ -230,21 +327,21 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   );
 
   const groupEdges = useMemo(() => {
-    if (activeGroup === null) return dataset.edges;
-    return dataset.edges.filter(
+    if (activeGroup === null) return graphDataset.edges;
+    return graphDataset.edges.filter(
       (edge) => endpointGroups.get(edge.source) === activeGroup || endpointGroups.get(edge.target) === activeGroup,
     );
-  }, [activeGroup, dataset.edges, endpointGroups]);
+  }, [activeGroup, graphDataset.edges, endpointGroups]);
 
   const selectedNode = useMemo(() => {
-    if (selectedNodeId !== undefined) return dataset.nodes.find((node) => node.id === selectedNodeId) ?? null;
-    return internalSelectedNode && dataset.nodes.includes(internalSelectedNode) ? internalSelectedNode : null;
-  }, [dataset.nodes, internalSelectedNode, selectedNodeId]);
+    if (selectedNodeId !== undefined) return graphDataset.nodes.find((node) => node.id === selectedNodeId) ?? null;
+    return internalSelectedNode && graphDataset.nodes.includes(internalSelectedNode) ? internalSelectedNode : null;
+  }, [graphDataset.nodes, internalSelectedNode, selectedNodeId]);
 
   const selectedEdge = useMemo(() => {
     if (selectedEdgeId !== undefined) return (selectedEdgeId !== null && edgeByDisplayId.get(selectedEdgeId)) || null;
-    return internalSelectedEdge && dataset.edges.includes(internalSelectedEdge) ? internalSelectedEdge : null;
-  }, [dataset.edges, edgeByDisplayId, internalSelectedEdge, selectedEdgeId]);
+    return internalSelectedEdge && graphDataset.edges.includes(internalSelectedEdge) ? internalSelectedEdge : null;
+  }, [graphDataset.edges, edgeByDisplayId, internalSelectedEdge, selectedEdgeId]);
 
   const stats = useMemo<GraphStats>(() => {
     const groupCount = new Set(groupNodes.map((node) => node.group ?? '')).size;
@@ -346,21 +443,165 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   function submitSearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    focusNode(findBestMatch(dataset, search, activeGroup));
+    focusNode(findBestMatch(graphDataset, search, activeGroup));
   }
 
   const inspectedNode = selectedNode ?? (selectedEdge ? null : hoverNode);
   const inspectedEdge = selectedNode ? null : (selectedEdge ?? (!inspectedNode ? hoverEdge : null));
   const currentSelectedNodeId = selectedNode?.id ?? null;
   const currentSelectedEdgeId = currentSelectedNodeId || !selectedEdge ? null : displayEdgeId(selectedEdge);
-  const sourceEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.source) : null;
-  const targetEndpoint = inspectedEdge ? findEndpoint(dataset, inspectedEdge.target) : null;
+  const sourceEndpoint = useMemo(
+    () => (inspectedEdge ? findEndpoint(graphDataset, inspectedEdge.source) : null),
+    [graphDataset, inspectedEdge],
+  );
+  const targetEndpoint = useMemo(
+    () => (inspectedEdge ? findEndpoint(graphDataset, inspectedEdge.target) : null),
+    [graphDataset, inspectedEdge],
+  );
   const sceneControlDisabled = !sceneReady;
+
+  const runExpansion = useCallback(
+    async (request: Omit<LargeGraphExpandRequest, 'activeGroup' | 'loadedEdgeIds' | 'loadedNodeIds'>) => {
+      if (!largeGraphEnabled || !expandGraph) return;
+      expansionAbortRef.current?.abort();
+      const controller = new AbortController();
+      expansionAbortRef.current = controller;
+      setExpanding(true);
+      setExpandError(null);
+
+      try {
+        const patch = await expandGraph(
+          {
+            ...request,
+            activeGroup,
+            loadedEdgeIds: graphDataset.edges.map(displayEdgeId),
+            loadedNodeIds: graphDataset.nodes.map((node) => node.id),
+          },
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        setAugmentedDataset((current) => mergeGraphDataset(current, patch, { edgeBudget }));
+      } catch (error) {
+        if (!controller.signal.aborted) setExpandError(error);
+      } finally {
+        if (expansionAbortRef.current === controller) expansionAbortRef.current = null;
+        if (!controller.signal.aborted) setExpanding(false);
+      }
+    },
+    [activeGroup, displayEdgeId, edgeBudget, expandGraph, graphDataset.edges, graphDataset.nodes, largeGraphEnabled],
+  );
+
+  const expandNode = useCallback(
+    (node: GraphNode<NMeta> | null) => {
+      if (!node) return;
+      void runExpansion({ camera: cameraView ?? undefined, nodeId: node.id, type: 'node' });
+    },
+    [cameraView, runExpansion],
+  );
+
+  const expandDirection = useCallback(
+    (direction: SpaceDirection) => {
+      void runExpansion({
+        camera: cameraView ?? undefined,
+        direction,
+        directionVector: vectorForDirection(cameraView, direction),
+        type: 'direction',
+      });
+    },
+    [cameraView, runExpansion],
+  );
+
+  useEffect(() => {
+    if (!largeGraphEnabled || !loadNodeDetail || !selectedNode) {
+      setNodeDetail(EMPTY_DETAIL_STATE);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const key = selectedNode.id;
+    setNodeDetail((current) => ({ ...current, error: null, key, loading: true }));
+    loadNodeDetail(selectedNode, controller.signal).then(
+      (detail) => {
+        if (!controller.signal.aborted)
+          setNodeDetail((current) => ({ ...current, detail, error: null, key, loading: false }));
+      },
+      (error) => {
+        if (!controller.signal.aborted) {
+          setNodeDetail((current) => ({ ...current, detail: undefined, error, key, loading: false }));
+        }
+      },
+    );
+
+    return () => controller.abort();
+  }, [largeGraphEnabled, loadNodeDetail, nodeDetail.reloadToken, selectedNode]);
+
+  useEffect(() => {
+    if (!largeGraphEnabled || !loadEdgeDetail || !selectedEdge || !sourceEndpoint || !targetEndpoint) {
+      setEdgeDetail(EMPTY_DETAIL_STATE);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const key = currentSelectedEdgeId;
+    const endpoints = { source: sourceEndpoint, target: targetEndpoint };
+    setEdgeDetail((current) => ({ ...current, error: null, key, loading: true }));
+    loadEdgeDetail(selectedEdge, endpoints, controller.signal).then(
+      (detail) => {
+        if (!controller.signal.aborted)
+          setEdgeDetail((current) => ({ ...current, detail, error: null, key, loading: false }));
+      },
+      (error) => {
+        if (!controller.signal.aborted) {
+          setEdgeDetail((current) => ({ ...current, detail: undefined, error, key, loading: false }));
+        }
+      },
+    );
+
+    return () => controller.abort();
+  }, [
+    currentSelectedEdgeId,
+    edgeDetail.reloadToken,
+    largeGraphEnabled,
+    loadEdgeDetail,
+    selectedEdge,
+    sourceEndpoint,
+    targetEndpoint,
+  ]);
+
+  const nodeDetailContext = useMemo<LargeGraphDetailContext | undefined>(() => {
+    if (!largeGraphEnabled || inspectedNode !== selectedNode) return undefined;
+    return {
+      detail: nodeDetail.detail,
+      error: nodeDetail.error,
+      expand: () => expandNode(inspectedNode),
+      loading: nodeDetail.loading,
+      reload: () => setNodeDetail((current) => ({ ...current, reloadToken: current.reloadToken + 1 })),
+    };
+  }, [
+    expandNode,
+    inspectedNode,
+    largeGraphEnabled,
+    nodeDetail.detail,
+    nodeDetail.error,
+    nodeDetail.loading,
+    selectedNode,
+  ]);
+
+  const edgeDetailContext = useMemo<LargeGraphDetailContext | undefined>(() => {
+    if (!largeGraphEnabled || inspectedEdge !== selectedEdge) return undefined;
+    return {
+      detail: edgeDetail.detail,
+      error: edgeDetail.error,
+      expand: () => undefined,
+      loading: edgeDetail.loading,
+      reload: () => setEdgeDetail((current) => ({ ...current, reloadToken: current.reloadToken + 1 })),
+    };
+  }, [edgeDetail.detail, edgeDetail.error, edgeDetail.loading, inspectedEdge, largeGraphEnabled, selectedEdge]);
 
   return (
     <main className={['galaxy-nodes', className].filter(Boolean).join(' ')} style={themeStyle(theme)}>
       <GalaxyScene<NMeta, EMeta, CMeta>
-        dataset={dataset}
+        dataset={graphDataset}
         activeGroup={activeGroup}
         showClusters={showClusters}
         galaxyMode={galaxyMode}
@@ -378,6 +619,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
           onSceneFailure?.(failure);
         }}
         onSceneReady={() => setSceneReady(true)}
+        onCameraViewChange={setCameraView}
         onSelectNode={selectNode}
         onHoverNode={hover}
         onSelectEdge={(edge) => selectEdge(edge, true)}
@@ -485,8 +727,8 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
                 <button
                   key={size}
                   type="button"
-                  className={dataset.nodes.length === size ? 'is-active' : ''}
-                  aria-pressed={dataset.nodes.length === size}
+                  className={graphDataset.nodes.length === size ? 'is-active' : ''}
+                  aria-pressed={graphDataset.nodes.length === size}
                   onClick={() => requestDatasetSize(size)}
                 >
                   {formatCompactNumber(size)}
@@ -529,41 +771,105 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         </button>
         {sideRailActions}
         {showNavigationControls ? (
-          <div className="nav-pad" aria-label="Space navigation">
-            <button type="button" title="Move up" disabled={sceneControlDisabled} onClick={() => moveCamera('up')}>
-              <ChevronUp size={15} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Move forward"
-              disabled={sceneControlDisabled}
-              onClick={() => moveCamera('forward')}
-            >
-              <ArrowUp size={15} aria-hidden="true" />
-            </button>
-            <button type="button" title="Move left" disabled={sceneControlDisabled} onClick={() => moveCamera('left')}>
-              <ArrowLeft size={15} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Move right"
-              disabled={sceneControlDisabled}
-              onClick={() => moveCamera('right')}
-            >
-              <ArrowRight size={15} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              title="Move backward"
-              disabled={sceneControlDisabled}
-              onClick={() => moveCamera('back')}
-            >
-              <ArrowDown size={15} aria-hidden="true" />
-            </button>
-            <button type="button" title="Move down" disabled={sceneControlDisabled} onClick={() => moveCamera('down')}>
-              <ChevronDown size={15} aria-hidden="true" />
-            </button>
-          </div>
+          <>
+            <div className="nav-pad" aria-label="Space navigation">
+              <button type="button" title="Move up" disabled={sceneControlDisabled} onClick={() => moveCamera('up')}>
+                <ChevronUp size={15} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                title="Move forward"
+                disabled={sceneControlDisabled}
+                onClick={() => moveCamera('forward')}
+              >
+                <ArrowUp size={15} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                title="Move left"
+                disabled={sceneControlDisabled}
+                onClick={() => moveCamera('left')}
+              >
+                <ArrowLeft size={15} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                title="Move right"
+                disabled={sceneControlDisabled}
+                onClick={() => moveCamera('right')}
+              >
+                <ArrowRight size={15} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                title="Move backward"
+                disabled={sceneControlDisabled}
+                onClick={() => moveCamera('back')}
+              >
+                <ArrowDown size={15} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                title="Move down"
+                disabled={sceneControlDisabled}
+                onClick={() => moveCamera('down')}
+              >
+                <ChevronDown size={15} aria-hidden="true" />
+              </button>
+            </div>
+            {canExpandGraph ? (
+              <div className="nav-pad" aria-label="Load more graph data">
+                <button
+                  type="button"
+                  title="Load more up"
+                  disabled={sceneControlDisabled || expanding}
+                  onClick={() => expandDirection('up')}
+                >
+                  <ChevronUp size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Load more forward"
+                  disabled={sceneControlDisabled || expanding}
+                  onClick={() => expandDirection('forward')}
+                >
+                  <ArrowUp size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Load more left"
+                  disabled={sceneControlDisabled || expanding}
+                  onClick={() => expandDirection('left')}
+                >
+                  <ArrowLeft size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Load more right"
+                  disabled={sceneControlDisabled || expanding}
+                  onClick={() => expandDirection('right')}
+                >
+                  <ArrowRight size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Load more backward"
+                  disabled={sceneControlDisabled || expanding}
+                  onClick={() => expandDirection('back')}
+                >
+                  <ArrowDown size={15} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  title="Load more down"
+                  disabled={sceneControlDisabled || expanding}
+                  onClick={() => expandDirection('down')}
+                >
+                  <ChevronDown size={15} aria-hidden="true" />
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : null}
       </aside>
 
@@ -572,7 +878,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
       {showDetailPanel && inspectedNode ? (
         <aside className="detail-panel">
           {renderNodeDetail ? (
-            renderNodeDetail(inspectedNode)
+            renderNodeDetail(inspectedNode, nodeDetailContext)
           ) : (
             <>
               <div className="detail-heading">
@@ -606,13 +912,24 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
             <Upload size={15} aria-hidden="true" />
             Navigate
           </button>
+          {canExpandGraph ? (
+            <button
+              type="button"
+              disabled={sceneControlDisabled || expanding}
+              onClick={() => expandNode(inspectedNode)}
+            >
+              <GitBranch size={15} aria-hidden="true" />
+              {expanding ? 'Loading...' : 'Expand neighbors'}
+            </button>
+          ) : null}
+          {largeGraphEnabled && expandError ? <span role="status">Expansion failed</span> : null}
         </aside>
       ) : null}
 
       {showDetailPanel && inspectedEdge && sourceEndpoint && targetEndpoint ? (
         <aside className="detail-panel connection-panel">
           {renderEdgeDetail ? (
-            renderEdgeDetail(inspectedEdge, { source: sourceEndpoint, target: targetEndpoint })
+            renderEdgeDetail(inspectedEdge, { source: sourceEndpoint, target: targetEndpoint }, edgeDetailContext)
           ) : (
             <>
               <div className="detail-heading">

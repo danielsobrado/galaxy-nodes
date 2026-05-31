@@ -3,10 +3,14 @@ import {
   defaultEdgeColor,
   defaultEdgeWeight,
   defaultNodeColor,
+  defaultNodeImage,
   defaultNodeLabel,
+  defaultNodeRing,
+  DEFAULT_GRAPH_EDGE_BUDGET,
   defaultNodeSize,
   formatCompactNumber,
   getEdgeId,
+  mergeGraphDataset,
   parseGraphDataset,
   resolveAccessors,
 } from './data';
@@ -43,11 +47,31 @@ describe('parseGraphDataset', () => {
 
   it('keeps optional fields when present', () => {
     const parsed = parseGraphDataset({
-      nodes: [{ id: 'a', position: { x: 0, y: 0, z: 0 }, label: 'A', size: 4, major: true, group: 'g', color: '#fff' }],
+      nodes: [
+        {
+          id: 'a',
+          position: { x: 0, y: 0, z: 0 },
+          label: 'A',
+          size: 4,
+          major: true,
+          group: 'g',
+          color: '#fff',
+          image: '/types/politics.png',
+          ring: true,
+        },
+      ],
       edges: [],
       clusters: [],
     });
-    expect(parsed.nodes[0]).toMatchObject({ label: 'A', size: 4, major: true, group: 'g', color: '#fff' });
+    expect(parsed.nodes[0]).toMatchObject({
+      label: 'A',
+      size: 4,
+      major: true,
+      group: 'g',
+      color: '#fff',
+      image: '/types/politics.png',
+      ring: true,
+    });
   });
 
   it('rejects malformed positions when provided', () => {
@@ -114,11 +138,15 @@ describe('default accessors', () => {
     expect(defaultNodeColor(sampleNode())).toBe('#9ca3af');
   });
 
-  it('defaults size, label, and edge weight', () => {
+  it('defaults size, label, image, ring, and edge weight', () => {
     expect(defaultNodeSize(sampleNode())).toBe(1);
     expect(defaultNodeSize(sampleNode({ size: 7 }))).toBe(7);
     expect(defaultNodeLabel(sampleNode())).toBeNull();
     expect(defaultNodeLabel(sampleNode({ label: 'hi' }))).toBe('hi');
+    expect(defaultNodeImage(sampleNode())).toBeNull();
+    expect(defaultNodeImage(sampleNode({ image: '/a.png' }))).toBe('/a.png');
+    expect(defaultNodeRing(sampleNode())).toBe(false);
+    expect(defaultNodeRing(sampleNode({ ring: true }))).toBe(true);
     expect(defaultEdgeWeight({ source: 'a', target: 'b' })).toBe(0.5);
   });
 
@@ -132,6 +160,8 @@ describe('default accessors', () => {
     const resolved = resolveAccessors({ nodeSize: () => 99 });
     expect(resolved.nodeSize(sampleNode())).toBe(99);
     expect(resolved.nodeColor(sampleNode({ color: '#000' }))).toBe('#000');
+    expect(resolved.nodeImage(sampleNode({ image: '/image.png' }))).toBe('/image.png');
+    expect(resolved.nodeRing(sampleNode({ ring: true }))).toBe(true);
     expect(typeof resolved.edgeColor({ source: 'a', target: 'b' })).toBe('string');
   });
 });
@@ -144,6 +174,66 @@ describe('getEdgeId', () => {
   it('falls back to a composite id using the index', () => {
     expect(getEdgeId({ source: 'a', target: 'b', kind: 'signal' }, 7)).toBe('signal:a->b:7');
     expect(getEdgeId({ source: 'a', target: 'b' }, 2)).toBe('edge:a->b:2');
+  });
+});
+
+describe('mergeGraphDataset', () => {
+  it('upserts nodes, clusters, and explicit edge ids', () => {
+    const base: GraphDataset = {
+      nodes: [{ id: 'a', label: 'Old' }],
+      edges: [{ id: 'edge-1', source: 'a', target: 'b', weight: 0.1 }],
+      clusters: [{ id: 'cluster-1', label: 'Old cluster' }],
+      generatedAt: 'base',
+    };
+
+    const merged = mergeGraphDataset(base, {
+      nodes: [{ id: 'a', label: 'New' }, { id: 'b' }],
+      edges: [{ id: 'edge-1', source: 'a', target: 'b', weight: 0.9 }],
+      clusters: [{ id: 'cluster-1', label: 'New cluster' }],
+      generatedAt: 'patch',
+    });
+
+    expect(merged.nodes).toEqual([{ id: 'a', label: 'New' }, { id: 'b' }]);
+    expect(merged.edges).toEqual([{ id: 'edge-1', source: 'a', target: 'b', weight: 0.9 }]);
+    expect(merged.clusters).toEqual([{ id: 'cluster-1', label: 'New cluster' }]);
+    expect(merged.generatedAt).toBe('patch');
+  });
+
+  it('deduplicates edges without ids by relationship key', () => {
+    const merged = mergeGraphDataset(
+      { nodes: [], edges: [{ source: 'a', target: 'b', kind: 'supports', weight: 0.1 }] },
+      { edges: [{ source: 'a', target: 'b', kind: 'supports', weight: 0.8 }] },
+    );
+
+    expect(merged.edges).toEqual([{ source: 'a', target: 'b', kind: 'supports', weight: 0.8 }]);
+  });
+
+  it('preserves filaments first and trims relationships by weight when over budget', () => {
+    const merged = mergeGraphDataset(
+      {
+        nodes: [],
+        edges: [
+          { id: 'filament', source: 'cluster-a', target: 'cluster-b', kind: 'filament', weight: 0.1 },
+          { id: 'low', source: 'a', target: 'b', kind: 'supports', weight: 0.1 },
+          { id: 'high', source: 'b', target: 'c', kind: 'supports', weight: 0.9 },
+        ],
+      },
+      { edges: [{ id: 'middle', source: 'c', target: 'd', kind: 'supports', weight: 0.5 }] },
+      { edgeBudget: 3 },
+    );
+
+    expect(merged.edges.map((edge) => edge.id)).toEqual(['filament', 'high', 'middle']);
+  });
+
+  it('uses the default edge budget', () => {
+    const edges = Array.from({ length: DEFAULT_GRAPH_EDGE_BUDGET + 5 }, (_, index) => ({
+      id: `edge-${index}`,
+      source: `node-${index}`,
+      target: `node-${index + 1}`,
+      weight: index,
+    }));
+
+    expect(mergeGraphDataset({ nodes: [], edges }, {}).edges).toHaveLength(DEFAULT_GRAPH_EDGE_BUDGET);
   });
 });
 
