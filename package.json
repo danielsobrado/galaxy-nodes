@@ -1,7 +1,26 @@
 {
   "name": "galaxy-nodes",
+  "description": "Reusable React + Three.js library for interactive galaxy-like graph visualizations.",
   "version": "0.1.0",
   "private": false,
+  "license": "MIT",
+  "author": "Daniel Sobrado",
+  "homepage": "https://github.com/danielsobrado/galaxy-nodes#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danielsobrado/galaxy-nodes.git"
+  },
+  "bugs": {
+    "url": "https://github.com/danielsobrado/galaxy-nodes/issues"
+  },
+  "keywords": [
+    "react",
+    "threejs",
+    "graph",
+    "visualization",
+    "typescript",
+    "webgl"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -16,7 +35,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "docs/images/demo1_v0.1.jpg",
+    "LICENSE"
   ],
   "sideEffects": [
     "./dist/styles.css",
@@ -28,6 +49,7 @@
     "build:lib": "vite build && tsc -p tsconfig.build.json && node scripts/copy-styles.mjs",
     "dev": "vite --config examples/basic/vite.config.ts --host 127.0.0.1",
     "pack:dry": "npm pack --dry-run",
+    "prepublishOnly": "npm run build",
     "preview": "vite preview --config examples/basic/vite.config.ts --host 127.0.0.1"
   },
   "dependencies": {
