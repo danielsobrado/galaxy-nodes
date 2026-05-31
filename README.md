@@ -2,6 +2,8 @@
 
 A reusable React + Three.js library for navigating dense graph data as a galaxy. It renders GPU point clouds, planet-like graph nodes, selectable relationships, sparse cluster labels, camera navigation, search focus, category filters, and hover/click inspection.
 
+![Galaxy Nodes screenshot](docs/images/demo1_v0.1.jpg)
+
 ## Install
 
 ```bash
