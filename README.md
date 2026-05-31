@@ -1,16 +1,24 @@
 # Galaxy Nodes
 
-A reusable React + Three.js library for navigating dense graph data as a galaxy. It renders GPU point clouds, planet-like graph nodes, selectable relationships, sparse cluster labels, camera navigation, search focus, group filters, and hover/click inspection.
+A framework-neutral Three.js library for navigating dense graph data as a galaxy, with a ready-made React adapter. It renders GPU point clouds, planet-like graph nodes, selectable relationships, sparse cluster labels, camera navigation, search focus, group filters, and hover/click inspection.
 
 ![Galaxy Nodes screenshot](docs/images/demo1_v0.1.jpg)
 
 ## Install
 
 ```bash
-npm install galaxy-nodes three react react-dom
+npm install galaxy-nodes three
+```
+
+React consumers should also install React peer dependencies:
+
+```bash
+npm install react react-dom
 ```
 
 ## Generic Usage
+
+The root package export remains the React adapter for backward compatibility. New React integrations can also import from `galaxy-nodes/react`.
 
 ```tsx
 import { GalaxyGraphVisualizer, type GraphAccessors, type GraphDataset } from 'galaxy-nodes';
@@ -63,7 +71,53 @@ export function GraphView() {
 }
 ```
 
-Lower-level scene-only embedding is available through `GalaxyScene` when you want to provide your own HUD, panels, and data controls.
+Lower-level React scene-only embedding is available through `GalaxyScene` when you want to provide your own HUD, panels, and data controls.
+
+## Framework-Neutral Core
+
+Use `galaxy-nodes/core` when your app owns the framework lifecycle, such as vanilla DOM, Svelte, or a custom element. Vue and Angular also have explicit subpath exports, `galaxy-nodes/vue` and `galaxy-nodes/angular`, which expose the same renderer with framework-named factory functions.
+
+```ts
+import { createGalaxyRenderer, type GraphDataset } from 'galaxy-nodes/core';
+import 'galaxy-nodes/styles.css';
+
+const dataset: GraphDataset = {
+  nodes: [{ id: 'api', label: 'API', group: 'Services', major: true }],
+  edges: [],
+};
+
+const renderer = createGalaxyRenderer(
+  document.querySelector<HTMLElement>('#graph')!,
+  {
+    dataset,
+    activeGroup: null,
+    showClusters: true,
+    galaxyMode: true,
+    cameraCommand: null,
+    selectedNodeId: null,
+    selectedEdgeId: null,
+  },
+  {
+    onSelectNode: (node) => console.log(node?.id),
+    onSceneFailure: (failure) => console.warn(failure.reason, failure.message),
+  },
+);
+
+// Later, patch state without remounting when topology/layout did not change.
+renderer.update({
+  dataset,
+  activeGroup: 'Services',
+  showClusters: true,
+  galaxyMode: true,
+  cameraCommand: null,
+  selectedNodeId: null,
+  selectedEdgeId: null,
+});
+
+renderer.dispose();
+```
+
+Vue and Angular lifecycle examples are in [docs/examples.md](docs/examples.md).
 
 ## Reduced Motion
 
@@ -139,9 +193,9 @@ const resolved = resolveGraphLayout(dataset, { seed: 'docs-demo' });
 const adaPosition = resolved.nodePositions.get('ada');
 ```
 
-## Markets Preset
+## Corporate Demo Preset
 
-The original prediction-market demo is available as a preset, not part of the generic root module:
+The corporate operations demo is available as a preset, not part of the generic root module:
 
 ```tsx
 import { GalaxyGraphVisualizer } from 'galaxy-nodes';

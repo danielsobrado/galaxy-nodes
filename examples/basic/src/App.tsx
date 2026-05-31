@@ -15,9 +15,9 @@ import {
 const marketLegend = (
   <>
     <span>Color</span>
-    <b className="yes">YES</b>
-    <b className="no">NO</b>
-    <span>by sentiment / category</span>
+    <b className="yes">ON TRACK</b>
+    <b className="no">AT RISK</b>
+    <span>by business status / function</span>
   </>
 );
 
@@ -71,7 +71,7 @@ export default function App() {
           onClick={() => setSharpMoney((value) => !value)}
         >
           <Activity size={15} aria-hidden="true" />
-          Sharp flow <span>{sharpMoney ? 'ON' : 'OFF'}</span>
+          Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
         </button>
       }
       sideRailActions={

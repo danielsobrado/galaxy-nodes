@@ -5,6 +5,7 @@ export type {
   CameraCommand,
   GalaxyGraphTheme,
   GalaxyMotionPreference,
+  GalaxyPlanetSizingOptions,
   GalaxySceneFailure,
   GalaxySceneFailureReason,
   GalaxySceneProps,

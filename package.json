@@ -31,10 +31,35 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./core": {
+      "types": "./dist/core.d.ts",
+      "import": "./dist/core.js",
+      "require": "./dist/core.cjs"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs"
+    },
+    "./vue": {
+      "types": "./dist/vue.d.ts",
+      "import": "./dist/vue.js",
+      "require": "./dist/vue.cjs"
+    },
+    "./angular": {
+      "types": "./dist/angular.d.ts",
+      "import": "./dist/angular.js",
+      "require": "./dist/angular.cjs"
+    },
     "./presets/markets": {
       "types": "./dist/presets/markets.d.ts",
       "import": "./dist/presets/markets.js",
       "require": "./dist/presets/markets.cjs"
+    },
+    "./presets/markets/core": {
+      "types": "./dist/presets/markets-core.d.ts",
+      "import": "./dist/presets/markets/core.js",
+      "require": "./dist/presets/markets/core.cjs"
     },
     "./styles.css": "./dist/styles.css"
   },
@@ -72,6 +97,14 @@
     "react": ">=18.2.0 <20",
     "react-dom": ">=18.2.0 <20",
     "three": ">=0.160.0 <1"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

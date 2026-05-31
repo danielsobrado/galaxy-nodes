@@ -4,7 +4,7 @@ import { closeDriver, driver, waitForMemgraph } from './memgraph.js';
 const relationshipTypes = {
   filament: 'FILAMENT',
   signal: 'SIGNAL',
-  trade: 'TRADE',
+  dependency: 'DEPENDENCY',
 };
 
 function chunk(values, size) {
@@ -67,10 +67,10 @@ async function seed() {
           size: row.size,
           score: row.score,
           sentiment: row.sentiment,
-          volume: row.metrics.volume,
-          activeTraders: row.metrics.activeTraders,
-          marketPrice: row.metrics.marketPrice,
-          winRate: row.metrics.winRate,
+          annualImpact: row.metrics.annualImpact,
+          stakeholders: row.metrics.stakeholders,
+          confidence: row.metrics.confidence,
+          deliveryRate: row.metrics.deliveryRate,
           isMajor: row.isMajor
         })
         `,

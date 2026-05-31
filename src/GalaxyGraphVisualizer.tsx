@@ -23,6 +23,7 @@ import GalaxyScene, {
   type CameraCommand,
   type GalaxyGraphTheme,
   type GalaxyMotionPreference,
+  type GalaxyPlanetSizingOptions,
   type GalaxySceneFailure,
 } from './GalaxyScene';
 import { formatCompactNumber, getEdgeId } from './data';
@@ -40,6 +41,7 @@ export interface GalaxyGraphVisualizerOptions {
   datasetSizes?: readonly number[];
   galaxyMode?: boolean;
   motionPreference?: GalaxyMotionPreference;
+  planetSizing?: GalaxyPlanetSizingOptions;
   showClusters?: boolean;
   showControls?: boolean;
   showDatasetSizeControls?: boolean;
@@ -366,6 +368,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         accessors={accessors}
         paused={!playing}
         motionPreference={options?.motionPreference}
+        planetSizing={options?.planetSizing}
         theme={theme}
         cameraCommand={cameraCommand}
         selectedNodeId={currentSelectedNodeId}

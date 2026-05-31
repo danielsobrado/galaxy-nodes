@@ -4,7 +4,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist/', 'docs/api/', 'examples/basic/dist/', 'node_modules/', '*.tsbuildinfo', 'demo/memgraph/api/'],
+    ignores: [
+      'dist/',
+      '.site/',
+      'docs/api/',
+      'examples/basic/dist/',
+      'node_modules/',
+      '*.tsbuildinfo',
+      'demo/memgraph/api/',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

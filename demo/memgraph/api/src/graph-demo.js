@@ -1,23 +1,33 @@
-// NOTE: This is a standalone copy of the generator in ../../../../src/presets/markets.tsx,
+// NOTE: This is a standalone copy of the generator in ../../../../src/presets/markets-core.ts,
 // kept self-contained so the demo container has no dependency on the library
 // source. It uses different cluster/major-node constants on purpose (smaller,
 // seed-oriented dataset). Keep the GraphDataset shape in sync if the library's
 // contract changes.
-const CATEGORIES = ['Crypto', 'Politics', 'Geopolitics', 'Finance', 'Tech', 'Sports', 'Culture', 'Social', 'Other'];
+const CATEGORIES = [
+  'Sales',
+  'Operations',
+  'Finance',
+  'Product',
+  'Engineering',
+  'Marketing',
+  'Customer Success',
+  'People',
+  'Risk',
+];
 
 const TOPICS = [
-  'liquidity surge',
-  'policy drift',
-  'semiconductor supply',
-  'rate path',
-  'frontier model',
-  'energy shock',
-  'stablecoin rails',
-  'defense corridor',
-  'cloud capex',
-  'election odds',
-  'media reach',
-  'derivatives flow',
+  'enterprise renewal',
+  'regional forecast',
+  'customer onboarding',
+  'supply continuity',
+  'margin recovery',
+  'product launch',
+  'platform reliability',
+  'talent capacity',
+  'compliance review',
+  'vendor consolidation',
+  'pipeline coverage',
+  'service expansion',
 ];
 
 function mulberry32(seed) {
@@ -45,17 +55,17 @@ function pick(rand, values) {
 
 function makeMetrics(rand) {
   return {
-    volume: Math.round(randBetween(rand, 1_200_000, 840_000_000)),
-    activeTraders: Math.round(randBetween(rand, 40, 18_000)),
-    marketPrice: Number(randBetween(rand, 41, 99.8).toFixed(1)),
-    winRate: Number(randBetween(rand, 42, 100).toFixed(1)),
+    annualImpact: Math.round(randBetween(rand, 250_000, 48_000_000)),
+    stakeholders: Math.round(randBetween(rand, 3, 220)),
+    confidence: Number(randBetween(rand, 41, 99.8).toFixed(1)),
+    deliveryRate: Number(randBetween(rand, 42, 100).toFixed(1)),
   };
 }
 
 function sentimentFor(score, rand) {
-  if (score > 66 && rand() > 0.22) return 'yes';
-  if (score < 42 && rand() > 0.24) return 'no';
-  return 'mixed';
+  if (score > 66 && rand() > 0.22) return 'on-track';
+  if (score < 42 && rand() > 0.24) return 'at-risk';
+  return 'watch';
 }
 
 function buildClusters(count, rand) {
@@ -145,7 +155,7 @@ export function generateDemoGraph(count = 8000) {
       source: source.id,
       target: target.id,
       weight: randBetween(rand, 0.35, 1),
-      kind: rand() > 0.46 ? 'signal' : 'trade',
+      kind: rand() > 0.46 ? 'signal' : 'dependency',
     });
   }
 

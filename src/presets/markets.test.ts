@@ -24,7 +24,7 @@ describe('generateGalaxyDataset', () => {
     expect(second.clusters).toEqual(first.clusters);
   });
 
-  it('emits the generic core shape with trading fields under meta', () => {
+  it('emits the generic core shape with business fields under meta', () => {
     const dataset = generateGalaxyDataset(10_000);
     const node = dataset.nodes[0];
     expect(typeof node.id).toBe('string');
@@ -33,8 +33,8 @@ describe('generateGalaxyDataset', () => {
     expect(MARKET_CATEGORIES).toContain(node.group);
     const meta = node.meta as MarketNodeMeta;
     expect(MARKET_CATEGORIES).toContain(meta.category);
-    expect(['yes', 'no', 'mixed']).toContain(meta.sentiment);
-    expect(meta.metrics).toMatchObject({ volume: expect.any(Number), winRate: expect.any(Number) });
+    expect(['on-track', 'at-risk', 'watch']).toContain(meta.sentiment);
+    expect(meta.metrics).toMatchObject({ annualImpact: expect.any(Number), deliveryRate: expect.any(Number) });
   });
 
   it('only references existing node or cluster ids in edges', () => {
@@ -59,10 +59,10 @@ describe('createMarketAccessors', () => {
   const major = dataset.nodes.find((node) => node.major)!;
   const point = dataset.nodes.find((node) => !node.major)!;
 
-  it('colors by sentiment when sharpMoney is on', () => {
+  it('colors by business status when sharpMoney is on', () => {
     const accessors = createMarketAccessors({ sharpMoney: true });
     const sentiment = (major.meta as MarketNodeMeta).sentiment;
-    const expected = sentiment === 'yes' ? '#42f7bd' : sentiment === 'no' ? '#ff6f86' : '#d7d7d7';
+    const expected = sentiment === 'on-track' ? '#42f7bd' : sentiment === 'at-risk' ? '#ff6f86' : '#d7d7d7';
     expect(accessors.nodeColor!(major)).toBe(expected);
   });
 

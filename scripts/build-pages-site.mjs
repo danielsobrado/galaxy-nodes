@@ -5,6 +5,8 @@ import path from 'node:path';
 const siteDir = '.site';
 const demoSource = 'examples/basic/dist';
 const demoTarget = path.join(siteDir, 'demo');
+const apiSource = 'docs/api';
+const apiTarget = path.join(siteDir, 'api');
 
 if (!existsSync(demoSource)) {
   throw new Error(`Missing ${demoSource}. Run npm run build:example first.`);
@@ -12,6 +14,10 @@ if (!existsSync(demoSource)) {
 
 await mkdir(siteDir, { recursive: true });
 await cp(demoSource, demoTarget, { recursive: true });
+
+if (!existsSync(path.join(apiTarget, 'index.html')) && existsSync(path.join(apiSource, 'index.html'))) {
+  await cp(apiSource, apiTarget, { recursive: true });
+}
 
 await writeFile(
   path.join(siteDir, 'index.html'),

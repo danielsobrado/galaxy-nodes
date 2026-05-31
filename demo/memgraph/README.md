@@ -34,8 +34,8 @@ Then click the database button in the left toolbar to load nodes and relationshi
 ## Memgraph Model
 
 - `(:Cluster {id, label, category, centerX, centerY, centerZ, radius, nodeCount, score})`
-- `(:GraphNode {id, label, category, clusterId, x, y, z, size, score, sentiment, isMajor, volume, activeTraders, marketPrice, winRate})`
+- `(:GraphNode {id, label, category, clusterId, x, y, z, size, score, sentiment, isMajor, annualImpact, stakeholders, confidence, deliveryRate})`
 - `(:Cluster)-[:FILAMENT {id, kind, weight}]->(:Cluster)`
-- `(:GraphNode)-[:SIGNAL|TRADE {id, kind, weight}]->(:GraphNode)`
+- `(:GraphNode)-[:SIGNAL|DEPENDENCY {id, kind, weight}]->(:GraphNode)`
 
 The API maps those Memgraph nodes and relationships back to the app's `GraphDataset` JSON contract.

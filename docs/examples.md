@@ -21,6 +21,115 @@ export function MinimalGraph() {
 }
 ```
 
+## Vanilla DOM Core
+
+```ts
+import { createGalaxyRenderer, type GraphDataset } from 'galaxy-nodes/core';
+import 'galaxy-nodes/styles.css';
+
+const dataset: GraphDataset = {
+  nodes: [
+    { id: 'api', label: 'API', group: 'Services', major: true },
+    { id: 'worker', label: 'Worker', group: 'Services' },
+  ],
+  edges: [{ source: 'api', target: 'worker', weight: 0.7 }],
+};
+
+const renderer = createGalaxyRenderer(
+  document.getElementById('graph')!,
+  {
+    dataset,
+    activeGroup: null,
+    showClusters: true,
+    galaxyMode: true,
+    cameraCommand: null,
+    selectedNodeId: null,
+    selectedEdgeId: null,
+    layout: { seed: 'vanilla' },
+  },
+  {
+    onSelectNode: (node) => console.log(node?.id),
+  },
+);
+
+window.addEventListener('beforeunload', () => renderer.dispose());
+```
+
+## Vue Core Adapter
+
+```vue
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { createGalaxyVueRenderer, type GalaxyRenderer, type GraphDataset } from 'galaxy-nodes/vue';
+import 'galaxy-nodes/styles.css';
+
+const host = ref<HTMLElement | null>(null);
+let renderer: GalaxyRenderer | null = null;
+
+const dataset: GraphDataset = {
+  nodes: [{ id: 'api', label: 'API', group: 'Services', major: true }],
+  edges: [],
+};
+
+onMounted(() => {
+  if (!host.value) return;
+  renderer = createGalaxyVueRenderer(host.value, {
+    dataset,
+    activeGroup: null,
+    showClusters: true,
+    galaxyMode: true,
+    cameraCommand: null,
+    selectedNodeId: null,
+    selectedEdgeId: null,
+  });
+});
+
+onBeforeUnmount(() => renderer?.dispose());
+</script>
+
+<template>
+  <div ref="host" class="galaxy-scene" />
+</template>
+```
+
+## Angular Core Adapter
+
+```ts
+import { AfterViewInit, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
+import { createGalaxyAngularRenderer, type GalaxyRenderer, type GraphDataset } from 'galaxy-nodes/angular';
+import 'galaxy-nodes/styles.css';
+
+@Component({
+  selector: 'app-graph',
+  template: '<div #host class="galaxy-scene"></div>',
+})
+export class GraphComponent implements AfterViewInit, OnDestroy {
+  @ViewChild('host', { static: true }) host!: ElementRef<HTMLElement>;
+  private renderer: GalaxyRenderer | null = null;
+
+  private dataset: GraphDataset = {
+    nodes: [{ id: 'api', label: 'API', group: 'Services', major: true }],
+    edges: [],
+  };
+
+  ngAfterViewInit() {
+    this.renderer = createGalaxyAngularRenderer(this.host.nativeElement, {
+      dataset: this.dataset,
+      activeGroup: null,
+      showClusters: true,
+      galaxyMode: true,
+      cameraCommand: null,
+      selectedNodeId: null,
+      selectedEdgeId: null,
+    });
+  }
+
+  ngOnDestroy() {
+    this.renderer?.dispose();
+  }
+}
+```
+
 ## Custom Data Shape
 
 ```tsx

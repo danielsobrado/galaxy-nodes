@@ -8,7 +8,7 @@ const port = Number(process.env.PORT ?? 8787);
 app.use(cors());
 
 // Emits the generic galaxy-nodes shape: structural fields at the top level and
-// the domain payload under `meta`, matching the markets preset's MarketNodeMeta.
+// the domain payload under `meta`, matching the corporate demo preset's MarketNodeMeta.
 function asNode(record) {
   const properties = record.get('n').properties;
   return {
@@ -28,10 +28,10 @@ function asNode(record) {
       score: Number(properties.score),
       sentiment: properties.sentiment,
       metrics: {
-        volume: Number(properties.volume),
-        activeTraders: Number(properties.activeTraders),
-        marketPrice: Number(properties.marketPrice),
-        winRate: Number(properties.winRate),
+        annualImpact: Number(properties.annualImpact),
+        stakeholders: Number(properties.stakeholders),
+        confidence: Number(properties.confidence),
+        deliveryRate: Number(properties.deliveryRate),
       },
     },
   };
