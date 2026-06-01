@@ -1,10 +1,8 @@
 # Galaxy Nodes
 
-[![npm version](https://img.shields.io/npm/v/galaxy-nodes)](https://www.npmjs.com/package/galaxy-nodes)
-[![CI](https://github.com/danielsobrado/galaxy-nodes/actions/workflows/ci.yml/badge.svg)](https://github.com/danielsobrado/galaxy-nodes/actions/workflows/ci.yml)
-[![bundle size](https://img.shields.io/bundlephobia/minzip/galaxy-nodes)](https://bundlephobia.com/package/galaxy-nodes)
-[![license](https://img.shields.io/npm/l/galaxy-nodes)](LICENSE)
-[![types](https://img.shields.io/npm/types/galaxy-nodes)](https://www.npmjs.com/package/galaxy-nodes)
+![version](https://img.shields.io/badge/version-0.1.0-0f766e)
+![license](https://img.shields.io/badge/license-MIT-2563eb)
+![types](https://img.shields.io/badge/types-TypeScript-3178c6)
 
 A framework-neutral Three.js library for navigating dense graph data as a galaxy, with a ready-made React adapter. It renders GPU point clouds, planet-like graph nodes, selectable relationships, sparse cluster labels, camera navigation, search focus, group filters, and hover/click inspection.
 
