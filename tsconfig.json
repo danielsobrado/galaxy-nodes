@@ -13,7 +13,8 @@
     "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "types": ["react", "react-dom", "vitest", "@vitest/browser/providers/playwright"]
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts"]
 }

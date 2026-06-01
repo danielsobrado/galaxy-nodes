@@ -1,7 +1,11 @@
 node_modules/
 dist/
 docs/api/
+coverage/
+temp/
 examples/basic/dist/
+examples/next/.next/
+examples/next/out/
 .site/
 .npm-cache/
 *.local

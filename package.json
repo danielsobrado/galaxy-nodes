@@ -2,10 +2,11 @@
   "name": "galaxy-nodes",
   "description": "Reusable React + Three.js library for interactive galaxy-like graph visualizations.",
   "version": "0.1.0",
+  "packageManager": "npm@11.1.0",
   "private": false,
   "license": "MIT",
   "author": "Daniel Sobrado",
-  "homepage": "https://github.com/danielsobrado/galaxy-nodes#readme",
+  "homepage": "https://danielsobrado.github.io/galaxy-nodes/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/danielsobrado/galaxy-nodes.git"
@@ -77,18 +78,39 @@
     "dist",
     "README.md",
     "CHANGELOG.md",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "docs/release-policy.md",
     "docs/images/demo1_v0.1.jpg",
+    "docs/images/demo-preview.gif",
     "LICENSE"
   ],
   "sideEffects": [
     "./dist/styles.css",
     "*.css"
   ],
+  "overrides": {
+    "postcss": "8.5.15"
+  },
+  "engines": {
+    "node": ">=20.19.0 <23",
+    "npm": ">=10"
+  },
   "scripts": {
+    "api:check": "npm run build:types && node scripts/fix-declaration-imports.mjs && node scripts/api-extractor.mjs",
+    "api:rollup": "node scripts/api-extractor.mjs --rollup-only",
+    "api:update": "npm run build:types && node scripts/fix-declaration-imports.mjs && node scripts/api-extractor.mjs --local",
     "build": "npm run build:lib",
     "build:example": "tsc --noEmit -p examples/basic/tsconfig.json && vite build --config examples/basic/vite.config.ts",
-    "build:lib": "vite build && tsc -p tsconfig.build.json && node scripts/copy-styles.mjs",
-    "ci": "npm run lint && npm run format:check && npm test && npm run build && npm run build:example && npm run docs:api",
+    "build:next": "next build examples/next",
+    "build:lib": "vite build && npm run build:types && node scripts/fix-declaration-imports.mjs && npm run api:rollup && node scripts/copy-styles.mjs",
+    "build:types": "tsc -p tsconfig.build.json",
+    "benchmark": "node scripts/benchmark.mjs",
+    "benchmark:browser": "node scripts/browser-perf.mjs",
+    "changeset": "changeset",
+    "ci": "npm run ci:compat && npm run size && npm run benchmark -- --sizes 10000 --iterations 1 --warmups 0 && npm run build:example && npm run build:next && npm run test:next && npm run package:check && npm run docs:api",
+    "ci:compat": "npm run lint && npm run format:check && npm run test:coverage && npm run build && npm run api:check",
     "dev": "vite --config examples/basic/vite.config.ts --host 127.0.0.1",
     "docs:api": "typedoc",
     "docs:site": "node scripts/build-pages-site.mjs",
@@ -96,10 +118,29 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "pack:dry": "npm pack --dry-run",
+    "package:check": "node scripts/check-package.mjs",
     "prepublishOnly": "npm run build",
     "preview": "vite preview --config examples/basic/vite.config.ts --host 127.0.0.1",
-    "test": "vitest run"
+    "release": "changeset publish",
+    "size": "node scripts/size-limit.mjs",
+    "test": "vitest run",
+    "test:browser": "vitest run --project browser",
+    "test:coverage": "node scripts/prepare-coverage.mjs && vitest run --coverage",
+    "test:next": "node scripts/next-smoke.mjs",
+    "version": "changeset version"
   },
+  "size-limit": [
+    {
+      "name": "core renderer chunk",
+      "path": "dist/core-*.js",
+      "limit": "16 KB"
+    },
+    {
+      "name": "React visualizer chunk",
+      "path": "dist/GalaxyGraphVisualizer-*.js",
+      "limit": "9 KB"
+    }
+  ],
   "dependencies": {
     "lucide-react": "1.17.0"
   },
@@ -117,7 +158,10 @@
     }
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@changesets/cli": "^2.31.0",
+    "@eslint/js": "^9.39.4",
+    "@microsoft/api-extractor": "^7.58.7",
+    "@size-limit/file": "^12.1.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "25.9.1",
@@ -125,17 +169,28 @@
     "@types/react-dom": "19.2.3",
     "@types/three": "0.184.1",
     "@vitejs/plugin-react": "6.0.2",
-    "eslint": "^10.4.1",
+    "@vitest/browser": "3.2.4",
+    "@vitest/coverage-v8": "3.2.4",
+    "eslint": "^9.39.4",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
+    "next": "^16.2.6",
+    "playwright": "1.60.0",
     "prettier": "^3.8.3",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "size-limit": "^12.1.0",
     "three": "0.184.0",
     "typedoc": "^0.28.19",
     "typescript": "6.0.3",
     "typescript-eslint": "^8.60.0",
     "vite": "8.0.14",
     "vitest": "3.2.4"
+  },
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
   }
 }

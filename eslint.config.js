@@ -1,5 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
+import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
@@ -9,7 +11,10 @@ export default tseslint.config(
       '.site/',
       'docs/api/',
       'examples/basic/dist/',
+      'examples/next/.next/',
+      'examples/next/out/',
       'node_modules/',
+      'temp/',
       '*.tsbuildinfo',
       'demo/memgraph/api/',
     ],
@@ -39,6 +44,18 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+  {
+    files: ['**/*.{tsx,jsx}'],
+    plugins: {
+      'jsx-a11y': jsxA11y,
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      ...jsxA11y.configs.recommended.rules,
+      'react-hooks/exhaustive-deps': 'error',
+      'react-hooks/rules-of-hooks': 'error',
     },
   },
   {

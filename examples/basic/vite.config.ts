@@ -29,7 +29,8 @@ export default defineConfig({
     port: 5173,
   },
   build: {
-    outDir: `${repoRoot}/examples/basic/dist`,
+    chunkSizeWarningLimit: 900,
     emptyOutDir: true,
+    outDir: `${repoRoot}/examples/basic/dist`,
   },
 });

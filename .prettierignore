@@ -1,6 +1,12 @@
 dist/
 docs/api/
+coverage/
+temp/
+etc/*.api.md
 examples/basic/dist/
+examples/next/.next/
+examples/next/out/
+examples/next/next-env.d.ts
 node_modules/
 package-lock.json
 *.tsbuildinfo
