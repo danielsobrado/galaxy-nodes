@@ -8,7 +8,7 @@
 
 A framework-neutral Three.js library for navigating dense graph data as a galaxy, with a ready-made React adapter. It renders GPU point clouds, planet-like graph nodes, selectable relationships, sparse cluster labels, camera navigation, search focus, group filters, and hover/click inspection.
 
-![Galaxy Nodes screenshot](docs/images/demo1_v0.1.jpg)
+![Galaxy Nodes screenshot](docs/images/GalaxyDemo1.gif)
 
 [Live demo](https://danielsobrado.github.io/galaxy-nodes/demo/) | [API reference](https://danielsobrado.github.io/galaxy-nodes/api/) | [Release policy](docs/release-policy.md) | [GitHub repository](https://github.com/danielsobrado/galaxy-nodes)
 
@@ -16,7 +16,7 @@ A framework-neutral Three.js library for navigating dense graph data as a galaxy
 
 Try the hosted playground at [danielsobrado.github.io/galaxy-nodes/demo/](https://danielsobrado.github.io/galaxy-nodes/demo/). The GitHub Pages workflow builds `examples/basic`, publishes it under `/demo/`, and publishes generated TypeDoc output under `/api/`.
 
-![Short Galaxy Nodes demo](docs/images/demo-preview.gif)
+![Short Galaxy Nodes demo](docs/images/GalaxyDemo2.gif)
 
 ## Install
 
