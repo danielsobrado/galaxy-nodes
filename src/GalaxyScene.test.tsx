@@ -66,6 +66,7 @@ describe('GalaxyScene', () => {
   it('mounts the core renderer, sends updates, and disposes on cleanup', () => {
     const { rerender, unmount } = render(<GalaxyScene {...makeProps()} />);
 
+    expect(screen.getByRole('img', { name: 'Interactive graph visualization' })).toBeTruthy();
     expect(createGalaxyRenderer).toHaveBeenCalledWith(
       expect.any(HTMLDivElement),
       expect.objectContaining({ activeGroup: null, dataset }),
@@ -80,6 +81,13 @@ describe('GalaxyScene', () => {
 
     unmount();
     expect(mocks.renderer.dispose).toHaveBeenCalled();
+  });
+
+  it('exposes caller-provided accessibility labels for non-visual fallbacks', () => {
+    render(<GalaxyScene {...makeProps({ accessibility: { describedBy: 'graph-summary', label: 'Revenue graph' } })} />);
+
+    const scene = screen.getByRole('img', { name: 'Revenue graph' });
+    expect(scene.getAttribute('aria-describedby')).toBe('graph-summary');
   });
 
   it('renders fallback state from core failures and retries the renderer', () => {
@@ -98,5 +106,16 @@ describe('GalaxyScene', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry renderer' }));
     expect(mocks.renderer.retry).toHaveBeenCalled();
+  });
+
+  it('cleans up renderer instances during mount and unmount stress', () => {
+    const mounted = Array.from({ length: 20 }, (_, index) =>
+      render(<GalaxyScene {...makeProps({ activeGroup: `group-${index}` })} />),
+    );
+
+    mounted.forEach((entry) => entry.unmount());
+
+    expect(createGalaxyRenderer).toHaveBeenCalledTimes(20);
+    expect(mocks.renderer.dispose).toHaveBeenCalledTimes(20);
   });
 });

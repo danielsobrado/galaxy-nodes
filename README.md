@@ -1,8 +1,22 @@
 # Galaxy Nodes
 
+[![npm version](https://img.shields.io/npm/v/galaxy-nodes)](https://www.npmjs.com/package/galaxy-nodes)
+[![CI](https://github.com/danielsobrado/galaxy-nodes/actions/workflows/ci.yml/badge.svg)](https://github.com/danielsobrado/galaxy-nodes/actions/workflows/ci.yml)
+[![bundle size](https://img.shields.io/bundlephobia/minzip/galaxy-nodes)](https://bundlephobia.com/package/galaxy-nodes)
+[![license](https://img.shields.io/npm/l/galaxy-nodes)](LICENSE)
+[![types](https://img.shields.io/npm/types/galaxy-nodes)](https://www.npmjs.com/package/galaxy-nodes)
+
 A framework-neutral Three.js library for navigating dense graph data as a galaxy, with a ready-made React adapter. It renders GPU point clouds, planet-like graph nodes, selectable relationships, sparse cluster labels, camera navigation, search focus, group filters, and hover/click inspection.
 
 ![Galaxy Nodes screenshot](docs/images/demo1_v0.1.jpg)
+
+[Live demo](https://danielsobrado.github.io/galaxy-nodes/demo/) | [API reference](https://danielsobrado.github.io/galaxy-nodes/api/) | [Release policy](docs/release-policy.md) | [GitHub repository](https://github.com/danielsobrado/galaxy-nodes)
+
+## Live Demo
+
+Try the hosted playground at [danielsobrado.github.io/galaxy-nodes/demo/](https://danielsobrado.github.io/galaxy-nodes/demo/). The GitHub Pages workflow builds `examples/basic`, publishes it under `/demo/`, and publishes generated TypeDoc output under `/api/`.
+
+![Short Galaxy Nodes demo](docs/images/demo-preview.gif)
 
 ## Install
 
@@ -146,6 +160,16 @@ If WebGL is unavailable, scene initialization fails, or the browser loses the We
 
 The failure reason is one of `'webgl-unavailable'`, `'context-lost'`, or `'scene-error'`.
 
+Browsers commonly cap a tab at roughly 16 active WebGL contexts. Galaxy Nodes keeps its own supported ceiling at 12 active renderer instances so pages with several mounted graphs fail predictably before the browser starts evicting contexts. Unmount inactive graphs, reuse one renderer when possible, and inspect the live budget with `getGalaxyRendererContextBudget()` from `galaxy-nodes/core`. Apps that need a lower ceiling can set `options.webglContextLimit` on `GalaxyGraphVisualizer` or `contextLimit` on the imperative renderer options, and can observe budget failures with `onContextBudgetExceeded`.
+
+The active-context counter is module-local. It coordinates one document using one loaded copy of Galaxy Nodes; pages that can load multiple bundled copies, such as micro-frontends, should share a single package instance or set a lower per-app context limit because separate module copies cannot see each other's counters.
+
+```ts
+import { getGalaxyRendererContextBudget } from 'galaxy-nodes/core';
+
+console.log(getGalaxyRendererContextBudget());
+```
+
 ## Next.js
 
 Galaxy Nodes is a client-rendered React component. In the App Router, put the graph in a client component and import the stylesheet there or from a client-side wrapper:
@@ -163,9 +187,45 @@ export function GraphClient({ dataset }: { dataset: GraphDataset }) {
 
 The package guards browser-only work so server rendering can safely encounter the component tree, but the WebGL scene starts only after hydration. For very large graphs, `next/dynamic(() => import('./GraphClient'), { ssr: false })` can still be useful to defer client bundle work; it is not required for correctness.
 
+The repository includes `examples/next`, and CI runs `npm run build:next` plus `npm run test:next` after the library build to verify the package can be consumed, server-rendered, hydrated, and rendered as either a WebGL canvas or documented fallback by a Next.js App Router project.
+
+## Accessibility And Labels
+
+The WebGL canvas is paired with a screen-reader-only graph summary. By default the summary lists the first 50 nodes and first 50 edges in the current filtered view, plus counts for the full view. Use `options.accessibleSummaryLimit` to tune that cap, or provide `renderAccessibleSummary` when your product needs a table, grouped list, or domain-specific fields. When focus is on the graph scene, Page Down/Page Up traverses nodes, Home/End jumps to the first or last visible node, Enter refocuses the current node, and Escape clears selection. Selection changes are announced through a polite live region.
+
+Built-in chrome labels are overridable with the `labels` prop so applications can localize controls and status text:
+
+```tsx
+<GalaxyGraphVisualizer
+  dataset={dataset}
+  labels={{
+    alphaBadge: 'Preview',
+    groupsNav: 'Teams',
+    motionOn: 'Motion enabled',
+    formatNodesCount: (count) => new Intl.NumberFormat(locale).format(count) + (count === 1 ? ' node' : ' nodes'),
+    searchInput: 'Search services',
+  }}
+  renderAccessibleSummary={({ nodes, edges, labels }) => (
+    <>
+      <h2>{labels.accessibleSummaryHeading}</h2>
+      <p>
+        {nodes.length} nodes and {edges.length} relationships are available in this view.
+      </p>
+    </>
+  )}
+/>
+```
+
 ## Performance Envelope
 
 The built-in renderer is tuned for sparse, large graph exploration:
+
+- Published browser envelope, measured with the bundled corporate dataset shape and sparse relationship cap:
+
+|    Dataset |    Edge cap | Expected FPS | Expected JS heap |
+| ---------: | ----------: | -----------: | ---------------: |
+|  10k nodes | ~1.2k edges |    55-60 FPS |        80-120 MB |
+| 100k nodes |   12k edges |    32-45 FPS |       180-260 MB |
 
 - Target envelope: up to about 100k nodes with a sampled sparse relationship layer. The bundled corporate demo caps generated relationships at 12k.
 - Nodes are always kept in one GPU point cloud, including nodes marked `major`.
@@ -175,6 +235,18 @@ The built-in renderer is tuned for sparse, large graph exploration:
 - Edges use sparse TubeGeometry for visual quality. Full dense enterprise graphs need a separate line-buffer or level-of-detail renderer.
 
 For best results, keep the `dataset`, `layout`, and accessor objects stable with `useMemo` when their inputs have not changed.
+
+Run the local benchmark harness after `npm run build`:
+
+```bash
+npm run benchmark
+npm run benchmark -- --sizes 10000 --iterations 5
+npm run benchmark:browser
+```
+
+CI runs a 10k-node smoke benchmark so data generation and layout costs remain visible without making every pull request depend on workstation GPU timing. The scheduled/manual `Browser performance` workflow runs `npm run benchmark:browser` in Chromium and reports FPS, JS heap, frame time, and nonblank canvas pixels for 10k and 100k nodes. Use that full browser harness before releases or renderer changes.
+
+The current edge renderer intentionally spends geometry on sparse relationship quality. The next dense-graph renderer should add a line-buffer or level-of-detail edge path for very high edge counts: keep TubeGeometry for selected/highlighted relationships, batch background edges into a single buffer, and progressively reveal higher-fidelity edges near the camera or active selection.
 
 ## Optional Large Graph Loading
 
@@ -238,6 +310,8 @@ Layout is spatial only. Use `layout` for coordinates, spacing, cluster radius, a
 
 Nodes and edges can carry direct `color` fields. Without custom accessors, node colors prefer `node.color`, then hash `node.group` into the built-in palette, then fall back to a neutral gray. Edge colors prefer `edge.color`, with separate defaults for normal relationships and filament edges.
 
+Display text can be supplied directly on both nodes and relationships with `label`, `name`, or `type`. For relationships, `kind` remains the styling/category key and is also used as a label fallback. If your data uses another field, map it through `accessors.nodeLabel` or `accessors.edgeLabel`.
+
 For product palettes or data-driven styling, provide `GraphAccessors`:
 
 ```tsx
@@ -252,8 +326,9 @@ const paletteByGroup: Record<string, string> = {
 const accessors: GraphAccessors = {
   nodeColor: (node) => node.color ?? paletteByGroup[node.group ?? ''] ?? defaultNodeColor(node),
   edgeColor: (edge) => edge.color ?? (edge.weight && edge.weight > 0.75 ? '#f5cf5b' : '#6bd7ff'),
+  edgeLabel: (edge) => edge.label ?? edge.name ?? edge.type ?? edge.kind ?? null,
   nodeSize: (node) => node.size ?? (node.major ? 3 : 1),
-  nodeLabel: (node) => node.label ?? null,
+  nodeLabel: (node) => node.label ?? node.name ?? node.type ?? null,
 };
 
 export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
@@ -272,6 +347,18 @@ export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
 ```
 
 `theme.background` controls the WebGL clear color and app background. `theme.panelAccentColor` controls HUD accents and secondary selection markers. `theme.selectedColor` controls selected/highlighted scene elements. There is no separate `palette` prop; keep palette logic in `nodeColor` or domain-specific accessor helpers.
+
+## Node Image Trust Model
+
+`GraphNode.image` and `GraphAccessors.nodeImage` can point to arbitrary consumer-supplied URLs. Galaxy Nodes passes those URLs to `THREE.TextureLoader` and sets `crossOrigin` to `anonymous` before loading textures.
+
+Treat node image URLs as remote content owned by your host application, not as trusted package assets:
+
+- Validate or map image URLs to an allowlist of origins before passing them to the renderer.
+- Configure your Content Security Policy so `img-src` allows only the image origins you trust. The renderer cannot bypass CSP.
+- Cross-origin image servers must allow anonymous CORS requests, for example with an appropriate `Access-Control-Allow-Origin` response. Without that, browser/WebGL texture loading may fail.
+- Avoid embedding tokens, private identifiers, or user secrets in image URLs because browsers, CDNs, logs, and referrers may expose them.
+- If users can submit graph JSON directly, sanitize or reject unexpected `image` values during import.
 
 ## Corporate Demo Preset
 
@@ -323,6 +410,8 @@ interface GraphNode<TMeta = unknown> {
   id: string;
   position?: { x: number; y: number; z: number };
   label?: string;
+  name?: string;
+  type?: string;
   size?: number;
   major?: boolean;
   group?: string;
@@ -332,8 +421,11 @@ interface GraphNode<TMeta = unknown> {
 
 interface GraphEdge<TMeta = unknown> {
   id?: string;
+  label?: string;
+  name?: string;
   source: string;
   target: string;
+  type?: string;
   weight?: number;
   kind?: string;
   color?: string;
@@ -366,7 +458,11 @@ The dev server runs `examples/basic`, which imports the library through the pack
 
 ```bash
 npm run build
+npm run size
 npm run build:example
+npm run build:next
+npm run test:next
+npm run package:check
 ```
 
 Run the full contribution gate locally with:
@@ -375,9 +471,12 @@ Run the full contribution gate locally with:
 npm run ci
 ```
 
-API documentation is generated with TypeDoc:
+Browser-mode WebGL tests run through the pinned Playwright version in `devDependencies` and compare against `src/__screenshots__/core-renderer-galaxy.png`. To refresh that checked-in visual baseline after an intentional renderer change, run `VITE_UPDATE_GALAXY_SCREENSHOTS=1 npm run test:browser` on macOS/Linux, or `$env:VITE_UPDATE_GALAXY_SCREENSHOTS='1'; npm run test:browser; Remove-Item Env:VITE_UPDATE_GALAXY_SCREENSHOTS` in PowerShell, then review the PNG diff before committing it. The visual assertion allows a small SwiftShader pixel tolerance, so only refresh the baseline when the rendered scene change is expected.
+
+API compatibility is locked with API Extractor reports under `etc/*.api.md`, and API documentation is generated with TypeDoc:
 
 ```bash
+npm run api:check
 npm run docs:api
 ```
 

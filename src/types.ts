@@ -26,6 +26,10 @@ export interface GraphNode<TMeta = unknown> {
   position?: Vec3;
   /** Display name shown in the detail panel heading. */
   label?: string;
+  /** Optional display name; used as a display fallback when `label` is absent. */
+  name?: string;
+  /** Optional node type label; useful when imported data stores names under type. */
+  type?: string;
   /** World-space size; the renderer defaults to 1. */
   size?: number;
   /** Major nodes render as interactive "planets" with labels. */
@@ -34,7 +38,13 @@ export interface GraphNode<TMeta = unknown> {
   group?: string;
   /** Explicit color override; wins over the accessor default. */
   color?: string;
-  /** Optional image URL rendered on the node's planet overlay. */
+  /**
+   * Optional image URL rendered on the node's planet overlay.
+   *
+   * The renderer loads this URL as a WebGL texture with `crossOrigin: 'anonymous'`.
+   * Treat values as consumer-supplied remote content: validate
+   * allowed origins in your host app and allow those origins in CSP `img-src`.
+   */
   image?: string;
   /** Opt-in orbit/donut ring around this node. Defaults to false. */
   ring?: boolean;
@@ -44,8 +54,14 @@ export interface GraphNode<TMeta = unknown> {
 
 export interface GraphEdge<TMeta = unknown> {
   id?: string;
+  /** Optional display label for relationship overlays and detail UIs. */
+  label?: string;
+  /** Optional relationship name; used as a display fallback when `label` is absent. */
+  name?: string;
   source: string;
   target: string;
+  /** Optional relationship type label; `kind` remains the canonical styling key. */
+  type?: string;
   /** Relationship strength in the 0..1 range; the renderer defaults to 0.5. */
   weight?: number;
   /** `'filament'` renders as a faint large-scale strand; anything else is a relationship. */
@@ -82,7 +98,7 @@ export interface GraphDatasetPatch<NMeta = unknown, EMeta = unknown, CMeta = unk
 
 /**
  * Functions the renderer uses to derive visual properties from your nodes and
- * edges. All are optional - {@link resolveAccessors} fills in sensible defaults
+ * edges. All are optional - `resolveAccessors` fills in sensible defaults
  * that read the core fields (`color`, `size`, `label`, `group`).
  */
 export interface GraphAccessors<NMeta = unknown, EMeta = unknown> {
@@ -92,12 +108,20 @@ export interface GraphAccessors<NMeta = unknown, EMeta = unknown> {
   nodeSize?: (node: GraphNode<NMeta>) => number;
   /** Floating planet label; return `null` to hide it. */
   nodeLabel?: (node: GraphNode<NMeta>) => string | null;
-  /** Optional planet image URL; useful for type-based icons or thumbnails. */
+  /**
+   * Optional planet image URL; useful for type-based icons or thumbnails.
+   *
+   * The renderer loads this URL as a WebGL texture with `crossOrigin: 'anonymous'`.
+   * Treat values as consumer-supplied remote content: validate
+   * allowed origins in your host app and allow those origins in CSP `img-src`.
+   */
   nodeImage?: (node: GraphNode<NMeta>) => string | null;
   /** Whether this node should render the optional orbit/donut ring. */
   nodeRing?: (node: GraphNode<NMeta>) => boolean;
   /** Color for an edge. */
   edgeColor?: (edge: GraphEdge<EMeta>) => string;
+  /** Relationship display label used for hover, selected-line labels, and default detail text. */
+  edgeLabel?: (edge: GraphEdge<EMeta>) => string | null;
   /** Strength in the 0..1 range, driving edge thickness/opacity. */
   edgeWeight?: (edge: GraphEdge<EMeta>) => number;
 }

@@ -128,7 +128,10 @@
   box-shadow: inset 0 0 0 1px rgba(70, 244, 188, 0.28);
 }
 .galaxy-nodes .cluster-label,
-.galaxy-nodes .node-label {
+.galaxy-nodes .node-label,
+.galaxy-nodes .node-highlight-label,
+.galaxy-nodes .edge-label,
+.galaxy-nodes .hover-label {
   position: absolute;
   left: 0;
   top: 0;
@@ -162,6 +165,72 @@
   border-radius: 999px;
   background: rgba(237, 244, 241, 0.78);
   box-shadow: 0 0 14px rgba(99, 230, 190, 0.56);
+}
+.galaxy-nodes .node-highlight-label {
+  max-width: min(260px, 38vw);
+  overflow: hidden;
+  padding: 4px 8px;
+  border-left: 2px solid rgba(70, 244, 188, 0.8);
+  color: rgba(250, 255, 251, 0.96);
+  background: linear-gradient(90deg, rgba(3, 5, 7, 0.74), rgba(3, 5, 7, 0.18));
+  box-shadow: 0 0 18px rgba(70, 244, 188, 0.24);
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  translate: 8px -50%;
+}
+.galaxy-nodes .node-highlight-label.subtle {
+  opacity: 0.84;
+  border-left-color: rgba(216, 255, 243, 0.68);
+}
+.galaxy-nodes .edge-label {
+  max-width: min(280px, 42vw);
+  overflow: hidden;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 6px;
+  color: #ffffff;
+  background: rgba(3, 5, 7, 0.78);
+  box-shadow:
+    0 0 18px rgba(255, 255, 255, 0.42),
+    0 0 28px rgba(70, 244, 188, 0.22);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  translate: -50% -50%;
+}
+.galaxy-nodes .edge-label.relationship-label {
+  border-color: rgba(70, 244, 188, 0.5);
+  color: rgba(250, 255, 251, 0.95);
+  background: rgba(3, 5, 7, 0.68);
+  box-shadow:
+    0 0 15px rgba(70, 244, 188, 0.34),
+    0 0 24px rgba(255, 255, 255, 0.18);
+  font-size: 0.68rem;
+  text-transform: none;
+}
+.galaxy-nodes .hover-label {
+  max-width: min(320px, 46vw);
+  overflow: hidden;
+  padding: 5px 8px;
+  border: 1px solid rgba(70, 244, 188, 0.42);
+  border-radius: 6px;
+  color: #fafffc;
+  background: rgba(3, 5, 7, 0.72);
+  box-shadow:
+    0 0 14px rgba(70, 244, 188, 0.26),
+    0 0 22px rgba(255, 255, 255, 0.18);
+  font-size: 0.7rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  translate: -50% -118%;
 }
 .galaxy-nodes .top-bar,
 .galaxy-nodes .control-ribbon,

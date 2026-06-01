@@ -55,7 +55,7 @@ export function defaultNodeSize(node: GraphNode): number {
 }
 
 export function defaultNodeLabel(node: GraphNode): string | null {
-  return node.label ?? null;
+  return node.label ?? node.name ?? node.type ?? null;
 }
 
 export function defaultNodeImage(node: GraphNode): string | null {
@@ -75,6 +75,10 @@ export function defaultEdgeWeight(edge: GraphEdge): number {
   return edge.weight ?? 0.5;
 }
 
+export function defaultEdgeLabel(edge: GraphEdge): string | null {
+  return edge.label ?? edge.name ?? edge.type ?? edge.kind ?? null;
+}
+
 /** Fill in any missing accessor with the built-in default. */
 export function resolveAccessors<NMeta = unknown, EMeta = unknown>(
   accessors?: GraphAccessors<NMeta, EMeta>,
@@ -86,6 +90,7 @@ export function resolveAccessors<NMeta = unknown, EMeta = unknown>(
     nodeImage: accessors?.nodeImage ?? (defaultNodeImage as ResolvedAccessors<NMeta, EMeta>['nodeImage']),
     nodeRing: accessors?.nodeRing ?? (defaultNodeRing as ResolvedAccessors<NMeta, EMeta>['nodeRing']),
     edgeColor: accessors?.edgeColor ?? (defaultEdgeColor as ResolvedAccessors<NMeta, EMeta>['edgeColor']),
+    edgeLabel: accessors?.edgeLabel ?? (defaultEdgeLabel as ResolvedAccessors<NMeta, EMeta>['edgeLabel']),
     edgeWeight: accessors?.edgeWeight ?? (defaultEdgeWeight as ResolvedAccessors<NMeta, EMeta>['edgeWeight']),
   };
 }
@@ -156,6 +161,10 @@ function parseNode<TMeta = unknown>(value: unknown, index: number): GraphNode<TM
 
   const label = readOptionalString(value, 'label', path);
   if (label !== undefined) node.label = label;
+  const name = readOptionalString(value, 'name', path);
+  if (name !== undefined) node.name = name;
+  const type = readOptionalString(value, 'type', path);
+  if (type !== undefined) node.type = type;
   const size = readOptionalNumber(value, 'size', path);
   if (size !== undefined) node.size = size;
   const major = readOptionalBoolean(value, 'major', path);
@@ -184,6 +193,12 @@ function parseEdge<TMeta = unknown>(value: unknown, index: number): GraphEdge<TM
 
   const id = readOptionalString(value, 'id', path);
   if (id !== undefined) edge.id = id;
+  const label = readOptionalString(value, 'label', path);
+  if (label !== undefined) edge.label = label;
+  const name = readOptionalString(value, 'name', path);
+  if (name !== undefined) edge.name = name;
+  const type = readOptionalString(value, 'type', path);
+  if (type !== undefined) edge.type = type;
   const weight = readOptionalNumber(value, 'weight', path);
   if (weight !== undefined) edge.weight = weight;
   const kind = readOptionalString(value, 'kind', path);
@@ -269,7 +284,7 @@ function trimEdges<EMeta>(edges: GraphEdge<EMeta>[], edgeBudget: number) {
   if (edgeBudget <= 0) return [];
   if (edges.length <= edgeBudget) return edges;
 
-  const filaments = edges.filter((edge) => edge.kind === 'filament');
+  const filaments = edges.filter((edge) => edge.kind === 'filament').slice(0, edgeBudget);
   const relationshipBudget = Math.max(0, edgeBudget - filaments.length);
   const relationships = edges
     .filter((edge) => edge.kind !== 'filament')

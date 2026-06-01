@@ -8,7 +8,13 @@ import {
 import { createSceneFallbackViewModel, type GalaxySceneFailure } from './sceneFallback';
 import type { GalaxyCameraView, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
 
-export type { CameraCommand, GalaxyGraphTheme, GalaxyMotionPreference, GalaxyPlanetSizingOptions } from './core';
+export type {
+  CameraCommand,
+  GalaxyGraphTheme,
+  GalaxyMotionPreference,
+  GalaxyPlanetSizingOptions,
+  PlanetSizingMode,
+} from './core';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
 
 export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> extends GalaxyRendererOptions<
@@ -16,9 +22,15 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
   EMeta,
   CMeta
 > {
+  accessibility?: {
+    describedBy?: string;
+    keyShortcuts?: string;
+    label?: string;
+  };
   onSceneFailure?: (failure: GalaxySceneFailure) => void;
   onSceneReady?: () => void;
   onCameraViewChange?: (view: GalaxyCameraView) => void;
+  onContextBudgetExceeded?: GalaxyRendererCallbacks<NMeta, EMeta>['onContextBudgetExceeded'];
   onSelectNode: (node: GraphNode<NMeta> | null) => void;
   onHoverNode: (node: GraphNode<NMeta> | null) => void;
   onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
@@ -27,6 +39,7 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
 
 export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>({
   dataset,
+  accessibility,
   activeGroup,
   showClusters,
   galaxyMode,
@@ -38,6 +51,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   onSceneFailure,
   onSceneReady,
   onCameraViewChange,
+  onContextBudgetExceeded,
   paused = false,
   planetSizing,
   selectedNodeId,
@@ -89,6 +103,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       onHoverEdge,
       onHoverNode,
       onCameraViewChange,
+      onContextBudgetExceeded,
       onSceneFailure: (nextFailure) => {
         setFailure(nextFailure);
         onSceneFailure?.(nextFailure);
@@ -100,7 +115,16 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       onSelectEdge,
       onSelectNode,
     }),
-    [onCameraViewChange, onHoverEdge, onHoverNode, onSceneFailure, onSceneReady, onSelectEdge, onSelectNode],
+    [
+      onCameraViewChange,
+      onContextBudgetExceeded,
+      onHoverEdge,
+      onHoverNode,
+      onSceneFailure,
+      onSceneReady,
+      onSelectEdge,
+      onSelectNode,
+    ],
   );
 
   const optionsRef = useRef(options);
@@ -133,7 +157,14 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   const fallback = failure ? createSceneFallbackViewModel(dataset, failure) : null;
 
   return (
-    <div ref={hostRef} className="galaxy-scene">
+    <div
+      ref={hostRef}
+      className="galaxy-scene"
+      role="img"
+      aria-label={accessibility?.label ?? 'Interactive graph visualization'}
+      aria-describedby={accessibility?.describedBy}
+      aria-keyshortcuts={accessibility?.keyShortcuts}
+    >
       {fallback ? (
         <div className="scene-fallback" role="status" aria-live="polite">
           <div>
