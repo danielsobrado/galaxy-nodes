@@ -30,6 +30,7 @@ import type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallba
 import type {
   GraphAccessors,
   GalaxyCameraView,
+  GraphCluster,
   GraphDataset,
   GraphEdge,
   GraphNode,
@@ -129,6 +130,7 @@ interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   updatePlanetSizing: (planetSizing: GalaxyPlanetSizingOptions | undefined) => void;
   updateSelection: (selectedNodeId: string | null, selectedEdgeId: string | null) => void;
   updateTheme: (theme: GalaxyGraphTheme | undefined) => void;
+  appendDataset: (dataset: GraphDataset<NMeta, EMeta>) => void;
   dispose: () => void;
 }
 
@@ -716,9 +718,15 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   let theme = initialTheme;
   let accessors = resolveAccessors(accessorsInput);
   let planetSizing = resolvePlanetSizing(planetSizingInput);
+  // Render-on-demand flag. The animation loop only submits a frame when something
+  // actually changed (camera moved, hover/selection updated, data appended), unless
+  // full-motion ambient animation is running. Starts true so the first frame paints.
+  let needsRender = true;
   const graphLayout = resolveGraphLayout(dataset, layoutInput);
-  const nodeIndex: SceneNodeIndex<NMeta> = buildSceneNodeIndex(dataset.nodes);
-  const nodeDegrees = buildNodeDegrees(dataset);
+  // Reassignable because incremental append (see appendDataset) recomputes them
+  // when streamed nodes/edges arrive.
+  let nodeIndex: SceneNodeIndex<NMeta> = buildSceneNodeIndex(dataset.nodes);
+  let nodeDegrees = buildNodeDegrees(dataset);
 
   const labelsRoot = document.createElement('div');
   labelsRoot.className = 'scene-labels';
@@ -771,6 +779,10 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   }
 
   function emitCameraView() {
+    // Every camera change funnels through here (the OrbitControls 'change' event,
+    // damping inertia frames, WASD pans, and focus/reset), so it is the single
+    // choke point that wakes the render loop on movement.
+    needsRender = true;
     callbacksRef.current.onCameraViewChange?.(currentCameraView());
   }
 
@@ -812,11 +824,15 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const neighborNodeIdsByNodeId = new Map<string, Set<string>>();
   const interactiveEdgeMeshes: THREE.Object3D[] = [];
 
-  const pointPositions = new Float32Array(dataset.nodes.length * 3);
-  const basePointColors = new Float32Array(dataset.nodes.length * 3);
-  const pointColors = new Float32Array(dataset.nodes.length * 3);
-  const basePointSizes = new Float32Array(dataset.nodes.length);
-  const visiblePointSizes = new Float32Array(dataset.nodes.length);
+  // Point-cloud attribute buffers grow on incremental append (see growPointBuffers).
+  // They are over-allocated with spare capacity so streamed chunks rarely reallocate,
+  // and the geometry draw range caps rendering/picking to the live node count.
+  let pointCapacity = dataset.nodes.length;
+  let pointPositions = new Float32Array(pointCapacity * 3);
+  let basePointColors = new Float32Array(pointCapacity * 3);
+  let pointColors = new Float32Array(pointCapacity * 3);
+  let basePointSizes = new Float32Array(pointCapacity);
+  let visiblePointSizes = new Float32Array(pointCapacity);
 
   dataset.nodes.forEach((node, index) => {
     const position = nodePositions.get(node.id)!;
@@ -826,8 +842,8 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   });
 
   const pointsGeometry = new THREE.BufferGeometry();
-  const pointColorAttribute = new THREE.BufferAttribute(pointColors, 3);
-  const pointSizeAttribute = new THREE.BufferAttribute(visiblePointSizes, 1);
+  let pointColorAttribute = new THREE.BufferAttribute(pointColors, 3);
+  let pointSizeAttribute = new THREE.BufferAttribute(visiblePointSizes, 1);
   pointColorAttribute.setUsage(THREE.DynamicDrawUsage);
   pointSizeAttribute.setUsage(THREE.DynamicDrawUsage);
   pointsGeometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3));
@@ -1291,7 +1307,8 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       const selectionEmphasized = selected || relatedToSelectedEdge || firstDegree || secondDegree;
       const emphasized = selectionEmphasized || hovered;
       const planetScale =
-        radius * (selected ? 1.38 : relatedToSelectedEdge || firstDegree ? 1.2 : secondDegree ? 1.14 : hovered ? 1.1 : 1);
+        radius *
+        (selected ? 1.38 : relatedToSelectedEdge || firstDegree ? 1.2 : secondDegree ? 1.14 : hovered ? 1.1 : 1);
       const ringScale =
         radius *
         1.42 *
@@ -1306,9 +1323,9 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
           )
         : hovered
           ? planetColor(nodeColor).multiplyScalar(1.18)
-        : hasSelection
-          ? dimColor(nodeColor, 0.86)
-          : planetColor(nodeColor);
+          : hasSelection
+            ? dimColor(nodeColor, 0.86)
+            : planetColor(nodeColor);
 
       instanceDummy.position.set(position.x, position.y, position.z);
       instanceDummy.rotation.set(0, (index % 16) * 0.12, 0);
@@ -1391,7 +1408,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     );
     if (!source || !target) {
       state.visual.visible = false;
-      state.hit.visible = false;
+      state.hit.userData.pickable = false;
       edgeEndpoints.delete(state.id);
       return;
     }
@@ -1425,7 +1442,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       const connectedToSelectedNode = Boolean(selectedNodeHighlight?.connectedEdgeIds.has(state.id));
       const visible = visibleByGroup || selected || connectedToSelectedNode;
       state.visual.visible = visible;
-      state.hit.visible = visible;
+      state.hit.userData.pickable = visible;
     });
   }
 
@@ -1434,7 +1451,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updateEdgeVisibility();
   }
 
-  dataset.edges.forEach((edge, index) => {
+  function addEdgeMesh(edge: GraphEdge<EMeta>, index: number) {
     const source = resolveEndpoint(edge.source, nodeLookup, nodePositions, clusterLookup, accessors, planetRadius);
     const target = resolveEndpoint(edge.target, nodeLookup, nodePositions, clusterLookup, accessors, planetRadius);
     if (!source || !target) return;
@@ -1467,6 +1484,12 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     );
     hit.userData.edgeId = edgeId;
     hit.userData.type = 'edge';
+    hit.userData.pickable = true;
+    // The hit tube never renders: its additive material is fully transparent so it
+    // contributes nothing to the image, and three.js raycasting ignores `visible`.
+    // Keeping it invisible removes one draw call per edge (halving edge draw calls)
+    // while it remains pickable; eligibility is gated by userData.pickable instead.
+    hit.visible = false;
     interactiveEdgeMeshes.push(hit);
     world.add(hit);
 
@@ -1475,7 +1498,110 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeLookup.set(edgeId, edge);
     edgeEndpoints.set(edgeId, endpoints);
     indexSelectableEdge(edgeId, edge);
-  });
+  }
+
+  dataset.edges.forEach(addEdgeMesh);
+
+  // Grow (and lazily reallocate) the point-cloud buffers to cover `nextCount` nodes,
+  // seeding positions for the appended tail. Used by the incremental append path so a
+  // streamed chunk never rebuilds the whole point cloud.
+  function growPointBuffers(prevCount: number, nextCount: number) {
+    if (nextCount > pointCapacity) {
+      const nextCapacity = Math.max(nextCount, Math.ceil(pointCapacity * 1.5) + 8);
+      const grow = (source: Float32Array, stride: number) => {
+        const next = new Float32Array(nextCapacity * stride);
+        next.set(source.subarray(0, prevCount * stride));
+        return next;
+      };
+      pointPositions = grow(pointPositions, 3);
+      basePointColors = grow(basePointColors, 3);
+      pointColors = grow(pointColors, 3);
+      basePointSizes = grow(basePointSizes, 1);
+      visiblePointSizes = grow(visiblePointSizes, 1);
+      pointCapacity = nextCapacity;
+
+      pointColorAttribute = new THREE.BufferAttribute(pointColors, 3);
+      pointSizeAttribute = new THREE.BufferAttribute(visiblePointSizes, 1);
+      pointColorAttribute.setUsage(THREE.DynamicDrawUsage);
+      pointSizeAttribute.setUsage(THREE.DynamicDrawUsage);
+      pointsGeometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3));
+      pointsGeometry.setAttribute('color', pointColorAttribute);
+      pointsGeometry.setAttribute('size', pointSizeAttribute);
+    }
+
+    for (let index = prevCount; index < nextCount; index += 1) {
+      const node = dataset.nodes[index];
+      const position = nodePositions.get(node.id);
+      if (!position) continue;
+      pointPositions[index * 3] = position.x;
+      pointPositions[index * 3 + 1] = position.y;
+      pointPositions[index * 3 + 2] = position.z;
+    }
+    (pointsGeometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+    pointsGeometry.setDrawRange(0, nextCount);
+    pointsGeometry.computeBoundingSphere();
+  }
+
+  function resolveAppendedNodePositions(nextDataset: GraphDataset<NMeta, EMeta>, newNodes: GraphNode<NMeta>[]) {
+    // Feed every already-placed node back in as an authored position so re-running
+    // layout only generates coordinates for the appended nodes and never disturbs
+    // what is already on screen (which would also invalidate existing edge tubes).
+    const layoutNodes = nextDataset.nodes.map((node) => {
+      if (node.position) return node;
+      const resolved = nodePositions.get(node.id);
+      return resolved ? { ...node, position: resolved } : node;
+    });
+    const layoutClusters: GraphCluster[] = graphLayout.clusters.map((cluster) => ({
+      id: cluster.id,
+      label: cluster.label,
+      center: cluster.center,
+      radius: cluster.radius,
+      group: cluster.group,
+      color: cluster.color,
+    }));
+    const resolved = resolveGraphLayout({ ...nextDataset, nodes: layoutNodes, clusters: layoutClusters }, layoutInput);
+    for (const node of newNodes) {
+      const position = resolved.nodePositions.get(node.id);
+      if (!position) {
+        throw new Error(`Galaxy Nodes could not resolve a position for appended node "${node.id}".`);
+      }
+      nodePositions.set(node.id, position);
+      nodeLookup.set(node.id, node);
+    }
+  }
+
+  // Incremental append: extend the scene in place when streamed/progressive loading
+  // adds nodes and edges on top of the existing prefix, instead of disposing and
+  // rebuilding every mesh (a cost that otherwise grows with the total graph size on
+  // every chunk). Only the appended tail is built; existing meshes are untouched.
+  function appendDataset(nextDataset: GraphDataset<NMeta, EMeta>) {
+    const prevNodeCount = dataset.nodes.length;
+    const prevEdgeCount = dataset.edges.length;
+    if (nextDataset.nodes.length < prevNodeCount || nextDataset.edges.length < prevEdgeCount) {
+      throw new Error('Galaxy Nodes incremental append requires a superset of the current dataset.');
+    }
+
+    const newNodes = nextDataset.nodes.slice(prevNodeCount);
+    if (newNodes.length) resolveAppendedNodePositions(nextDataset, newNodes);
+
+    dataset = nextDataset as GraphDataset<NMeta, EMeta, CMeta>;
+    nodeIndex = buildSceneNodeIndex(dataset.nodes);
+    nodeDegrees = buildNodeDegrees(dataset);
+    rankedPlanetNodes.clear();
+
+    if (newNodes.length) growPointBuffers(prevNodeCount, dataset.nodes.length);
+
+    for (let index = prevEdgeCount; index < dataset.edges.length; index += 1) {
+      addEdgeMesh(dataset.edges[index], index);
+    }
+
+    updatePointAppearance();
+    updateEdges();
+    updateClusterVisibility();
+    updateSelection(selectedNodeId, selectedEdgeId);
+    updateHoverHighlight();
+    needsRender = true;
+  }
 
   const hoverEdgeEmptyGeometry = new THREE.BufferGeometry();
   const hoverEdgeMaterial = new THREE.MeshBasicMaterial({
@@ -1696,6 +1822,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     camera.updateProjectionMatrix();
     renderer.setSize(nextWidth, nextHeight);
     pointsMaterial.uniforms.pixelRatio.value = renderer.getPixelRatio();
+    needsRender = true;
   }
 
   function intersectAt(clientX: number, clientY: number) {
@@ -1713,7 +1840,9 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       return visiblePointSizes[entry.index] > 0;
     };
     const isEdgeHit = (entry: THREE.Intersection) =>
-      entry.object.visible && entry.object.userData.type === 'edge' && Boolean(entry.object.userData.edgeId);
+      Boolean(entry.object.userData.pickable) &&
+      entry.object.userData.type === 'edge' &&
+      Boolean(entry.object.userData.edgeId);
     const hit = hits.find((entry) => isNodeHit(entry) || isEdgeHit(entry));
     const instanceId = hit?.instanceId;
     const pointIndex = hit?.object.userData.type === 'node-points' ? hit.index : undefined;
@@ -1802,6 +1931,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   function handlePointerLeave() {
     hoverPending = false;
     clearHover();
+    needsRender = true;
   }
 
   function handlePointerDown(event: PointerEvent) {
@@ -1914,12 +2044,19 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     if (pressedKeys.has('d') || pressedKeys.has('arrowright')) moveCamera('right', keySpeed * 0.16, true);
     if (pressedKeys.has('e')) moveCamera('up', keySpeed * 0.13, true);
     if (pressedKeys.has('q')) moveCamera('down', keySpeed * 0.13, true);
+    if (pressedKeys.size) needsRender = true;
     controls.update();
 
     const paused = pausedRef.current;
-    if (!paused && motion === 'full' && galaxyMode) world.rotation.y += 0.000035;
+    // In full-motion mode the world auto-rotates and markers spin, so the scene
+    // genuinely changes every frame and must always render. Otherwise we render on
+    // demand: the loop keeps ticking (to process damping) but skips the GPU submit
+    // and label projection when nothing changed, instead of redrawing an identical
+    // frame 60x a second.
+    const animating = !paused && motion === 'full';
+    if (animating && galaxyMode) world.rotation.y += 0.000035;
 
-    if (!paused && motion === 'full') {
+    if (animating) {
       endpointMarkers.forEach((marker, index) => {
         if (!marker.group.visible) return;
         marker.innerRing.rotation.z += 0.006 + index * 0.001;
@@ -1935,9 +2072,17 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       }
     }
 
-    if (hoverPending) processHover();
+    if (hoverPending) {
+      processHover();
+      needsRender = true;
+    }
 
-    if (frame % 2 === 0) {
+    if (!animating && !needsRender) return;
+    needsRender = false;
+
+    // While animating, label projection stays throttled to every other frame; for a
+    // one-off on-demand render we always reproject so labels are never a frame stale.
+    if (animating ? frame % 2 === 0 : true) {
       const currentWidth = host.clientWidth || window.innerWidth;
       const currentHeight = host.clientHeight || window.innerHeight;
       labels.forEach((label) => {
@@ -1955,19 +2100,31 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   animate();
 
+  // Every public mutator changes what should be on screen, so wake the on-demand
+  // loop after it runs. Camera methods already wake it via emitCameraView, but
+  // wrapping uniformly keeps the contract in one place.
+  const wake =
+    <Args extends unknown[], R>(fn: (...args: Args) => R) =>
+    (...args: Args): R => {
+      const result = fn(...args);
+      needsRender = true;
+      return result;
+    };
+
   return {
-    focusEdge,
-    focusNode,
-    moveCamera,
-    resetCamera,
-    updateAccessors,
-    updateActiveGroup,
-    updateClusterVisibility: updateClusterVisibilityFromProp,
-    updateGalaxyMode,
-    updateMotionPreference,
-    updatePlanetSizing,
-    updateSelection,
-    updateTheme,
+    focusEdge: wake(focusEdge),
+    focusNode: wake(focusNode),
+    moveCamera: wake(moveCamera),
+    resetCamera: wake(resetCamera),
+    updateAccessors: wake(updateAccessors),
+    updateActiveGroup: wake(updateActiveGroup),
+    updateClusterVisibility: wake(updateClusterVisibilityFromProp),
+    updateGalaxyMode: wake(updateGalaxyMode),
+    updateMotionPreference: wake(updateMotionPreference),
+    updatePlanetSizing: wake(updatePlanetSizing),
+    updateSelection: wake(updateSelection),
+    updateTheme: wake(updateTheme),
+    appendDataset: wake(appendDataset),
     dispose: () => {
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
@@ -2003,6 +2160,48 @@ function getRendererSceneKey<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   options: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
 ) {
   return getSceneRebuildKey(options.dataset, getLayoutKey(options.layout));
+}
+
+/**
+ * Conservatively detect that the only difference between two option sets is appended
+ * nodes/edges on top of the unchanged existing prefix (the shape progressive loading
+ * and `mergeGraphDataset` produce). Anything else — a replaced entry, removed entry,
+ * cluster change, layout change, or a layout that does not preserve positions — returns
+ * false so the caller falls back to a full rebuild.
+ */
+function isAppendOnlyDatasetChange<NMeta, EMeta, CMeta>(
+  prev: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
+  next: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
+): boolean {
+  if (getLayoutKey(prev.layout) !== getLayoutKey(next.layout)) return false;
+  const layout = next.layout;
+  const preservesPositions = layout === false ? true : (layout?.preserveExistingPositions ?? true);
+  if (!preservesPositions) return false;
+
+  const prevNodes = prev.dataset.nodes;
+  const nextNodes = next.dataset.nodes;
+  const prevEdges = prev.dataset.edges;
+  const nextEdges = next.dataset.edges;
+  const prevClusters = prev.dataset.clusters ?? [];
+  const nextClusters = next.dataset.clusters ?? [];
+
+  // Clusters are not appended incrementally; any change there forces a rebuild.
+  if (prevClusters.length !== nextClusters.length) return false;
+  for (let index = 0; index < prevClusters.length; index += 1) {
+    if (prevClusters[index] !== nextClusters[index]) return false;
+  }
+
+  // Require pure growth: at least one addition, with every existing node/edge kept by
+  // reference at its original index (a replaced or reordered entry is not an append).
+  if (nextNodes.length < prevNodes.length || nextEdges.length < prevEdges.length) return false;
+  if (nextNodes.length === prevNodes.length && nextEdges.length === prevEdges.length) return false;
+  for (let index = 0; index < prevNodes.length; index += 1) {
+    if (prevNodes[index] !== nextNodes[index]) return false;
+  }
+  for (let index = 0; index < prevEdges.length; index += 1) {
+    if (prevEdges[index] !== nextEdges[index]) return false;
+  }
+  return true;
 }
 
 function reportRendererFailure<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
@@ -2202,6 +2401,7 @@ export function createGalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = u
     },
     update: (nextOptions, nextCallbacks) => {
       if (state.disposed) return;
+      const prevOptions = state.options;
       state.options = nextOptions;
       if (nextCallbacks) {
         state.callbacks = nextCallbacks;
@@ -2211,6 +2411,20 @@ export function createGalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = u
 
       const nextSceneKey = getRendererSceneKey(nextOptions);
       if (nextSceneKey !== state.sceneKey) {
+        // Progressive/streamed growth only appends nodes and edges on top of the
+        // existing prefix; apply that in place instead of disposing and rebuilding
+        // every mesh — a cost that otherwise grows with the total graph on each chunk.
+        if (state.runtime && isAppendOnlyDatasetChange(prevOptions, nextOptions)) {
+          try {
+            state.runtime.appendDataset(nextOptions.dataset);
+            state.sceneKey = nextSceneKey;
+            state.pausedRef.current = Boolean(nextOptions.paused) || state.resolvedMotion === 'reduced';
+            patchRuntime(state);
+            return;
+          } catch {
+            // Fall back to a full rebuild if the incremental path cannot apply.
+          }
+        }
         state.sceneKey = nextSceneKey;
         rebuildRenderer(host, state);
         return;

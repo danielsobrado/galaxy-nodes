@@ -110,7 +110,7 @@
     "benchmark:browser": "node scripts/browser-perf.mjs",
     "changeset": "changeset",
     "ci": "npm run ci:compat && npm run size && npm run benchmark -- --sizes 10000 --iterations 1 --warmups 0 && npm run build:example && npm run build:next && npm run test:next && npm run package:check && npm run docs:api",
-    "ci:compat": "npm run lint && npm run format:check && npm run test:coverage && npm run build && npm run api:check",
+    "ci:compat": "npm run lint && npm run format:check && npm run test:coverage && npm run test:browser && npm run build && npm run api:check",
     "dev": "vite --config examples/basic/vite.config.ts --host 127.0.0.1",
     "docs:api": "typedoc",
     "docs:site": "node scripts/build-pages-site.mjs",

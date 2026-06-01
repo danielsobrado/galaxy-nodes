@@ -36,7 +36,7 @@ jobs:
         run: npm run build
 
       - name: Build live demo
-        run: npm run build:example -- --base /galaxy-nodes/demo/
+        run: npm run build:example -- --base /${{ github.event.repository.name }}/demo/
 
       - name: Build API docs
         run: npm run docs:api -- --out .site/api

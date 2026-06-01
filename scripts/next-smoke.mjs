@@ -1,48 +1,62 @@
-import { spawn } from 'node:child_process';
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 
-const port = 4179;
-const baseUrl = `http://127.0.0.1:${port}`;
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const outDir = path.join(projectRoot, 'examples/next/out');
+const mimeTypes = new Map([
+  ['.css', 'text/css'],
+  ['.html', 'text/html'],
+  ['.js', 'text/javascript'],
+  ['.json', 'application/json'],
+  ['.png', 'image/png'],
+  ['.svg', 'image/svg+xml'],
+  ['.txt', 'text/plain'],
+  ['.woff2', 'font/woff2'],
+]);
 
-function waitForServer(url, timeoutMs = 30_000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    async function poll() {
-      try {
-        const response = await fetch(url);
-        if (response.ok) {
-          resolve();
-          return;
-        }
-      } catch {
-        // Keep polling until timeout.
-      }
-
-      if (Date.now() - startedAt > timeoutMs) {
-        reject(new Error(`Timed out waiting for ${url}`));
-        return;
-      }
-
-      setTimeout(poll, 500);
-    }
-
-    void poll();
-  });
+function contentType(filePath) {
+  return mimeTypes.get(path.extname(filePath)) ?? 'application/octet-stream';
 }
 
-const server = spawn('npx', ['next', 'start', '--hostname', '127.0.0.1', '--port', String(port)], {
-  cwd: path.join(projectRoot, 'examples/next'),
-  stdio: ['ignore', 'pipe', 'pipe'],
-  shell: process.platform === 'win32',
+function resolveRequest(url) {
+  const pathname = decodeURIComponent(new URL(url, 'http://localhost').pathname);
+  const candidate = pathname === '/' ? 'index.html' : pathname.slice(1);
+  const filePath = path.resolve(outDir, candidate);
+  if (!filePath.startsWith(outDir)) return null;
+  return filePath;
+}
+
+const server = createServer(async (request, response) => {
+  const filePath = resolveRequest(request.url ?? '/');
+  if (!filePath) {
+    response.writeHead(403).end('Forbidden');
+    return;
+  }
+
+  try {
+    const body = await readFile(filePath);
+    response.writeHead(200, { 'content-type': contentType(filePath) }).end(body);
+  } catch {
+    try {
+      const fallback = await readFile(path.join(outDir, '404.html'));
+      response.writeHead(404, { 'content-type': 'text/html' }).end(fallback);
+    } catch {
+      response.writeHead(404).end('Not found');
+    }
+  }
 });
+
+await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+const address = server.address();
+if (!address || typeof address === 'string') throw new Error('Could not start static Next smoke server.');
+const baseUrl = `http://127.0.0.1:${address.port}`;
 
 let browser;
 
 try {
-  await waitForServer(baseUrl);
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ reducedMotion: 'reduce', viewport: { width: 960, height: 640 } });
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -50,10 +64,8 @@ try {
   await page.getByLabel('Graph data summary').waitFor();
   await page.locator('canvas, .scene-fallback').first().waitFor({ timeout: 30_000 });
   const hasCanvas = await page.locator('canvas').count();
-  const hasFallback = await page.locator('.scene-fallback').count();
-  if (!hasCanvas && !hasFallback) throw new Error('Expected hydrated graph canvas or WebGL fallback.');
   console.log(`Next runtime smoke OK: ${hasCanvas ? 'canvas' : 'fallback'} rendered.`);
 } finally {
   await browser?.close();
-  server.kill();
+  await new Promise((resolve) => server.close(resolve));
 }

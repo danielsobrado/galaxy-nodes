@@ -132,6 +132,51 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(getGalaxyRendererContextBudget().active).toBe(0);
   });
 
+  it('appends streamed nodes and edges in place without rebuilding the scene', async () => {
+    const onSceneReady = vi.fn();
+    const { host } = await mountRenderer({ onSceneReady });
+    const canvasBefore = getCanvas(host);
+    expect(onSceneReady).toHaveBeenCalledTimes(1);
+
+    // Append-only growth: reuse every existing node/edge object by reference and add
+    // one new major node + one new edge on top (the shape mergeGraphDataset produces
+    // during progressive/streamed loading).
+    const appended: GraphDataset = {
+      ...dataset,
+      nodes: [
+        ...dataset.nodes,
+        { id: 'delta', label: 'Delta', group: 'core', major: true, color: '#c9a6ff', size: 10, position: { x: 120, y: -140, z: 180 } },
+      ],
+      edges: [...dataset.edges, { id: 'links', source: 'hub', target: 'delta', label: 'links', weight: 0.7, color: '#c9a6ff' }],
+    };
+
+    activeRenderer?.update({ ...rendererOptions(), dataset: appended });
+    await waitForFrames(2);
+
+    // Reusing the same canvas + WebGL context and never firing onSceneReady again
+    // proves the scene was extended in place rather than disposed and rebuilt.
+    expect(getCanvas(host)).toBe(canvasBefore);
+    expect(onSceneReady).toHaveBeenCalledTimes(1);
+    expect(getGalaxyRendererContextBudget().active).toBe(1);
+
+    // The appended edge is now a real, selectable part of the runtime: selecting it
+    // (a same-key patch, not a rebuild) surfaces its relationship label, which is only
+    // possible if appendDataset actually wired the new node and edge into the scene.
+    activeRenderer?.update({
+      ...rendererOptions(),
+      dataset: appended,
+      accessors: {
+        edgeLabel: (edge) => (edge.id === 'links' ? 'linked_by' : null),
+        nodeLabel: (node) => `Display ${node.id}`,
+      },
+      selectedEdgeId: 'links',
+    });
+
+    await vi.waitFor(() => {
+      expect(host.querySelector('.edge-label')?.textContent).toContain('Display hub -> linked by -> Display delta');
+    });
+  });
+
   it('matches the checked-in galaxy render baseline', async () => {
     const { host } = await mountRenderer();
 

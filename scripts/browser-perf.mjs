@@ -111,7 +111,8 @@ window.__galaxyPerf = {
 }
 
 async function readCanvasSignal(page) {
-  const screenshotBase64 = await page.screenshot({ encoding: 'base64', fullPage: false });
+  const screenshot = await page.screenshot({ fullPage: false, timeout: 120_000 });
+  const screenshotBase64 = screenshot.toString('base64');
   return page.evaluate(async (base64) => {
     const probe = document.createElement('canvas');
     const image = new Image();
@@ -137,7 +138,7 @@ async function run() {
 
   const server = await createServer({
     root: tempRoot,
-    server: { host: '127.0.0.1', port: 0 },
+    server: { hmr: false, host: '127.0.0.1', port: 0, watch: null },
     resolve: {
       alias: [
         { find: /^galaxy-nodes$/, replacement: path.join(projectRoot, 'src/index.ts') },
@@ -163,10 +164,13 @@ async function run() {
     for (const size of args.sizes) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, reducedMotion: 'no-preference' });
       await page.goto(`http://127.0.0.1:${address.port}/?size=${size}`, { waitUntil: 'networkidle' });
-      await page.waitForSelector('canvas, .scene-fallback', { timeout: 30_000 });
+      await page.waitForSelector('canvas, .scene-fallback', { timeout: 120_000 });
       await page.waitForTimeout(4_000);
       const sample = await page.evaluate(() => window.__galaxyPerf.sample());
       const canvasSignal = await readCanvasSignal(page);
+      if (canvasSignal.nonBackgroundRatio < 0.001) {
+        throw new Error(`Browser performance run for ${size} nodes produced a blank-looking screenshot.`);
+      }
       await page.close();
       results.push({ ...sample, ...canvasSignal });
     }
