@@ -38,6 +38,214 @@ import type {
   SpaceDirection,
   Vec3,
 } from './types';
+import {
+  MAX_STAR_COUNT,
+  QUIET_STAR_COUNT,
+  POINT_PICK_THRESHOLD,
+  NODE_HIGHLIGHT_MARKER_LIMIT,
+  NODE_HIGHLIGHT_FIRST_DEGREE_LIMIT,
+  NODE_HIGHLIGHT_SECOND_DEGREE_LIMIT,
+  SELECTED_NODE_RELATIONSHIP_LABEL_LIMIT,
+  DIMMED_POINT_COLOR_FACTOR,
+  KEY_MOVE_SPEED,
+  KEY_MOVE_SPEED_VERTICAL,
+  KEY_SHIFT_BOOST,
+  CAMERA_MOVE_DISTANCE,
+  MAX_PIXEL_RATIO,
+  TONE_MAPPING_EXPOSURE,
+  FOG_DENSITY_GALAXY,
+  FOG_DENSITY_DEFAULT,
+  CAMERA_FOV,
+  CAMERA_NEAR,
+  CAMERA_FAR,
+  CONTROLS_DAMPING_FACTOR,
+  CONTROLS_ROTATE_SPEED,
+  CONTROLS_PAN_SPEED,
+  CONTROLS_ZOOM_SPEED,
+  CONTROLS_MIN_DISTANCE,
+  CONTROLS_MAX_DISTANCE,
+  AMBIENT_LIGHT_INTENSITY,
+  KEY_LIGHT_INTENSITY,
+  KEY_LIGHT_DISTANCE,
+  RIM_LIGHT_INTENSITY,
+  RIM_LIGHT_DISTANCE,
+  DEFAULT_PLANET_SIZE_MIN,
+  DEFAULT_PLANET_SIZE_MAX,
+  DEFAULT_PLANET_SIZE_STRENGTH,
+  POINT_BASE_SIZE_GALAXY,
+  POINT_BASE_SIZE_DEFAULT,
+  POINT_SIZE_SELECTED,
+  POINT_SIZE_FIRST_DEGREE,
+  POINT_SIZE_SECOND_DEGREE,
+  POINT_FIRST_DEGREE_TINT,
+  POINT_SECOND_DEGREE_TINT,
+  POINT_UNRELATED_DIM,
+  SELECTION_POINT_OPACITY,
+  POINT_COLOR_LERP,
+  POINT_COLOR_BRIGHTEN,
+  POINT_CAPACITY_GROWTH_FACTOR,
+  POINT_CAPACITY_GROWTH_PAD,
+  STAR_DISTANCE_MIN,
+  STAR_DISTANCE_SPAN,
+  STAR_VERTICAL_SPREAD,
+  STAR_SIZE,
+  STAR_OPACITY,
+  GLOW_SPRITE_OPACITY,
+  CLUSTER_LABEL_HEIGHT_FACTOR,
+  CLUSTER_SPRITE_SCALE_GALAXY,
+  CLUSTER_SPRITE_SCALE_DEFAULT,
+  PLANET_MATERIAL_OPACITY,
+  RING_MATERIAL_OPACITY,
+  NODE_IMAGE_SPRITE_OPACITY,
+  NODE_IMAGE_MAX_ANISOTROPY,
+  PLANET_RADIUS_FACTOR,
+  NODE_IMAGE_SCALE_FACTOR,
+  NODE_IMAGE_MIN_SCALE,
+  DIM_COLOR_LERP,
+  DIM_COLOR_MULTIPLIER,
+  PLANET_COLOR_WHITEN,
+  PLANET_SCALE_SELECTED,
+  PLANET_SCALE_RELATED,
+  PLANET_SCALE_SECOND_DEGREE,
+  PLANET_SCALE_HOVERED,
+  RING_SCALE_BASE,
+  RING_SCALE_SELECTED,
+  RING_SCALE_RELATED,
+  RING_SCALE_SECOND_DEGREE,
+  RING_SCALE_HOVERED,
+  RING_SCALE_IDLE,
+  PLANET_HOVER_BRIGHTEN,
+  PLANET_YAW_CYCLE,
+  PLANET_YAW_STEP,
+  RING_TILT_X,
+  RING_TILT_Y,
+  MAJOR_LABEL_NODE_SIZE_FACTOR,
+  MAJOR_LABEL_RADIUS_FACTOR,
+  MAJOR_LABEL_LIMIT_GROUPED,
+  MAJOR_LABEL_LIMIT_TOP,
+  MAJOR_LABEL_INTERVAL,
+  CLUSTER_LABEL_LIMIT_GROUPED,
+  CLUSTER_LABEL_INDEX_A,
+  CLUSTER_LABEL_INDEX_B,
+  MARKER_ATMOSPHERE_OPACITY_BASE,
+  MARKER_ATMOSPHERE_OPACITY_SPAN,
+  MARKER_CORE_OPACITY_BASE,
+  MARKER_CORE_OPACITY_SPAN,
+  MARKER_INNER_RING_OPACITY_BASE,
+  MARKER_INNER_RING_OPACITY_SPAN,
+  MARKER_OUTER_RING_OPACITY_BASE,
+  MARKER_OUTER_RING_OPACITY_SPAN,
+  MARKER_MIN_SCALE,
+  MARKER_ATMOSPHERE_SCALE,
+  MARKER_CORE_SCALE,
+  MARKER_INNER_RING_SCALE,
+  MARKER_OUTER_RING_SCALE,
+  HOVER_BALL_OPACITY,
+  HOVER_BALL_RADIUS_FACTOR,
+  HOVER_BALL_MIN_SCALE,
+  HOVER_BALL_MAX_SCALE,
+  HOVER_BALL_SPIN,
+  HIGHLIGHT_MARKER_SCALE_NEAR,
+  HIGHLIGHT_MARKER_SCALE_FAR,
+  HIGHLIGHT_MARKER_STRENGTH_NEAR,
+  HIGHLIGHT_MARKER_STRENGTH_FAR,
+  ENDPOINT_MARKER_SCALE_PRIMARY,
+  ENDPOINT_MARKER_SCALE_SECONDARY,
+  NODE_MARKER_LABEL_OFFSET_X,
+  NODE_MARKER_LABEL_OFFSET_Y,
+  NODE_MARKER_LABEL_MIN_X,
+  NODE_MARKER_LABEL_MIN_Y,
+  ENDPOINT_INNER_RING_SPIN,
+  ENDPOINT_OUTER_RING_SPIN,
+  ENDPOINT_RING_SPIN_STAGGER,
+  HIGHLIGHT_INNER_RING_SPIN,
+  HIGHLIGHT_OUTER_RING_SPIN,
+  HIGHLIGHT_RING_SPIN_STAGGER,
+  ENDPOINT_MIN_RADIUS,
+  ENDPOINT_PLANET_RADIUS_FACTOR,
+  ENDPOINT_NODE_SIZE_FACTOR_MAJOR,
+  ENDPOINT_NODE_SIZE_FACTOR_MINOR,
+  CLUSTER_ENDPOINT_MIN_RADIUS,
+  CLUSTER_ENDPOINT_RADIUS_FACTOR,
+  EDGE_CURVE_DEFAULT_LIFT,
+  EDGE_CURVE_DISTANCE_LIFT,
+  EDGE_MIDPOINT_LERP,
+  EDGE_FILAMENT_LIFT_GALAXY,
+  EDGE_FILAMENT_LIFT_DEFAULT,
+  EDGE_LIFT_BASE,
+  EDGE_LIFT_PER_WEIGHT,
+  EDGE_FILAMENT_RADIUS,
+  EDGE_RADIUS_BASE,
+  EDGE_RADIUS_PER_WEIGHT,
+  EDGE_FILAMENT_OPACITY_GALAXY,
+  EDGE_FILAMENT_OPACITY_DEFAULT,
+  EDGE_OPACITY_BASE,
+  EDGE_OPACITY_PER_WEIGHT,
+  EDGE_FILAMENT_VISUAL_SEGMENTS,
+  EDGE_VISUAL_SEGMENTS,
+  EDGE_FILAMENT_HIT_SEGMENTS,
+  EDGE_HIT_SEGMENTS,
+  EDGE_FILAMENT_HIT_RADIUS,
+  EDGE_HIT_RADIUS,
+  EDGE_DEFAULT_BASE_OPACITY,
+  EDGE_OPACITY_SELECTED_CAP,
+  EDGE_OPACITY_SELECTED_BOOST,
+  EDGE_OPACITY_HOVER_CAP,
+  EDGE_OPACITY_HOVER_BOOST,
+  EDGE_OPACITY_CONNECTED_CAP,
+  EDGE_OPACITY_CONNECTED_BOOST,
+  EDGE_OPACITY_UNRELATED_DIM,
+  HOVER_EDGE_OVERLAY_OPACITY,
+  HOVER_EDGE_RADIUS_FACTOR,
+  FOCUS_NODE_OFFSET_X_SCALE,
+  FOCUS_NODE_OFFSET_X_BASE,
+  FOCUS_NODE_OFFSET_Y_SCALE,
+  FOCUS_NODE_OFFSET_Y_BASE,
+  FOCUS_NODE_OFFSET_Z_SCALE,
+  FOCUS_NODE_OFFSET_Z_BASE,
+  FOCUS_EDGE_MIN_DISTANCE,
+  FOCUS_EDGE_OFFSET_XY_SCALE,
+  FOCUS_EDGE_OFFSET_X_BASE,
+  FOCUS_EDGE_OFFSET_Y_BASE,
+  FOCUS_EDGE_OFFSET_Z_SCALE,
+  FOCUS_EDGE_OFFSET_Z_BASE,
+  HOVER_LABEL_MIN_HEIGHT,
+  HOVER_LABEL_HEIGHT_FACTOR,
+  WORLD_ROTATION_SPEED,
+  tmpProjected,
+} from './sceneConstants';
+import { dimColor, makeGlowTexture, makePlanetTexture, planetColor, pointCloudColor } from './materials';
+import { createTubeGeometry, curvedEdgeCurve, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
+import {
+  createEndpointMarker,
+  createHoverNodeMarker,
+  setHoverNodeMarkerVisible,
+  setMarkerColor,
+  setMarkerStrength,
+  setMarkerVisible,
+} from './markers';
+import {
+  edgeDisplayLabel,
+  firstStringValue,
+  formatRelationshipLabel,
+  isPlainRecord,
+  makeLabel,
+  makeSceneLabel,
+  nodeDisplayLabel,
+  selectedEdgeDisplayLabel,
+  setLabelPosition,
+  setSceneLabel,
+  shouldShowClusterLabel,
+  shouldShowMajorLabel,
+} from './labels';
+import type {
+  EdgeEndpoints,
+  EdgeVisualState,
+  EndpointMarker,
+  HoverNodeMarker,
+  SceneEdgeEndpoint,
+  SceneLabel,
+} from './sceneTypes';
 
 export { getGalaxyRendererContextBudget } from './environment';
 export type { GalaxyMotionPreference, GalaxyRendererContextBudget } from './environment';
@@ -208,57 +416,15 @@ function applyCameraCommand<NMeta, EMeta>(
   if (cameraCommand.type === 'move' && cameraCommand.direction) runtime.moveCamera(cameraCommand.direction, 1.75);
 }
 
-interface SceneEdgeEndpoint {
-  group?: string;
-  id: string;
-  isNode: boolean;
-  label: string;
-  position: THREE.Vector3;
-  radius: number;
-}
-
-interface EdgeEndpoints {
-  source: SceneEdgeEndpoint;
-  target: SceneEdgeEndpoint;
-}
-
-interface EdgeVisualState<EMeta = unknown> {
-  edge: GraphEdge<EMeta>;
-  endpoints: EdgeEndpoints;
-  geometryKey: string;
-  hit: THREE.Mesh;
-  id: string;
-  visual: THREE.Mesh;
-}
-
 interface NodeSelectionHighlight {
   connectedEdgeIds: Set<string>;
   firstDegreeNodeIds: Set<string>;
   secondDegreeNodeIds: Set<string>;
 }
 
-interface EndpointMarker {
-  atmosphere: THREE.Mesh;
-  group: THREE.Group;
-  core: THREE.Mesh;
-  innerRing: THREE.Mesh;
-  outerRing: THREE.Mesh;
-}
-
-interface HoverNodeMarker {
-  ball: THREE.Mesh;
-  group: THREE.Group;
-}
-
 interface NodeHighlightMarker {
   label: SceneLabel;
   marker: EndpointMarker;
-}
-
-interface SceneLabel {
-  active: boolean;
-  element: HTMLDivElement;
-  position: THREE.Vector3;
 }
 
 interface ClusterVisual {
@@ -278,260 +444,12 @@ export interface GalaxyGraphTheme {
 
 const CAMERA_HOME = new THREE.Vector3(120, 430, 1540);
 const TARGET_HOME = new THREE.Vector3(0, 0, 0);
-const MAX_STAR_COUNT = 2400;
-const QUIET_STAR_COUNT = 1100;
-const POINT_PICK_THRESHOLD = 22;
-const NODE_HIGHLIGHT_MARKER_LIMIT = 42;
-const NODE_HIGHLIGHT_FIRST_DEGREE_LIMIT = 18;
-const NODE_HIGHLIGHT_SECOND_DEGREE_LIMIT = 24;
-const SELECTED_NODE_RELATIONSHIP_LABEL_LIMIT = 18;
-// Factor applied to each RGB channel to dim points hidden by the active group filter.
-const DIMMED_POINT_COLOR_FACTOR = 0.36;
-// Per-frame camera step for WASD/arrow movement (shift multiplies by KEY_SHIFT_BOOST).
-const KEY_MOVE_SPEED = 0.16;
-const KEY_MOVE_SPEED_VERTICAL = 0.13;
-const KEY_SHIFT_BOOST = 1.75;
-// Per-frame world distance moved per WASD step before the speed multiplier above.
-const CAMERA_MOVE_DISTANCE = 80;
-
-// ── Renderer, camera & controls ─────────────────────────────────────────────
-// Cap devicePixelRatio so retina/4K panels don't quadruple the fragment cost.
-const MAX_PIXEL_RATIO = 1.75;
-// ACES tone-mapping exposure; >1 lifts the additive glow without clipping highlights.
-const TONE_MAPPING_EXPOSURE = 1.1;
-// Exponential fog density. Galaxy mode fogs harder so distant arms dissolve into the void.
-const FOG_DENSITY_GALAXY = 0.00068;
-const FOG_DENSITY_DEFAULT = 0.00042;
-// Perspective frustum: wide-ish FOV, tight near plane, far plane past the star shell.
-const CAMERA_FOV = 58;
-const CAMERA_NEAR = 0.1;
-const CAMERA_FAR = 7000;
-// OrbitControls feel: low damping = floaty inertia; speeds tuned <1 to slow the defaults.
-const CONTROLS_DAMPING_FACTOR = 0.07;
-const CONTROLS_ROTATE_SPEED = 0.42;
-const CONTROLS_PAN_SPEED = 0.78;
-const CONTROLS_ZOOM_SPEED = 0.72;
-const CONTROLS_MIN_DISTANCE = 90;
-const CONTROLS_MAX_DISTANCE = 2700;
-
-// ── Lighting (intensity, falloff distance) ──────────────────────────────────
-const AMBIENT_LIGHT_INTENSITY = 0.78;
-const KEY_LIGHT_INTENSITY = 1.45;
-const KEY_LIGHT_DISTANCE = 2400;
-const RIM_LIGHT_INTENSITY = 2.2;
-const RIM_LIGHT_DISTANCE = 1900;
-
-// ── Planet sizing defaults (overridable via GalaxyPlanetSizingOptions) ───────
-const DEFAULT_PLANET_SIZE_MIN = 0.72;
-const DEFAULT_PLANET_SIZE_MAX = 2.15;
-const DEFAULT_PLANET_SIZE_STRENGTH = 0.82;
-
-// ── Point cloud (every node drawn as an additive sprite) ─────────────────────
-// Base point size before per-node size and distance attenuation; galaxy mode runs larger.
-const POINT_BASE_SIZE_GALAXY = 2.7;
-const POINT_BASE_SIZE_DEFAULT = 2.25;
-// Size multiplier applied to a point by selection tier (selected / 1st-degree / 2nd-degree).
-const POINT_SIZE_SELECTED = 2.55;
-const POINT_SIZE_FIRST_DEGREE = 1.85;
-const POINT_SIZE_SECOND_DEGREE = 1.5;
-// How strongly a highlighted point is tinted toward the accent/selected color (0..1 lerp).
-const POINT_FIRST_DEGREE_TINT = 0.74;
-const POINT_SECOND_DEGREE_TINT = 0.6;
-// Dimming applied to unrelated points while any node/edge is selected.
-const POINT_UNRELATED_DIM = 0.48;
-// Whole point-cloud opacity while a selection is active, so the selection stands out.
-const SELECTION_POINT_OPACITY = 0.28;
-// Point base color treatment: lerp toward the off-white tint, then a slight brighten.
-const POINT_COLOR_LERP = 0.12;
-const POINT_COLOR_BRIGHTEN = 1.02;
-// Over-allocation when growing point buffers on incremental append: *factor then +pad.
-const POINT_CAPACITY_GROWTH_FACTOR = 1.5;
-const POINT_CAPACITY_GROWTH_PAD = 8;
-
-// ── Background star shell ────────────────────────────────────────────────────
-const STAR_DISTANCE_MIN = 1600;
-const STAR_DISTANCE_SPAN = 2100;
-const STAR_VERTICAL_SPREAD = 900;
-const STAR_SIZE = 1.25;
-const STAR_OPACITY = 0.2;
-
-// ── Cluster / planet / ring / image materials ────────────────────────────────
-const GLOW_SPRITE_OPACITY = 0.055;
-// Cluster label floats this fraction of the cluster radius above its center.
-const CLUSTER_LABEL_HEIGHT_FACTOR = 0.85;
-// Cluster glow sprite scale relative to its radius (galaxy mode blooms larger).
-const CLUSTER_SPRITE_SCALE_GALAXY = 1.18;
-const CLUSTER_SPRITE_SCALE_DEFAULT = 0.92;
-const PLANET_MATERIAL_OPACITY = 0.34;
-const RING_MATERIAL_OPACITY = 0.12;
-const NODE_IMAGE_SPRITE_OPACITY = 0.94;
-const NODE_IMAGE_MAX_ANISOTROPY = 4;
-// Planet sphere radius per node = nodeSize * this, before the sizing multiplier.
-const PLANET_RADIUS_FACTOR = 0.68;
-// Node image sprite scale = planetScale * this (floored so tiny planets stay legible).
-const NODE_IMAGE_SCALE_FACTOR = 1.82;
-const NODE_IMAGE_MIN_SCALE = 0.4;
-
-// ── Node color helpers ───────────────────────────────────────────────────────
-// dimColor: lerp toward the pale tint, then multiply down; default multiplier reused
-// as the planet dim factor while a selection is active.
-const DIM_COLOR_LERP = 0.42;
-const DIM_COLOR_MULTIPLIER = 0.86;
-// planetColor: whiten the node color by this much for the lit planet body.
-const PLANET_COLOR_WHITEN = 0.45;
-
-// ── Selection / hover emphasis on major-node planets ─────────────────────────
-// Planet scale bump by emphasis tier (selected > related/1st > 2nd > hovered > idle=1).
-const PLANET_SCALE_SELECTED = 1.38;
-const PLANET_SCALE_RELATED = 1.2;
-const PLANET_SCALE_SECOND_DEGREE = 1.14;
-const PLANET_SCALE_HOVERED = 1.1;
-// Ring scale = radius * RING_SCALE_BASE * (per-tier factor below).
-const RING_SCALE_BASE = 1.42;
-const RING_SCALE_SELECTED = 1.42;
-const RING_SCALE_RELATED = 1.24;
-const RING_SCALE_SECOND_DEGREE = 1.14;
-const RING_SCALE_HOVERED = 1.08;
-const RING_SCALE_IDLE = 0.92;
-// Hovered (but unselected) planets brighten their base color by this factor.
-const PLANET_HOVER_BRIGHTEN = 1.18;
-// Planets get a deterministic per-instance yaw (index % cycle * step) so they don't
-// all present the same face; rings reuse the cycle plus a fixed tilt to read as 3D.
-const PLANET_YAW_CYCLE = 16;
-const PLANET_YAW_STEP = 0.12;
-const RING_TILT_X = Math.PI * 0.55;
-const RING_TILT_Y = Math.PI * 0.1;
-// Major-node label height = max(nodeSize * factor, radius * factor) above the node.
-const MAJOR_LABEL_NODE_SIZE_FACTOR = 1.85;
-const MAJOR_LABEL_RADIUS_FACTOR = 1.18;
-
-// ── Label thinning (which major/cluster labels stay visible to avoid clutter) ─
-const MAJOR_LABEL_LIMIT_GROUPED = 12;
-const MAJOR_LABEL_LIMIT_TOP = 6;
-const MAJOR_LABEL_INTERVAL = 11;
-const CLUSTER_LABEL_LIMIT_GROUPED = 4;
-const CLUSTER_LABEL_INDEX_A = 3;
-const CLUSTER_LABEL_INDEX_B = 9;
-
-// ── Endpoint & highlight markers ─────────────────────────────────────────────
-// Marker layer opacity = base + strength(0..1) * span, per concentric layer.
-const MARKER_ATMOSPHERE_OPACITY_BASE = 0.06;
-const MARKER_ATMOSPHERE_OPACITY_SPAN = 0.16;
-const MARKER_CORE_OPACITY_BASE = 0.24;
-const MARKER_CORE_OPACITY_SPAN = 0.46;
-const MARKER_INNER_RING_OPACITY_BASE = 0.08;
-const MARKER_INNER_RING_OPACITY_SPAN = 0.22;
-const MARKER_OUTER_RING_OPACITY_BASE = 0.04;
-const MARKER_OUTER_RING_OPACITY_SPAN = 0.13;
-// Marker layer scale relative to the (clamped) endpoint radius.
-const MARKER_MIN_SCALE = 24;
-const MARKER_ATMOSPHERE_SCALE = 0.54;
-const MARKER_CORE_SCALE = 0.3;
-const MARKER_INNER_RING_SCALE = 0.94;
-const MARKER_OUTER_RING_SCALE = 1.18;
-// Hover ball: opacity, radius factor, and clamp range for its scale.
-const HOVER_BALL_OPACITY = 0.74;
-const HOVER_BALL_RADIUS_FACTOR = 0.46;
-const HOVER_BALL_MIN_SCALE = 8;
-const HOVER_BALL_MAX_SCALE = 18;
-const HOVER_BALL_SPIN = 0.004;
-// Highlight-marker scale/strength for 1st-degree (level 2) vs 2nd-degree (level 1) nodes.
-const HIGHLIGHT_MARKER_SCALE_NEAR = 0.86;
-const HIGHLIGHT_MARKER_SCALE_FAR = 0.78;
-const HIGHLIGHT_MARKER_STRENGTH_NEAR = 0.72;
-const HIGHLIGHT_MARKER_STRENGTH_FAR = 0.54;
-// Endpoint marker scale when the endpoint is the selected node vs. just an edge end.
-const ENDPOINT_MARKER_SCALE_PRIMARY = 1.34;
-const ENDPOINT_MARKER_SCALE_SECONDARY = 1.12;
-// Node-marker label offset as fractions of the node radius (x to the side, y above),
-// each floored to a minimum pixel offset so labels never overlap tiny nodes.
-const NODE_MARKER_LABEL_OFFSET_X = 0.68;
-const NODE_MARKER_LABEL_OFFSET_Y = 0.34;
-const NODE_MARKER_LABEL_MIN_X = 18;
-const NODE_MARKER_LABEL_MIN_Y = 8;
-// Marker ring spin per frame in animated mode (base + per-marker-index stagger).
-const ENDPOINT_INNER_RING_SPIN = 0.006;
-const ENDPOINT_OUTER_RING_SPIN = 0.004;
-const ENDPOINT_RING_SPIN_STAGGER = 0.001;
-const HIGHLIGHT_INNER_RING_SPIN = 0.004;
-const HIGHLIGHT_OUTER_RING_SPIN = 0.0025;
-const HIGHLIGHT_RING_SPIN_STAGGER = 0.0002;
-
-// ── Endpoint resolution (interaction hit radius of nodes & clusters) ──────────
-const ENDPOINT_MIN_RADIUS = 14;
-const ENDPOINT_PLANET_RADIUS_FACTOR = 1.35;
-const ENDPOINT_NODE_SIZE_FACTOR_MAJOR = 1.4;
-const ENDPOINT_NODE_SIZE_FACTOR_MINOR = 2.2;
-const CLUSTER_ENDPOINT_MIN_RADIUS = 28;
-const CLUSTER_ENDPOINT_RADIUS_FACTOR = 0.42;
-
-// ── Edge geometry & appearance ───────────────────────────────────────────────
-// Curve lift (how far the bezier control point bows up) and per-distance extra lift.
-const EDGE_CURVE_DEFAULT_LIFT = 50;
-const EDGE_CURVE_DISTANCE_LIFT = 0.04;
-const EDGE_MIDPOINT_LERP = 0.5;
-// Filament edges (cluster-to-cluster gossamer) vs. weighted relationship edges.
-const EDGE_FILAMENT_LIFT_GALAXY = 86;
-const EDGE_FILAMENT_LIFT_DEFAULT = 38;
-const EDGE_LIFT_BASE = 24;
-const EDGE_LIFT_PER_WEIGHT = 42;
-const EDGE_FILAMENT_RADIUS = 0.3;
-const EDGE_RADIUS_BASE = 0.34;
-const EDGE_RADIUS_PER_WEIGHT = 0.34;
-const EDGE_FILAMENT_OPACITY_GALAXY = 0.078;
-const EDGE_FILAMENT_OPACITY_DEFAULT = 0.052;
-const EDGE_OPACITY_BASE = 0.075;
-const EDGE_OPACITY_PER_WEIGHT = 0.1;
-const EDGE_FILAMENT_VISUAL_SEGMENTS = 36;
-const EDGE_VISUAL_SEGMENTS = 28;
-const EDGE_FILAMENT_HIT_SEGMENTS = 16;
-const EDGE_HIT_SEGMENTS = 18;
-const EDGE_FILAMENT_HIT_RADIUS = 10;
-const EDGE_HIT_RADIUS = 8;
-// Edge opacity ramp by state: each tier is min(cap, baseOpacity + boost).
-const EDGE_DEFAULT_BASE_OPACITY = 0.18;
-const EDGE_OPACITY_SELECTED_CAP = 0.86;
-const EDGE_OPACITY_SELECTED_BOOST = 0.56;
-const EDGE_OPACITY_HOVER_CAP = 0.54;
-const EDGE_OPACITY_HOVER_BOOST = 0.26;
-const EDGE_OPACITY_CONNECTED_CAP = 0.82;
-const EDGE_OPACITY_CONNECTED_BOOST = 0.52;
-const EDGE_OPACITY_UNRELATED_DIM = 0.28;
-// Hover-edge overlay: its own opacity and how much fatter than the base tube it draws.
-const HOVER_EDGE_OVERLAY_OPACITY = 0.34;
-const HOVER_EDGE_RADIUS_FACTOR = 1.85;
-
-// ── Focus camera framing ─────────────────────────────────────────────────────
-// focusNode offset = (nodeSize * scale + base) per axis, pulling the camera back & up.
-const FOCUS_NODE_OFFSET_X_SCALE = 6;
-const FOCUS_NODE_OFFSET_X_BASE = 60;
-const FOCUS_NODE_OFFSET_Y_SCALE = 5;
-const FOCUS_NODE_OFFSET_Y_BASE = 44;
-const FOCUS_NODE_OFFSET_Z_SCALE = 9;
-const FOCUS_NODE_OFFSET_Z_BASE = 150;
-// focusEdge frames the midpoint; offset = (edgeLength * scale + base) per axis.
-const FOCUS_EDGE_MIN_DISTANCE = 160;
-const FOCUS_EDGE_OFFSET_XY_SCALE = 0.14;
-const FOCUS_EDGE_OFFSET_X_BASE = 90;
-const FOCUS_EDGE_OFFSET_Y_BASE = 82;
-const FOCUS_EDGE_OFFSET_Z_SCALE = 0.52;
-const FOCUS_EDGE_OFFSET_Z_BASE = 320;
-// Hover label floats this fraction of the node radius above it (min 12 world units).
-const HOVER_LABEL_MIN_HEIGHT = 12;
-const HOVER_LABEL_HEIGHT_FACTOR = 0.72;
-
-// ── Ambient animation ────────────────────────────────────────────────────────
-// World auto-rotation per frame in full-motion galaxy mode (radians).
-const WORLD_ROTATION_SPEED = 0.000035;
 const tmpVector = new THREE.Vector3();
-const tmpProjected = new THREE.Vector3();
 const tmpDirection = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const tmpMove = new THREE.Vector3();
-const tmpPointCloudColor = new THREE.Color();
 const tmpPointSelectionColor = new THREE.Color();
 const tmpPointSelectionTargetColor = new THREE.Color();
-const pointCloudLerpColor = new THREE.Color(0xf4f7f2);
 const instanceDummy = new THREE.Object3D();
 
 const DEFAULT_PLANET_SIZING: ResolvedPlanetSizing = {
@@ -560,177 +478,6 @@ function resolvePlanetSizing(planetSizing?: GalaxyPlanetSizingOptions): Resolved
     ...DEFAULT_PLANET_SIZING,
     ...planetSizing,
   };
-}
-
-function makeGlowTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const context = canvas.getContext('2d')!;
-  const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gradient.addColorStop(0, 'rgba(255,255,255,1)');
-  gradient.addColorStop(0.24, 'rgba(120,255,220,0.78)');
-  gradient.addColorStop(0.62, 'rgba(80,210,255,0.2)');
-  gradient.addColorStop(1, 'rgba(0,0,0,0)');
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(canvas);
-}
-
-function makePlanetTexture() {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const context = canvas.getContext('2d')!;
-  const gradient = context.createRadialGradient(92, 78, 14, 128, 128, 136);
-  gradient.addColorStop(0, '#fbfff8');
-  gradient.addColorStop(0.4, '#eef6f1');
-  gradient.addColorStop(0.78, '#d5e0dc');
-  gradient.addColorStop(1, '#b6c5c0');
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, 256, 256);
-
-  for (let band = 0; band < 8; band += 1) {
-    context.fillStyle = band % 2 === 0 ? '#f8fbf7' : '#5e6d68';
-    context.globalAlpha = band % 2 === 0 ? 0.2 : 0.06;
-    context.beginPath();
-    context.ellipse(128, 34 + band * 24, 124, 5 + (band % 4) * 4, band * 0.07, 0, Math.PI * 2);
-    context.fill();
-  }
-
-  context.globalAlpha = 0.28;
-  context.fillStyle = '#ffffff';
-  context.beginPath();
-  context.arc(92, 82, 34, 0, Math.PI * 2);
-  context.fill();
-  context.globalAlpha = 0.015;
-  context.fillStyle = '#000000';
-  context.beginPath();
-  context.arc(172, 170, 78, 0, Math.PI * 2);
-  context.fill();
-  context.globalAlpha = 1;
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-function dimColor(color: string, multiplier = DIM_COLOR_MULTIPLIER) {
-  return new THREE.Color(color).lerp(new THREE.Color(0xe6f2ee), DIM_COLOR_LERP).multiplyScalar(multiplier);
-}
-
-function planetColor(color: string) {
-  return new THREE.Color(color).lerp(new THREE.Color(0xffffff), PLANET_COLOR_WHITEN);
-}
-
-function pointCloudColor(color: string) {
-  return tmpPointCloudColor.set(color).lerp(pointCloudLerpColor, POINT_COLOR_LERP).multiplyScalar(POINT_COLOR_BRIGHTEN);
-}
-
-function curvedEdgeCurve(a: THREE.Vector3, b: THREE.Vector3, lift = EDGE_CURVE_DEFAULT_LIFT) {
-  const midpoint = a.clone().lerp(b, EDGE_MIDPOINT_LERP);
-  midpoint.y += lift + a.distanceTo(b) * EDGE_CURVE_DISTANCE_LIFT;
-  return new THREE.QuadraticBezierCurve3(a, midpoint, b);
-}
-
-function makeLabel(text: string, className: string) {
-  const label = document.createElement('div');
-  label.className = className;
-  label.textContent = text;
-  return label;
-}
-
-function setLabelPosition(
-  label: HTMLDivElement,
-  position: THREE.Vector3,
-  camera: THREE.PerspectiveCamera,
-  width: number,
-  height: number,
-) {
-  tmpProjected.copy(position).project(camera);
-  const visible = tmpProjected.z < 1;
-  label.style.display = visible ? 'block' : 'none';
-  if (!visible) return;
-  label.style.transform = `translate3d(${(tmpProjected.x * 0.5 + 0.5) * width}px, ${(-tmpProjected.y * 0.5 + 0.5) * height}px, 0)`;
-}
-
-function makeSceneLabel(root: HTMLDivElement, className: string): SceneLabel {
-  const element = makeLabel('', className);
-  element.style.display = 'none';
-  root.appendChild(element);
-  return { active: false, element, position: new THREE.Vector3() };
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function firstStringValue(record: Record<string, unknown> | null, keys: string[]) {
-  if (!record) return null;
-  for (const key of keys) {
-    const value = record[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-}
-
-function formatRelationshipLabel(value: string) {
-  return value.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function edgeDisplayLabel<EMeta>(edge: GraphEdge<EMeta>, accessors: ResolvedAccessors<unknown, EMeta>) {
-  const accessorLabel = accessors.edgeLabel(edge);
-  if (accessorLabel?.trim()) return formatRelationshipLabel(accessorLabel);
-
-  const edgeRecord = edge as GraphEdge<EMeta> & Record<string, unknown>;
-  const metaRecord = isPlainRecord(edge.meta) ? edge.meta : null;
-  const label =
-    firstStringValue(edgeRecord, ['label', 'name', 'type', 'kind']) ??
-    firstStringValue(metaRecord, ['label', 'name', 'type', 'kind']) ??
-    'relationship';
-
-  return formatRelationshipLabel(label);
-}
-
-function selectedEdgeDisplayLabel<EMeta>(
-  edge: GraphEdge<EMeta>,
-  endpoints: EdgeEndpoints,
-  accessors: ResolvedAccessors<unknown, EMeta>,
-) {
-  const relationship = edgeDisplayLabel(edge, accessors);
-  const source = endpoints.source.label;
-  const target = endpoints.target.label;
-  if (!source && !target) return relationship;
-  if (!target) return `${source} -> ${relationship}`;
-  if (!source) return `${relationship} -> ${target}`;
-  return `${source} -> ${relationship} -> ${target}`;
-}
-
-function nodeDisplayLabel<NMeta, EMeta>(node: GraphNode<NMeta>, accessors: ResolvedAccessors<NMeta, EMeta>) {
-  const accessorLabel = accessors.nodeLabel(node)?.trim();
-  const nodeLabel = node.label?.trim() || node.name?.trim() || node.type?.trim();
-  return accessorLabel || nodeLabel || node.id;
-}
-
-function setSceneLabel(label: SceneLabel, text: string | null, position: THREE.Vector3 | null) {
-  label.active = Boolean(text && position);
-  if (!label.active || !text || !position) {
-    label.element.style.display = 'none';
-    label.element.textContent = '';
-    return;
-  }
-
-  label.element.textContent = text;
-  label.position.copy(position);
-}
-
-function shouldShowMajorLabel(index: number, activeGroup: string | null) {
-  if (activeGroup !== null) return index < MAJOR_LABEL_LIMIT_GROUPED;
-  return index < MAJOR_LABEL_LIMIT_TOP || index % MAJOR_LABEL_INTERVAL === 0;
-}
-
-function shouldShowClusterLabel(index: number, activeGroup: string | null) {
-  if (activeGroup !== null) return index < CLUSTER_LABEL_LIMIT_GROUPED;
-  return index === CLUSTER_LABEL_INDEX_A || index === CLUSTER_LABEL_INDEX_B;
 }
 
 function resolveEndpoint<NMeta, EMeta>(
@@ -762,129 +509,6 @@ function resolveEndpoint<NMeta, EMeta>(
   return clusterLookup.get(id) ?? null;
 }
 
-function createEndpointMarker(color: string) {
-  const group = new THREE.Group();
-  group.visible = false;
-
-  const atmosphereGeometry = new THREE.SphereGeometry(1, 32, 18);
-  const atmosphereMaterial = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.18,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false,
-  });
-  const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
-  atmosphere.renderOrder = 30;
-  group.add(atmosphere);
-
-  const coreGeometry = new THREE.SphereGeometry(1, 24, 16);
-  const coreMaterial = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.68,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false,
-  });
-  const core = new THREE.Mesh(coreGeometry, coreMaterial);
-  core.renderOrder = 31;
-  group.add(core);
-
-  const ringGeometry = new THREE.RingGeometry(1.18, 1.28, 96);
-  const innerRingMaterial = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: 0.22,
-    side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false,
-  });
-  const innerRing = new THREE.Mesh(ringGeometry, innerRingMaterial);
-  innerRing.renderOrder = 32;
-  innerRing.rotation.set(Math.PI * 0.54, Math.PI * 0.08, 0);
-  group.add(innerRing);
-
-  const outerRingMaterial = innerRingMaterial.clone();
-  outerRingMaterial.opacity = 0.12;
-  const outerRing = new THREE.Mesh(ringGeometry, outerRingMaterial);
-  outerRing.renderOrder = 32;
-  outerRing.rotation.set(Math.PI * 0.5, Math.PI * 0.32, Math.PI * 0.33);
-  group.add(outerRing);
-
-  return { atmosphere, group, core, innerRing, outerRing };
-}
-
-function setMarkerColor(marker: EndpointMarker, color: string) {
-  (marker.atmosphere.material as THREE.MeshBasicMaterial).color.set(color);
-  (marker.core.material as THREE.MeshBasicMaterial).color.set(color);
-  (marker.innerRing.material as THREE.MeshBasicMaterial).color.set(color);
-  (marker.outerRing.material as THREE.MeshBasicMaterial).color.set(color);
-}
-
-function setMarkerStrength(marker: EndpointMarker, strength: number) {
-  const clamped = Math.max(0, Math.min(1, strength));
-  (marker.atmosphere.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_ATMOSPHERE_OPACITY_BASE + clamped * MARKER_ATMOSPHERE_OPACITY_SPAN;
-  (marker.core.material as THREE.MeshBasicMaterial).opacity = MARKER_CORE_OPACITY_BASE + clamped * MARKER_CORE_OPACITY_SPAN;
-  (marker.innerRing.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_INNER_RING_OPACITY_BASE + clamped * MARKER_INNER_RING_OPACITY_SPAN;
-  (marker.outerRing.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_OUTER_RING_OPACITY_BASE + clamped * MARKER_OUTER_RING_OPACITY_SPAN;
-}
-
-function setMarkerVisible(
-  marker: EndpointMarker,
-  endpoint: SceneEdgeEndpoint | null,
-  color: string,
-  scaleMultiplier: number,
-  strength = 1,
-) {
-  marker.group.visible = Boolean(endpoint);
-  if (!endpoint) return;
-
-  setMarkerColor(marker, color);
-  setMarkerStrength(marker, strength);
-  const scale = Math.max(MARKER_MIN_SCALE, endpoint.radius * scaleMultiplier);
-  marker.group.position.copy(endpoint.position);
-  marker.atmosphere.scale.setScalar(scale * MARKER_ATMOSPHERE_SCALE);
-  marker.core.scale.setScalar(scale * MARKER_CORE_SCALE);
-  marker.innerRing.scale.setScalar(scale * MARKER_INNER_RING_SCALE);
-  marker.outerRing.scale.setScalar(scale * MARKER_OUTER_RING_SCALE);
-}
-
-function createHoverNodeMarker(color: string): HoverNodeMarker {
-  const group = new THREE.Group();
-  group.visible = false;
-
-  const ballMaterial = new THREE.MeshBasicMaterial({
-    color,
-    transparent: true,
-    opacity: HOVER_BALL_OPACITY,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    depthTest: false,
-  });
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(1, 18, 12), ballMaterial);
-  ball.renderOrder = 35;
-  group.add(ball);
-
-  return { ball, group };
-}
-
-function setHoverNodeMarkerVisible(marker: HoverNodeMarker, endpoint: SceneEdgeEndpoint | null, color: string) {
-  marker.group.visible = Boolean(endpoint);
-  if (!endpoint) return;
-
-  (marker.ball.material as THREE.MeshBasicMaterial).color.set(color);
-  marker.group.position.copy(endpoint.position);
-  marker.ball.scale.setScalar(
-    Math.max(HOVER_BALL_MIN_SCALE, Math.min(HOVER_BALL_MAX_SCALE, endpoint.radius * HOVER_BALL_RADIUS_FACTOR)),
-  );
-}
-
 function isTypingTarget(target: EventTarget | null) {
   return (
     target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement
@@ -895,54 +519,6 @@ function clearSceneDom(host: HTMLDivElement) {
   Array.from(host.children).forEach((child) => {
     if (child.tagName === 'CANVAS' || child.classList.contains('scene-labels')) child.remove();
   });
-}
-
-function getEdgeSpec<EMeta>(
-  edge: GraphEdge<EMeta>,
-  endpoints: EdgeEndpoints,
-  accessors: ResolvedAccessors<unknown, EMeta>,
-  galaxyMode: boolean,
-) {
-  const isFilament = edge.kind === 'filament';
-  const weight = accessors.edgeWeight(edge);
-  const lift = isFilament
-    ? galaxyMode
-      ? EDGE_FILAMENT_LIFT_GALAXY
-      : EDGE_FILAMENT_LIFT_DEFAULT
-    : EDGE_LIFT_BASE + weight * EDGE_LIFT_PER_WEIGHT;
-  const radius = isFilament ? EDGE_FILAMENT_RADIUS : EDGE_RADIUS_BASE + weight * EDGE_RADIUS_PER_WEIGHT;
-  const opacity = isFilament
-    ? galaxyMode
-      ? EDGE_FILAMENT_OPACITY_GALAXY
-      : EDGE_FILAMENT_OPACITY_DEFAULT
-    : EDGE_OPACITY_BASE + weight * EDGE_OPACITY_PER_WEIGHT;
-  const curve = curvedEdgeCurve(endpoints.source.position, endpoints.target.position, lift);
-  const visualSegments = isFilament ? EDGE_FILAMENT_VISUAL_SEGMENTS : EDGE_VISUAL_SEGMENTS;
-  const hitSegments = isFilament ? EDGE_FILAMENT_HIT_SEGMENTS : EDGE_HIT_SEGMENTS;
-  const hitRadius = isFilament ? EDGE_FILAMENT_HIT_RADIUS : EDGE_HIT_RADIUS;
-
-  return {
-    color: accessors.edgeColor(edge),
-    curve,
-    geometryKey: `${lift.toFixed(4)}:${radius.toFixed(4)}:${visualSegments}:${hitSegments}`,
-    hitRadius,
-    hitSegments,
-    opacity,
-    radius,
-    visualSegments,
-  };
-}
-
-function createTubeGeometry(curve: THREE.Curve<THREE.Vector3>, segments: number, radius: number) {
-  return new THREE.TubeGeometry(curve, segments, radius, 6, false);
-}
-
-function selectedEdgeLabelPosition<EMeta>(
-  state: EdgeVisualState<EMeta>,
-  accessors: ResolvedAccessors<unknown, EMeta>,
-  galaxyMode: boolean,
-) {
-  return getEdgeSpec(state.edge, state.endpoints, accessors, galaxyMode).curve.getPoint(0.5);
 }
 
 function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(

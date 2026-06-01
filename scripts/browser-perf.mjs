@@ -58,7 +58,7 @@ async function prepareApp() {
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { GalaxyGraphVisualizer } from 'galaxy-nodes';
-import { generateGalaxyDataset } from 'galaxy-nodes/presets/initiatives/core';
+import { generateGalaxyDataset } from 'galaxy-nodes-presets-initiatives-core';
 import 'galaxy-nodes/styles.css';
 
 const size = Number(new URLSearchParams(location.search).get('size') ?? '10000');
@@ -143,8 +143,8 @@ async function run() {
       alias: [
         { find: /^galaxy-nodes$/, replacement: path.join(projectRoot, 'src/index.ts') },
         {
-          find: /^galaxy-nodes\/presets\/initiatives\/core$/,
-          replacement: path.join(projectRoot, 'src/presets/initiatives/core.ts'),
+          find: /^galaxy-nodes-presets-initiatives-core$/,
+          replacement: path.join(projectRoot, 'examples/shared/presets/initiatives/core.ts'),
         },
         { find: /^galaxy-nodes\/styles.css$/, replacement: path.join(projectRoot, 'src/styles.css') },
       ],

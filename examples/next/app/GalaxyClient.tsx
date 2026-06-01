@@ -8,7 +8,7 @@ import {
   INITIATIVE_CATEGORIES,
   renderInitiativeEdgeDetail,
   renderInitiativeNodeDetail,
-} from 'galaxy-nodes/presets/initiatives';
+} from '../../shared/presets/initiatives';
 
 export default function GalaxyClient() {
   const dataset = useMemo(() => generateGalaxyDataset(10_000), []);

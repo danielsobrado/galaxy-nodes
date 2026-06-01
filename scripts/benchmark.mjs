@@ -1,6 +1,10 @@
 import { performance } from 'node:perf_hooks';
 import { resolveGraphLayout } from '../dist/core.js';
-import { generateGalaxyDataset } from '../dist/presets/initiatives/core.js';
+// The initiatives preset now lives with the examples and is not part of the
+// published package, so this benchmark imports the generator from source. The
+// `benchmark` npm script runs this file through vite-node so the TypeScript
+// source and its relative `src/*` imports resolve.
+import { generateGalaxyDataset } from '../examples/shared/presets/initiatives/core.ts';
 
 const DEFAULT_SIZES = [10_000, 100_000];
 

@@ -360,16 +360,26 @@ Treat node image URLs as remote content owned by your host application, not as t
 
 ## Corporate Demo Preset
 
-The corporate operations demo is available as a preset, not part of the generic root module:
+The corporate operations demo is **not part of the published package**. It is an
+example only: a seeded dataset generator, color/size/label accessors, and rich
+detail-panel renderers built entirely on top of the public root module. The
+source lives in [`examples/shared/presets/initiatives`](examples/shared/presets/initiatives)
+(the `markets` files there are deprecated re-export shims).
+
+To use it, copy the `examples/shared/presets` files into your own project (they
+import only from the public `galaxy-nodes` API once the relative `src/*` imports
+are repointed at the package), or generate your own dataset and accessors against
+the documented [dataset shape](#dataset-shape).
 
 ```tsx
 import { GalaxyGraphVisualizer } from 'galaxy-nodes';
+// Copied from examples/shared/presets/initiatives into your project:
 import {
   createInitiativeAccessors,
   generateGalaxyDataset,
   renderInitiativeEdgeDetail,
   renderInitiativeNodeDetail,
-} from 'galaxy-nodes/presets/initiatives';
+} from './presets/initiatives';
 import 'galaxy-nodes/styles.css';
 
 const dataset = generateGalaxyDataset(75_000);

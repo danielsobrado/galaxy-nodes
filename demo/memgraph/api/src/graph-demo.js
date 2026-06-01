@@ -1,4 +1,4 @@
-// NOTE: This is a standalone copy of the generator in ../../../../src/presets/initiatives/core.ts,
+// NOTE: This is a standalone copy of the generator in ../../../../examples/shared/presets/initiatives/core.ts,
 // kept self-contained so the demo container has no dependency on the library
 // source. It uses different cluster/major-node constants on purpose (smaller,
 // seed-oriented dataset). Keep the GraphDataset shape in sync if the library's

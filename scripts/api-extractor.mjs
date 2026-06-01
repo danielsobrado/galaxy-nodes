@@ -16,10 +16,6 @@ const entryPoints = [
   ['galaxy-nodes-react', 'react.d.ts'],
   ['galaxy-nodes-vue', 'vue.d.ts'],
   ['galaxy-nodes-angular', 'angular.d.ts'],
-  ['galaxy-nodes-presets-initiatives', 'presets/initiatives.d.ts'],
-  ['galaxy-nodes-presets-initiatives-core', 'presets/initiatives/core.d.ts'],
-  ['galaxy-nodes-presets-markets', 'presets/markets.d.ts'],
-  ['galaxy-nodes-presets-markets-core', 'presets/markets/core.d.ts'],
 ];
 
 let failed = false;

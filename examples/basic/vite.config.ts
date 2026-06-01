@@ -16,7 +16,7 @@ export default defineConfig({
       },
       {
         find: 'galaxy-nodes/presets/initiatives',
-        replacement: fileURLToPath(new URL('../../src/presets/initiatives.tsx', import.meta.url)),
+        replacement: fileURLToPath(new URL('../shared/presets/initiatives.tsx', import.meta.url)),
       },
       {
         find: 'galaxy-nodes',

@@ -1,428 +1,42 @@
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronDown,
-  ChevronUp,
-  CircleDot,
-  Focus,
-  GitBranch,
-  Layers3,
-  Navigation,
-  Pause,
-  Play,
-  Radar,
-  RotateCcw,
-  Search,
-  Sparkles,
-  Upload,
-} from 'lucide-react';
-import GalaxyScene, {
-  type CameraCommand,
-  type GalaxyGraphTheme,
-  type GalaxyMotionPreference,
-  type GalaxyPlanetSizingOptions,
-  type GalaxySceneFailure,
-  type GalaxySceneProps,
-} from './GalaxyScene';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { CircleDot, Layers3, Pause, Play, Search, Sparkles } from 'lucide-react';
+import GalaxyScene from './GalaxyScene';
+import { GalaxyDetailPanels } from './GalaxyDetailPanels';
+import { GalaxySideRail } from './GalaxySideRail';
 import { DEFAULT_GRAPH_EDGE_BUDGET, formatCompactNumber, getEdgeId, mergeGraphDataset, resolveAccessors } from './data';
-import type { GraphLayoutInput } from './layout';
+import type { CameraCommand } from './GalaxyScene';
+import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
+import {
+  DEFAULT_GALAXY_GRAPH_LABELS,
+  EMPTY_DETAIL_STATE,
+  distinctGroups,
+  findBestMatch,
+  findEndpoint,
+  isInteractiveTarget,
+  nodeDisplayText,
+  renderDefaultAccessibleSummary,
+  themeStyle,
+  vectorForDirection,
+} from './galaxyGraphVisualizerUtils';
 import type {
-  EdgeEndpoint,
-  GalaxyCameraView,
-  GraphAccessors,
-  GraphDataset,
-  GraphDatasetPatch,
-  GraphEdge,
-  GraphNode,
-  ResolvedAccessors,
-  SpaceDirection,
-  Vec3,
-} from './types';
+  AsyncDetailState,
+  GalaxyAccessibleSummaryContext,
+  GalaxyGraphVisualizerProps,
+  GraphStats,
+  LargeGraphDetailContext,
+  LargeGraphExpandRequest,
+} from './galaxyGraphVisualizerTypes';
 
-export interface GraphStats {
-  nodes: number;
-  groups: number;
-  edges: number;
-  major: number;
-}
-
-export interface GalaxyGraphVisualizerOptions {
-  accessibleSummaryLimit?: number;
-  datasetSizes?: readonly number[];
-  galaxyMode?: boolean;
-  motionPreference?: GalaxyMotionPreference;
-  planetSizing?: GalaxyPlanetSizingOptions;
-  showClusters?: boolean;
-  showControls?: boolean;
-  showDatasetSizeControls?: boolean;
-  showDetailPanel?: boolean;
-  showGroupNav?: boolean;
-  showLegend?: boolean;
-  showNavigationControls?: boolean;
-  showSearch?: boolean;
-  showStats?: boolean;
-  showTimeline?: boolean;
-  webglContextLimit?: number;
-}
-
-export interface GalaxyGraphLabels {
-  accessibleEdgesHeading: string;
-  accessibleGraphLabel: string;
-  accessibleNodesHeading: string;
-  accessibleSummaryHeading: string;
-  accessibleSummaryIntro: (stats: GraphStats, shownNodes: number, shownEdges: number) => string;
-  alphaBadge: string;
-  allGroups: string;
-  clusterToggle: string;
-  datasetSize: string;
-  edgeId: string;
-  edges: string;
-  expandNeighbors: string;
-  expansionFailed: string;
-  focusMatchingNode: string;
-  focusSelection: string;
-  formatEdgesCount: (count: number) => string;
-  formatGroupsCount: (count: number) => string;
-  formatMajorCount: (count: number) => string;
-  formatNodesCount: (count: number) => string;
-  galaxyMode: string;
-  graphControls: string;
-  group: string;
-  groups: string;
-  groupsNav: string;
-  loadMoreBackward: string;
-  loadMoreDown: string;
-  loadMoreForward: string;
-  loadMoreGraphData: string;
-  loadMoreLeft: string;
-  loadMoreRight: string;
-  loadMoreUp: string;
-  loading: string;
-  major: string;
-  motionOff: string;
-  motionOn: string;
-  moveBackward: string;
-  moveDown: string;
-  moveForward: string;
-  moveLeft: string;
-  moveRight: string;
-  moveUp: string;
-  navigate: string;
-  nodeId: string;
-  nodeSelectionAnnouncement: (nodeLabel: string, index: number, total: number) => string;
-  nodes: string;
-  off: string;
-  on: string;
-  pauseMotion: string;
-  playMotion: string;
-  relationshipId: string;
-  resetCamera: string;
-  sceneTools: string;
-  searchInput: string;
-  searchPlaceholder: string;
-  size: string;
-  spaceNavigation: string;
-  source: string;
-  strength: string;
-  target: string;
-  to: string;
-  traceLink: string;
-  traversalHelp: string;
-}
-
-export interface GalaxyAccessibleSummaryContext<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  accessors: ResolvedAccessors<NMeta, EMeta>;
-  activeGroup: string | null;
-  dataset: GraphDataset<NMeta, EMeta, CMeta>;
-  edges: readonly GraphEdge<EMeta>[];
-  labels: GalaxyGraphLabels;
-  nodes: readonly GraphNode<NMeta>[];
-  stats: GraphStats;
-}
-
-const DEFAULT_GALAXY_GRAPH_LABELS: GalaxyGraphLabels = {
-  accessibleEdgesHeading: 'Edges',
-  accessibleGraphLabel: 'Interactive graph visualization',
-  accessibleNodesHeading: 'Nodes',
-  accessibleSummaryHeading: 'Graph data summary',
-  accessibleSummaryIntro: (stats, shownNodes, shownEdges) =>
-    `Showing ${shownNodes} of ${stats.nodes} nodes and ${shownEdges} of ${stats.edges} edges in the current graph view.`,
-  alphaBadge: 'ALPHA',
-  allGroups: 'All',
-  clusterToggle: 'Clusters',
-  datasetSize: 'Dataset size',
-  edgeId: 'Relationship id',
-  edges: 'edges',
-  expandNeighbors: 'Expand neighbors',
-  expansionFailed: 'Expansion failed',
-  focusMatchingNode: 'Focus matching node',
-  focusSelection: 'Focus selection',
-  formatEdgesCount: (count) => `${formatCompactNumber(count)} ${count === 1 ? 'edge' : 'edges'}`,
-  formatGroupsCount: (count) => `${formatCompactNumber(count)} ${count === 1 ? 'group' : 'groups'}`,
-  formatMajorCount: (count) => `${formatCompactNumber(count)} major`,
-  formatNodesCount: (count) => `${formatCompactNumber(count)} ${count === 1 ? 'node' : 'nodes'}`,
-  galaxyMode: 'Galaxy',
-  graphControls: 'Graph controls',
-  group: 'Group',
-  groups: 'groups',
-  groupsNav: 'Groups',
-  loadMoreBackward: 'Load more backward',
-  loadMoreDown: 'Load more down',
-  loadMoreForward: 'Load more forward',
-  loadMoreGraphData: 'Load more graph data',
-  loadMoreLeft: 'Load more left',
-  loadMoreRight: 'Load more right',
-  loadMoreUp: 'Load more up',
-  loading: 'Loading...',
-  major: 'major',
-  motionOff: 'Paused',
-  motionOn: 'Motion on',
-  moveBackward: 'Move backward',
-  moveDown: 'Move down',
-  moveForward: 'Move forward',
-  moveLeft: 'Move left',
-  moveRight: 'Move right',
-  moveUp: 'Move up',
-  navigate: 'Navigate',
-  nodeId: 'Node id',
-  nodeSelectionAnnouncement: (nodeLabel, index, total) => `${nodeLabel} selected, node ${index} of ${total}.`,
-  nodes: 'nodes',
-  off: 'OFF',
-  on: 'ON',
-  pauseMotion: 'Pause motion',
-  playMotion: 'Play motion',
-  relationshipId: 'Relationship id',
-  resetCamera: 'Reset camera',
-  sceneTools: 'Scene tools',
-  searchInput: 'Search nodes',
-  searchPlaceholder: 'Search node',
-  size: 'Size',
-  spaceNavigation: 'Space navigation',
-  source: 'Source',
-  strength: 'STRENGTH',
-  target: 'Target',
-  to: 'to',
-  traceLink: 'Trace link',
-  traversalHelp:
-    'Use Page Down and Page Up to move between nodes, Home and End to jump to the first or last node, Enter to focus the selected node, and Escape to clear selection.',
-};
-
-export interface LargeGraphDetailContext {
-  detail: unknown;
-  error: unknown;
-  expand: () => void;
-  loading: boolean;
-  reload: () => void;
-}
-
-export interface LargeGraphExpandRequest {
-  activeGroup: string | null;
-  camera?: GalaxyCameraView;
-  direction?: SpaceDirection;
-  directionVector?: Vec3;
-  loadedEdgeIds: string[];
-  loadedNodeIds: string[];
-  nodeId?: string;
-  type: 'direction' | 'node';
-}
-
-export interface LargeGraphOptions<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  edgeBudget?: number;
-  enabled?: boolean;
-  expandGraph?: (
-    request: LargeGraphExpandRequest,
-    signal: AbortSignal,
-  ) => Promise<GraphDatasetPatch<NMeta, EMeta, CMeta>>;
-  loadEdgeDetail?: (
-    edge: GraphEdge<EMeta>,
-    endpoints: { source: EdgeEndpoint<NMeta>; target: EdgeEndpoint<NMeta> },
-    signal: AbortSignal,
-  ) => Promise<unknown>;
-  loadNodeDetail?: (node: GraphNode<NMeta>, signal: AbortSignal) => Promise<unknown>;
-}
-
-export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  /** Visual accessors. Memoize to avoid unnecessary buffer refreshes on parent renders. */
-  accessors?: GraphAccessors<NMeta, EMeta>;
-  brandLabel?: string;
-  className?: string;
-  /** Extra toggles rendered in the control ribbon (e.g. domain-specific modes). */
-  controlActions?: ReactNode;
-  dataset: GraphDataset<NMeta, EMeta, CMeta>;
-  /** Group filter buttons. Defaults to the distinct `node.group` values. */
-  groups?: readonly string[];
-  initialGroup?: string | null;
-  /** Replaces the legend strip; nothing renders without it. */
-  legend?: ReactNode;
-  /** Optional built-in spatial layout. Omit for auto, pass false to require authored coordinates. */
-  layout?: GraphLayoutInput;
-  /** Localized labels for built-in chrome and the non-visual graph summary. */
-  labels?: Partial<GalaxyGraphLabels>;
-  largeGraph?: LargeGraphOptions<NMeta, EMeta, CMeta>;
-  /** Called when a dataset-size button is pressed; supply a new dataset. */
-  onDatasetSizeChange?: (size: number) => void;
-  onGroupChange?: (group: string | null) => void;
-  onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
-  onHoverNode?: (node: GraphNode<NMeta> | null) => void;
-  onContextBudgetExceeded?: GalaxySceneProps<NMeta, EMeta, CMeta>['onContextBudgetExceeded'];
-  onNavigate?: (command: CameraCommand) => void;
-  onSceneFailure?: (failure: GalaxySceneFailure) => void;
-  onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
-  onSelectNode?: (node: GraphNode<NMeta> | null) => void;
-  options?: GalaxyGraphVisualizerOptions;
-  renderEdgeDetail?: (
-    edge: GraphEdge<EMeta>,
-    endpoints: { source: EdgeEndpoint<NMeta>; target: EdgeEndpoint<NMeta> },
-    context?: LargeGraphDetailContext,
-  ) => ReactNode;
-  renderAccessibleSummary?: (context: GalaxyAccessibleSummaryContext<NMeta, EMeta, CMeta>) => ReactNode;
-  renderNodeDetail?: (node: GraphNode<NMeta>, context?: LargeGraphDetailContext) => ReactNode;
-  renderStats?: (stats: GraphStats) => ReactNode;
-  selectedEdgeId?: string | null;
-  selectedNodeId?: string | null;
-  sideRailActions?: ReactNode;
-  theme?: GalaxyGraphTheme;
-}
-
-function distinctGroups<NMeta>(nodes: GraphNode<NMeta>[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const node of nodes) {
-    if (node.group && !seen.has(node.group)) {
-      seen.add(node.group);
-      out.push(node.group);
-    }
-  }
-  return out;
-}
-
-function findBestMatch<NMeta, EMeta, CMeta>(
-  dataset: GraphDataset<NMeta, EMeta, CMeta>,
-  query: string,
-  activeGroup: string | null,
-  accessors: ResolvedAccessors<NMeta, EMeta>,
-): GraphNode<NMeta> | null {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) return null;
-
-  return (
-    dataset.nodes.find((node) => {
-      if (activeGroup !== null && node.group !== activeGroup) return false;
-      const label = nodeDisplayText(node, accessors).toLowerCase();
-      const aliases = [node.label, node.name, node.type, node.id].filter(Boolean).join(' ').toLowerCase();
-      return label.includes(normalized) || aliases.includes(normalized) || node.id.toLowerCase() === normalized;
-    }) ?? null
-  );
-}
-
-function nodeDisplayText<NMeta, EMeta>(node: GraphNode<NMeta>, accessors: ResolvedAccessors<NMeta, EMeta>) {
-  return accessors.nodeLabel(node) ?? node.label ?? node.name ?? node.type ?? node.id;
-}
-
-function edgeDisplayText<NMeta, EMeta>(edge: GraphEdge<EMeta>, accessors: ResolvedAccessors<NMeta, EMeta>) {
-  return accessors.edgeLabel(edge) ?? edge.label ?? edge.name ?? edge.type ?? edge.kind ?? 'relationship';
-}
-
-function findEndpoint<NMeta, EMeta, CMeta>(
-  dataset: GraphDataset<NMeta, EMeta, CMeta>,
-  id: string,
-  accessors: ResolvedAccessors<NMeta, EMeta>,
-): EdgeEndpoint<NMeta> {
-  const node = dataset.nodes.find((entry) => entry.id === id);
-  if (node) {
-    return { id: node.id, label: nodeDisplayText(node, accessors), group: node.group, isNode: true, node };
-  }
-
-  const cluster = (dataset.clusters ?? []).find((entry) => entry.id === id);
-  if (cluster) {
-    return { id: cluster.id, label: cluster.label, group: cluster.group, isNode: false, node: null };
-  }
-
-  return { id, label: id, isNode: false, node: null };
-}
-
-function themeStyle(theme: GalaxyGraphTheme | undefined) {
-  return {
-    '--gn-bg': theme?.background,
-    '--gn-panel-accent': theme?.panelAccentColor,
-    '--gn-selected': theme?.selectedColor,
-  } as CSSProperties;
-}
-
-function isInteractiveTarget(target: EventTarget | null) {
-  return (
-    target instanceof HTMLButtonElement ||
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    target instanceof HTMLAnchorElement
-  );
-}
-
-function renderDefaultAccessibleSummary<NMeta, EMeta, CMeta>({
-  accessors,
-  dataset,
-  edges,
-  labels,
-  nodes,
-  stats,
-}: GalaxyAccessibleSummaryContext<NMeta, EMeta, CMeta>) {
-  const endpointLabel = (id: string) => findEndpoint(dataset, id, accessors).label;
-
-  return (
-    <>
-      <h2>{labels.accessibleSummaryHeading}</h2>
-      <p>{labels.accessibleSummaryIntro(stats, nodes.length, edges.length)}</p>
-      <h3>{labels.accessibleNodesHeading}</h3>
-      <ul>
-        {nodes.map((node) => (
-          <li key={node.id}>
-            {nodeDisplayText(node, accessors)}
-            {node.group ? `, ${labels.group}: ${node.group}` : ''}
-          </li>
-        ))}
-      </ul>
-      <h3>{labels.accessibleEdgesHeading}</h3>
-      <ul>
-        {edges.map((edge, index) => (
-          <li key={getEdgeId(edge, index)}>
-            {endpointLabel(edge.source)} {labels.to} {endpointLabel(edge.target)}
-            {edgeDisplayText(edge, accessors) ? `, ${edgeDisplayText(edge, accessors)}` : ''}
-          </li>
-        ))}
-      </ul>
-    </>
-  );
-}
-
-function vectorForDirection(view: GalaxyCameraView | null, direction: SpaceDirection): Vec3 | undefined {
-  if (!view) return undefined;
-  if (direction === 'forward') return view.direction;
-  if (direction === 'back') return { x: -view.direction.x, y: -view.direction.y, z: -view.direction.z };
-  if (direction === 'right') return view.right;
-  if (direction === 'left') return { x: -view.right.x, y: -view.right.y, z: -view.right.z };
-  if (direction === 'up') return view.up;
-  return { x: -view.up.x, y: -view.up.y, z: -view.up.z };
-}
-
-interface AsyncDetailState {
-  detail: unknown;
-  error: unknown;
-  key: string | null;
-  loading: boolean;
-  reloadToken: number;
-}
-
-const EMPTY_DETAIL_STATE: AsyncDetailState = {
-  detail: undefined,
-  error: null,
-  key: null,
-  loading: false,
-  reloadToken: 0,
-};
+export type {
+  GalaxyAccessibleSummaryContext,
+  GalaxyGraphLabels,
+  GalaxyGraphVisualizerOptions,
+  GalaxyGraphVisualizerProps,
+  GraphStats,
+  LargeGraphDetailContext,
+  LargeGraphExpandRequest,
+  LargeGraphOptions,
+} from './galaxyGraphVisualizerTypes';
 
 export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, CMeta = unknown>({
   accessors,
@@ -1062,259 +676,46 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         </section>
       ) : null}
 
-      <aside className="side-rail" aria-label={chromeLabels.sceneTools}>
-        <button
-          type="button"
-          title={chromeLabels.resetCamera}
-          aria-label={chromeLabels.resetCamera}
-          disabled={sceneControlDisabled}
-          onClick={() => issueCameraCommand({ type: 'reset' })}
-        >
-          <RotateCcw size={17} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          title={chromeLabels.focusSelection}
-          aria-label={chromeLabels.focusSelection}
-          disabled={sceneControlDisabled || (!inspectedEdge && !inspectedNode)}
-          onClick={() => {
-            if (inspectedEdge) focusEdge(inspectedEdge);
-            else focusNode(inspectedNode);
-          }}
-        >
-          <Focus size={17} aria-hidden="true" />
-        </button>
-        {sideRailActions}
-        {showNavigationControls ? (
-          <>
-            <div className="nav-pad" aria-label={chromeLabels.spaceNavigation}>
-              <button
-                type="button"
-                title={chromeLabels.moveUp}
-                aria-label={chromeLabels.moveUp}
-                disabled={sceneControlDisabled}
-                onClick={() => moveCamera('up')}
-              >
-                <ChevronUp size={15} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                title={chromeLabels.moveForward}
-                aria-label={chromeLabels.moveForward}
-                disabled={sceneControlDisabled}
-                onClick={() => moveCamera('forward')}
-              >
-                <ArrowUp size={15} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                title={chromeLabels.moveLeft}
-                aria-label={chromeLabels.moveLeft}
-                disabled={sceneControlDisabled}
-                onClick={() => moveCamera('left')}
-              >
-                <ArrowLeft size={15} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                title={chromeLabels.moveRight}
-                aria-label={chromeLabels.moveRight}
-                disabled={sceneControlDisabled}
-                onClick={() => moveCamera('right')}
-              >
-                <ArrowRight size={15} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                title={chromeLabels.moveBackward}
-                aria-label={chromeLabels.moveBackward}
-                disabled={sceneControlDisabled}
-                onClick={() => moveCamera('back')}
-              >
-                <ArrowDown size={15} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                title={chromeLabels.moveDown}
-                aria-label={chromeLabels.moveDown}
-                disabled={sceneControlDisabled}
-                onClick={() => moveCamera('down')}
-              >
-                <ChevronDown size={15} aria-hidden="true" />
-              </button>
-            </div>
-            {canExpandGraph ? (
-              <div className="nav-pad" aria-label={chromeLabels.loadMoreGraphData}>
-                <button
-                  type="button"
-                  title={chromeLabels.loadMoreUp}
-                  aria-label={chromeLabels.loadMoreUp}
-                  disabled={sceneControlDisabled || expanding}
-                  onClick={() => expandDirection('up')}
-                >
-                  <ChevronUp size={15} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  title={chromeLabels.loadMoreForward}
-                  aria-label={chromeLabels.loadMoreForward}
-                  disabled={sceneControlDisabled || expanding}
-                  onClick={() => expandDirection('forward')}
-                >
-                  <ArrowUp size={15} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  title={chromeLabels.loadMoreLeft}
-                  aria-label={chromeLabels.loadMoreLeft}
-                  disabled={sceneControlDisabled || expanding}
-                  onClick={() => expandDirection('left')}
-                >
-                  <ArrowLeft size={15} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  title={chromeLabels.loadMoreRight}
-                  aria-label={chromeLabels.loadMoreRight}
-                  disabled={sceneControlDisabled || expanding}
-                  onClick={() => expandDirection('right')}
-                >
-                  <ArrowRight size={15} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  title={chromeLabels.loadMoreBackward}
-                  aria-label={chromeLabels.loadMoreBackward}
-                  disabled={sceneControlDisabled || expanding}
-                  onClick={() => expandDirection('back')}
-                >
-                  <ArrowDown size={15} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  title={chromeLabels.loadMoreDown}
-                  aria-label={chromeLabels.loadMoreDown}
-                  disabled={sceneControlDisabled || expanding}
-                  onClick={() => expandDirection('down')}
-                >
-                  <ChevronDown size={15} aria-hidden="true" />
-                </button>
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </aside>
+      <GalaxySideRail<NMeta, EMeta>
+        canExpandGraph={canExpandGraph}
+        chromeLabels={chromeLabels}
+        expandDirection={expandDirection}
+        expanding={expanding}
+        focusEdge={focusEdge}
+        focusNode={focusNode}
+        inspectedEdge={inspectedEdge}
+        inspectedNode={inspectedNode}
+        issueCameraCommand={issueCameraCommand}
+        moveCamera={moveCamera}
+        sceneControlDisabled={sceneControlDisabled}
+        showNavigationControls={showNavigationControls}
+        sideRailActions={sideRailActions}
+      />
 
       {(options?.showLegend ?? true) && legend ? <div className="legend">{legend}</div> : null}
 
-      {showDetailPanel && inspectedNode ? (
-        <aside className="detail-panel">
-          {renderNodeDetail ? (
-            renderNodeDetail(inspectedNode, nodeDetailContext)
-          ) : (
-            <>
-              <div className="detail-heading">
-                <Radar size={18} aria-hidden="true" />
-                <div>
-                  {inspectedNode.group ? <span>{inspectedNode.group}</span> : null}
-                  <h2>{nodeDisplayText(inspectedNode, resolvedAccessors)}</h2>
-                </div>
-              </div>
-              <dl>
-                <div>
-                  <dt>{chromeLabels.nodeId}</dt>
-                  <dd>{inspectedNode.id}</dd>
-                </div>
-                {inspectedNode.group ? (
-                  <div>
-                    <dt>{chromeLabels.group}</dt>
-                    <dd>{inspectedNode.group}</dd>
-                  </div>
-                ) : null}
-                {inspectedNode.size !== undefined ? (
-                  <div>
-                    <dt>{chromeLabels.size}</dt>
-                    <dd>{inspectedNode.size.toFixed(1)}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            </>
-          )}
-          <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(inspectedNode)}>
-            <Upload size={15} aria-hidden="true" />
-            {chromeLabels.navigate}
-          </button>
-          {canExpandGraph ? (
-            <button
-              type="button"
-              disabled={sceneControlDisabled || expanding}
-              onClick={() => expandNode(inspectedNode)}
-            >
-              <GitBranch size={15} aria-hidden="true" />
-              {expanding ? chromeLabels.loading : chromeLabels.expandNeighbors}
-            </button>
-          ) : null}
-          {largeGraphEnabled && expandError ? <span role="status">{chromeLabels.expansionFailed}</span> : null}
-        </aside>
-      ) : null}
-
-      {showDetailPanel && inspectedEdge && sourceEndpoint && targetEndpoint ? (
-        <aside className="detail-panel connection-panel">
-          {renderEdgeDetail ? (
-            renderEdgeDetail(inspectedEdge, { source: sourceEndpoint, target: targetEndpoint }, edgeDetailContext)
-          ) : (
-            <>
-              <div className="detail-heading">
-                <GitBranch size={18} aria-hidden="true" />
-                <div>
-                  <span>{edgeDisplayText(inspectedEdge, resolvedAccessors)}</span>
-                  <h2>
-                    {sourceEndpoint.label} <small>{chromeLabels.to}</small> {targetEndpoint.label}
-                  </h2>
-                </div>
-              </div>
-              <div className="score-line">
-                <strong>{Math.round((inspectedEdge.weight ?? 0.5) * 100)}%</strong>
-                <span>{chromeLabels.strength}</span>
-              </div>
-              <dl>
-                <div>
-                  <dt>{chromeLabels.relationshipId}</dt>
-                  <dd>{displayEdgeId(inspectedEdge)}</dd>
-                </div>
-                {sourceEndpoint.group ? (
-                  <div>
-                    <dt>{chromeLabels.source}</dt>
-                    <dd>{sourceEndpoint.group}</dd>
-                  </div>
-                ) : null}
-                {targetEndpoint.group ? (
-                  <div>
-                    <dt>{chromeLabels.target}</dt>
-                    <dd>{targetEndpoint.group}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            </>
-          )}
-          <div className="detail-actions">
-            <button type="button" disabled={sceneControlDisabled} onClick={() => focusEdge(inspectedEdge)}>
-              <Navigation size={15} aria-hidden="true" />
-              {chromeLabels.traceLink}
-            </button>
-            {sourceEndpoint.node ? (
-              <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(sourceEndpoint.node)}>
-                {chromeLabels.source}
-              </button>
-            ) : null}
-            {targetEndpoint.node ? (
-              <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(targetEndpoint.node)}>
-                {chromeLabels.target}
-              </button>
-            ) : null}
-          </div>
-        </aside>
-      ) : null}
+      <GalaxyDetailPanels<NMeta, EMeta>
+        canExpandGraph={canExpandGraph}
+        chromeLabels={chromeLabels}
+        displayEdgeId={displayEdgeId}
+        edgeDetailContext={edgeDetailContext}
+        expandError={expandError}
+        expandNode={expandNode}
+        expanding={expanding}
+        focusEdge={focusEdge}
+        focusNode={focusNode}
+        inspectedEdge={inspectedEdge}
+        inspectedNode={inspectedNode}
+        largeGraphEnabled={largeGraphEnabled}
+        nodeDetailContext={nodeDetailContext}
+        renderEdgeDetail={renderEdgeDetail}
+        renderNodeDetail={renderNodeDetail}
+        resolvedAccessors={resolvedAccessors}
+        sceneControlDisabled={sceneControlDisabled}
+        showDetailPanel={showDetailPanel}
+        sourceEndpoint={sourceEndpoint}
+        targetEndpoint={targetEndpoint}
+      />
     </main>
   );
 }

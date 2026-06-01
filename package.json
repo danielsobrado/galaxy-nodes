@@ -52,26 +52,6 @@
       "import": "./dist/angular.js",
       "require": "./dist/angular.cjs"
     },
-    "./presets/initiatives": {
-      "types": "./dist/presets/initiatives.d.ts",
-      "import": "./dist/presets/initiatives.js",
-      "require": "./dist/presets/initiatives.cjs"
-    },
-    "./presets/initiatives/core": {
-      "types": "./dist/presets/initiatives/core.d.ts",
-      "import": "./dist/presets/initiatives/core.js",
-      "require": "./dist/presets/initiatives/core.cjs"
-    },
-    "./presets/markets": {
-      "types": "./dist/presets/markets.d.ts",
-      "import": "./dist/presets/markets.js",
-      "require": "./dist/presets/markets.cjs"
-    },
-    "./presets/markets/core": {
-      "types": "./dist/presets/markets/core.d.ts",
-      "import": "./dist/presets/markets/core.js",
-      "require": "./dist/presets/markets/core.cjs"
-    },
     "./styles.css": "./dist/styles.css"
   },
   "files": [
@@ -106,7 +86,7 @@
     "build:next": "next build examples/next",
     "build:lib": "vite build && npm run build:types && node scripts/fix-declaration-imports.mjs && npm run api:rollup && node scripts/copy-styles.mjs",
     "build:types": "tsc -p tsconfig.build.json",
-    "benchmark": "node scripts/benchmark.mjs",
+    "benchmark": "vite-node scripts/benchmark.mjs",
     "benchmark:browser": "node scripts/browser-perf.mjs",
     "changeset": "changeset",
     "ci": "npm run ci:compat && npm run size && npm run benchmark -- --sizes 10000 --iterations 1 --warmups 0 && npm run build:example && npm run build:next && npm run test:next && npm run package:check && npm run docs:api",
