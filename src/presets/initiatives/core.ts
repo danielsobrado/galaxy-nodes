@@ -104,12 +104,107 @@ const FALLBACK_CATEGORY_COLOR = '#9ca3af';
 const MAX_RELATIONSHIP_EDGES = 12_000;
 const RELATIONSHIP_EDGE_RATIO = 0.16;
 
+// --- PRNG / math helpers ---
+const MULBERRY32_SEED_INCREMENT = 0x6d2b79f5;
+const UINT32_NORMALIZER = 4294967296; // 2^32; maps a 32-bit int into [0, 1)
+const TAU = Math.PI * 2; // one full revolution in radians
+
+// --- Deterministic dataset seed ---
+// The requested node count is mixed into the PRNG seed so each size is reproducible.
+const DATASET_SEED_MULTIPLIER = 97;
+const DATASET_SEED_OFFSET = 42;
+
+// --- Cluster (spiral-arm) layout ---
+const SPIRAL_ARM_COUNT = 5;
+const MIN_CLUSTER_COUNT = 14;
+const MAX_CLUSTER_COUNT = 34;
+const NODES_PER_CLUSTER = 3_800; // ~1 cluster per this many nodes (clamped to the min/max above)
+const CLUSTER_INNER_RADIUS = 70; // distance of the innermost cluster from galaxy center
+const CLUSTER_RADIAL_SPAN = 980; // extra reach of the outermost cluster
+const CLUSTER_RADIAL_EXPONENT = 0.72; // < 1 packs clusters toward the outer disk
+const SPIRAL_TWIST_PER_UNIT = 0.0065; // how tightly the arms wind as distance grows
+const CLUSTER_ANGLE_SCATTER = 0.35; // +/- random angular offset from the arm centerline
+const CLUSTER_Y_THICKNESS = 42; // gaussian vertical thickness of the disk
+const DISK_WARP_FREQUENCY = 2.2; // ripple count of the warped disk over one turn
+const DISK_WARP_AMPLITUDE = 26; // vertical height of the disk warp
+const CLUSTER_RADIUS_MIN = 48;
+const CLUSTER_RADIUS_MAX = 132;
+const INNER_CLUSTER_COUNT = 5; // first N clusters are shrunk to keep the core tight
+const INNER_CLUSTER_RADIUS_SCALE = 0.75;
+const CLUSTER_X_SCATTER = 38; // gaussian jitter on a cluster center's x
+const CLUSTER_DISK_FLATTEN_Z = 0.46; // flattens cluster centers along z
+const CLUSTER_Z_SCATTER = 52; // gaussian jitter on a cluster center's z
+const CLUSTER_SCORE_MIN = 56;
+const CLUSTER_SCORE_MAX = 99;
+
+// --- Node placement within clusters ---
+const MIN_MAJOR_NODE_INTERVAL = 520; // at least one major node per this many nodes...
+const NODES_PER_MAJOR_NODE = 30; // ...or roughly one per this many, whichever interval is larger
+const CLUSTER_PICK_BIAS_EXPONENT = 1.45; // > 1 biases node assignment toward earlier (larger) clusters
+const RANDOM_MAJOR_CHANCE = 0.9991; // rand() above this also promotes a node to major
+const MAJOR_NODE_SCALE = 0.36; // major nodes hug their cluster center more tightly
+const NODE_X_SPREAD_MIN = 0.24;
+const NODE_X_SPREAD_MAX = 0.95;
+const NODE_Y_SPREAD = 0.36;
+const NODE_Z_SPREAD_MIN = 0.18;
+const NODE_Z_SPREAD_MAX = 0.72;
+const NODE_SCORE_MIN = 18;
+const NODE_SCORE_MAX = 99.5;
+const MAJOR_NODE_SIZE_MIN = 17;
+const MAJOR_NODE_SIZE_MAX = 42;
+const MINOR_NODE_SIZE_MIN = 1.1;
+const MINOR_NODE_SIZE_MAX = 4.8;
+
+// --- Labels & metrics ---
+const LABEL_SUFFIX_MIN = 100;
+const LABEL_SUFFIX_MAX = 9999;
+const LABEL_SUFFIX_RADIX = 36; // base-36 so the numeric suffix renders as alphanumeric
+const ANNUAL_IMPACT_MIN = 250_000;
+const ANNUAL_IMPACT_MAX = 48_000_000;
+const STAKEHOLDERS_MIN = 3;
+const STAKEHOLDERS_MAX = 220;
+const CONFIDENCE_MIN = 41;
+const CONFIDENCE_MAX = 99.8;
+const DELIVERY_RATE_MIN = 42;
+const DELIVERY_RATE_MAX = 100;
+const METRIC_DECIMALS = 1;
+
+// --- Sentiment thresholds (score plus a random gate) ---
+const ON_TRACK_SCORE = 66;
+const ON_TRACK_CHANCE = 0.22; // rand() must exceed this to read as on-track
+const AT_RISK_SCORE = 42;
+const AT_RISK_CHANCE = 0.24;
+
+// --- Relationship / edge generation ---
+const FILAMENT_WEIGHT_MIN = 0.18;
+const FILAMENT_WEIGHT_MAX = 0.92;
+const SAME_CLUSTER_LINK_CHANCE = 0.58; // probability a related node is drawn from the same cluster
+const MAJOR_NODE_LINK_CHANCE = 0.38; // otherwise, probability of linking to a major hub
+const RELATIONSHIP_WEIGHT_MIN = 0.22;
+const RELATIONSHIP_WEIGHT_MAX = 1;
+const MIN_MAJOR_LINKS = 2;
+const MAX_EXTRA_MAJOR_LINKS = 7; // each major node gets MIN_MAJOR_LINKS + 0..(this-1) links
+const MIN_SAMPLED_RELATIONSHIPS = 800;
+const RELATIONSHIP_ATTEMPT_MULTIPLIER = 12; // cap sampling attempts at target * this
+// Cumulative probability buckets selecting a relationship kind.
+const REL_KIND_DEPENDS_ON = 0.34;
+const REL_KIND_SUPPORTS = 0.56;
+const REL_KIND_IMPACTS = 0.74;
+const REL_KIND_OWNED_BY = 0.88;
+const REL_KIND_BLOCKS = 0.96;
+
+// --- Accessors ---
+const SCORE_BOOST_THRESHOLD = 76; // non-major nodes above this score render larger in sharpMoney mode
+const NODE_SIZE_BOOST = 1.5;
+const DEFAULT_NODE_SIZE = 1;
+const DEFAULT_EDGE_WEIGHT = 0.5;
+
 function mulberry32(seed: number) {
   return () => {
-    let t = (seed += 0x6d2b79f5);
+    let t = (seed += MULBERRY32_SEED_INCREMENT);
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    return ((t ^ (t >>> 14)) >>> 0) / UINT32_NORMALIZER;
   };
 }
 
@@ -122,9 +217,10 @@ function pick<T>(rand: () => number, values: T[]) {
 }
 
 function gaussian(rand: () => number) {
+  // Box-Muller transform: two uniform samples -> one standard-normal sample.
   const u = 1 - rand();
   const v = 1 - rand();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(TAU * v);
 }
 
 interface ClusterBuild {
@@ -133,19 +229,21 @@ interface ClusterBuild {
 }
 
 function buildClusters(count: number, rand: () => number): ClusterBuild[] {
-  const clusterCount = Math.max(14, Math.min(34, Math.round(count / 3_800)));
+  const clusterCount = Math.max(MIN_CLUSTER_COUNT, Math.min(MAX_CLUSTER_COUNT, Math.round(count / NODES_PER_CLUSTER)));
   const builds: ClusterBuild[] = [];
-  const arms = 5;
+  const arms = SPIRAL_ARM_COUNT;
 
   for (let index = 0; index < clusterCount; index += 1) {
     const arm = index % arms;
-    const armOffset = (arm / arms) * Math.PI * 2;
-    const distance = 70 + Math.pow(index / clusterCount, 0.72) * 980;
-    const twist = distance * 0.0065;
-    const angle = armOffset + twist + randBetween(rand, -0.35, 0.35);
-    const y = gaussian(rand) * 42 + Math.sin(angle * 2.2) * 26;
+    const armOffset = (arm / arms) * TAU;
+    const distance = CLUSTER_INNER_RADIUS + Math.pow(index / clusterCount, CLUSTER_RADIAL_EXPONENT) * CLUSTER_RADIAL_SPAN;
+    const twist = distance * SPIRAL_TWIST_PER_UNIT;
+    const angle = armOffset + twist + randBetween(rand, -CLUSTER_ANGLE_SCATTER, CLUSTER_ANGLE_SCATTER);
+    const y = gaussian(rand) * CLUSTER_Y_THICKNESS + Math.sin(angle * DISK_WARP_FREQUENCY) * DISK_WARP_AMPLITUDE;
     const category = INITIATIVE_CATEGORIES[index % INITIATIVE_CATEGORIES.length];
-    const radius = randBetween(rand, 48, 132) * (index < 5 ? 0.75 : 1);
+    const radius =
+      randBetween(rand, CLUSTER_RADIUS_MIN, CLUSTER_RADIUS_MAX) *
+      (index < INNER_CLUSTER_COUNT ? INNER_CLUSTER_RADIUS_SCALE : 1);
 
     builds.push({
       scale: radius,
@@ -154,15 +252,15 @@ function buildClusters(count: number, rand: () => number): ClusterBuild[] {
         label: category.toUpperCase(),
         group: category,
         center: {
-          x: Math.cos(angle) * distance + gaussian(rand) * 38,
+          x: Math.cos(angle) * distance + gaussian(rand) * CLUSTER_X_SCATTER,
           y,
-          z: Math.sin(angle) * distance * 0.46 + gaussian(rand) * 52,
+          z: Math.sin(angle) * distance * CLUSTER_DISK_FLATTEN_Z + gaussian(rand) * CLUSTER_Z_SCATTER,
         },
         radius,
         meta: {
           category,
           nodeCount: 0,
-          score: randBetween(rand, 56, 99),
+          score: randBetween(rand, CLUSTER_SCORE_MIN, CLUSTER_SCORE_MAX),
         },
       },
     });
@@ -172,38 +270,41 @@ function buildClusters(count: number, rand: () => number): ClusterBuild[] {
 }
 
 function makeNodeLabel(category: InitiativeCategory, rand: () => number) {
-  const suffix = Math.floor(randBetween(rand, 100, 9999))
-    .toString(36)
+  const suffix = Math.floor(randBetween(rand, LABEL_SUFFIX_MIN, LABEL_SUFFIX_MAX))
+    .toString(LABEL_SUFFIX_RADIX)
     .toUpperCase();
   return `${category} ${pick(rand, NODE_TOPICS)} ${suffix}`;
 }
 
 function makeMetrics(rand: () => number): InitiativeMetrics {
   return {
-    annualImpact: Math.round(randBetween(rand, 250_000, 48_000_000)),
-    stakeholders: Math.round(randBetween(rand, 3, 220)),
-    confidence: Number(randBetween(rand, 41, 99.8).toFixed(1)),
-    deliveryRate: Number(randBetween(rand, 42, 100).toFixed(1)),
+    annualImpact: Math.round(randBetween(rand, ANNUAL_IMPACT_MIN, ANNUAL_IMPACT_MAX)),
+    stakeholders: Math.round(randBetween(rand, STAKEHOLDERS_MIN, STAKEHOLDERS_MAX)),
+    confidence: Number(randBetween(rand, CONFIDENCE_MIN, CONFIDENCE_MAX).toFixed(METRIC_DECIMALS)),
+    deliveryRate: Number(randBetween(rand, DELIVERY_RATE_MIN, DELIVERY_RATE_MAX).toFixed(METRIC_DECIMALS)),
   };
 }
 
 function sentimentFor(score: number, rand: () => number): InitiativeSentiment {
-  if (score > 66 && rand() > 0.22) return 'on-track';
-  if (score < 42 && rand() > 0.24) return 'at-risk';
+  if (score > ON_TRACK_SCORE && rand() > ON_TRACK_CHANCE) return 'on-track';
+  if (score < AT_RISK_SCORE && rand() > AT_RISK_CHANCE) return 'at-risk';
   return 'watch';
 }
 
 function relationshipTargetCount(count: number) {
-  return Math.min(MAX_RELATIONSHIP_EDGES, Math.max(800, Math.round(count * RELATIONSHIP_EDGE_RATIO)));
+  return Math.min(
+    MAX_RELATIONSHIP_EDGES,
+    Math.max(MIN_SAMPLED_RELATIONSHIPS, Math.round(count * RELATIONSHIP_EDGE_RATIO)),
+  );
 }
 
 function relationshipKind(rand: () => number) {
   const roll = rand();
-  if (roll < 0.34) return 'depends_on';
-  if (roll < 0.56) return 'supports';
-  if (roll < 0.74) return 'impacts';
-  if (roll < 0.88) return 'owned_by';
-  if (roll < 0.96) return 'blocks';
+  if (roll < REL_KIND_DEPENDS_ON) return 'depends_on';
+  if (roll < REL_KIND_SUPPORTS) return 'supports';
+  if (roll < REL_KIND_IMPACTS) return 'impacts';
+  if (roll < REL_KIND_OWNED_BY) return 'owned_by';
+  if (roll < REL_KIND_BLOCKS) return 'blocks';
   return 'signal';
 }
 
@@ -216,27 +317,29 @@ function assertDatasetCount(count: number) {
 /** Generate a deterministic, seeded galaxy of corporate initiatives. */
 export function generateGalaxyDataset(count: DatasetSize | number = 75_000): InitiativeDataset {
   assertDatasetCount(count);
-  const rand = mulberry32(count * 97 + 42);
+  const rand = mulberry32(count * DATASET_SEED_MULTIPLIER + DATASET_SEED_OFFSET);
   const builds = buildClusters(count, rand);
   const nodes: InitiativeNode[] = [];
-  const majorEvery = Math.max(520, Math.floor(count / 30));
+  const majorEvery = Math.max(MIN_MAJOR_NODE_INTERVAL, Math.floor(count / NODES_PER_MAJOR_NODE));
 
   for (let index = 0; index < count; index += 1) {
-    const build = builds[Math.floor(Math.pow(rand(), 1.45) * builds.length)];
+    const build = builds[Math.floor(Math.pow(rand(), CLUSTER_PICK_BIAS_EXPONENT) * builds.length)];
     const cluster = build.cluster;
-    const isMajor = index % majorEvery === 0 || rand() > 0.9991;
-    const localScale = isMajor ? build.scale * 0.36 : build.scale;
-    const x = cluster.center.x + gaussian(rand) * localScale * randBetween(rand, 0.24, 0.95);
-    const y = cluster.center.y + gaussian(rand) * localScale * 0.36;
-    const z = cluster.center.z + gaussian(rand) * localScale * randBetween(rand, 0.18, 0.72);
-    const score = randBetween(rand, 18, 99.5);
+    const isMajor = index % majorEvery === 0 || rand() > RANDOM_MAJOR_CHANCE;
+    const localScale = isMajor ? build.scale * MAJOR_NODE_SCALE : build.scale;
+    const x = cluster.center.x + gaussian(rand) * localScale * randBetween(rand, NODE_X_SPREAD_MIN, NODE_X_SPREAD_MAX);
+    const y = cluster.center.y + gaussian(rand) * localScale * NODE_Y_SPREAD;
+    const z = cluster.center.z + gaussian(rand) * localScale * randBetween(rand, NODE_Z_SPREAD_MIN, NODE_Z_SPREAD_MAX);
+    const score = randBetween(rand, NODE_SCORE_MIN, NODE_SCORE_MAX);
 
     cluster.meta!.nodeCount += 1;
     nodes.push({
       id: `node-${index}`,
       label: makeNodeLabel(cluster.meta!.category, rand),
       position: { x, y, z },
-      size: isMajor ? randBetween(rand, 17, 42) : randBetween(rand, 1.1, 4.8),
+      size: isMajor
+        ? randBetween(rand, MAJOR_NODE_SIZE_MIN, MAJOR_NODE_SIZE_MAX)
+        : randBetween(rand, MINOR_NODE_SIZE_MIN, MINOR_NODE_SIZE_MAX),
       major: isMajor,
       group: cluster.meta!.category,
       meta: {
@@ -265,18 +368,18 @@ export function generateGalaxyDataset(count: DatasetSize | number = 75_000): Ini
       id: `edge-filament-${index}`,
       source: builds[index].cluster.id,
       target: builds[index + 1].cluster.id,
-      weight: randBetween(rand, 0.18, 0.92),
+      weight: randBetween(rand, FILAMENT_WEIGHT_MIN, FILAMENT_WEIGHT_MAX),
       kind: 'filament',
     });
   }
 
   function pickRelatedNode(source: InitiativeNode): InitiativeNode {
-    if (rand() < 0.58) {
+    if (rand() < SAME_CLUSTER_LINK_CHANCE) {
       const clusterNodes = nodesByCluster.get(source.meta!.clusterId) ?? nodes;
       return pick(rand, clusterNodes);
     }
 
-    if (rand() < 0.38 && majorNodes.length > 0) {
+    if (rand() < MAJOR_NODE_LINK_CHANCE && majorNodes.length > 0) {
       return pick(rand, majorNodes);
     }
 
@@ -293,7 +396,7 @@ export function generateGalaxyDataset(count: DatasetSize | number = 75_000): Ini
       id: `edge-${prefix}-${relationshipKeys.size}`,
       source: source.id,
       target: target.id,
-      weight: randBetween(rand, 0.22, 1),
+      weight: randBetween(rand, RELATIONSHIP_WEIGHT_MIN, RELATIONSHIP_WEIGHT_MAX),
       kind: relationshipKind(rand),
     });
     return true;
@@ -301,7 +404,7 @@ export function generateGalaxyDataset(count: DatasetSize | number = 75_000): Ini
 
   for (let index = 0; index < majorNodes.length; index += 1) {
     const source = majorNodes[index];
-    const linkCount = 2 + Math.floor(rand() * 7);
+    const linkCount = MIN_MAJOR_LINKS + Math.floor(rand() * MAX_EXTRA_MAJOR_LINKS);
     for (let link = 0; link < linkCount; link += 1) {
       addRelationship(source, pickRelatedNode(source), `major-${index}`);
     }
@@ -309,7 +412,7 @@ export function generateGalaxyDataset(count: DatasetSize | number = 75_000): Ini
 
   const targetRelationships = relationshipTargetCount(count);
   let attempts = 0;
-  const maxAttempts = targetRelationships * 12;
+  const maxAttempts = targetRelationships * RELATIONSHIP_ATTEMPT_MULTIPLIER;
   while (relationshipKeys.size < targetRelationships && attempts < maxAttempts) {
     attempts += 1;
     const source = pick(rand, nodes);
@@ -353,9 +456,9 @@ export function createInitiativeAccessors(options: InitiativeAccessorOptions = {
       return CATEGORY_COLORS[meta.category] ?? FALLBACK_CATEGORY_COLOR;
     },
     nodeSize: (node) => {
-      const base = node.size ?? 1;
-      const boosted = sharpMoney && !node.major && (nodeMeta(node)?.score ?? 0) > 76;
-      return base * (boosted ? 1.5 : 1);
+      const base = node.size ?? DEFAULT_NODE_SIZE;
+      const boosted = sharpMoney && !node.major && (nodeMeta(node)?.score ?? 0) > SCORE_BOOST_THRESHOLD;
+      return base * (boosted ? NODE_SIZE_BOOST : 1);
     },
     nodeLabel: (node) => {
       const meta = nodeMeta(node);
@@ -370,7 +473,7 @@ export function createInitiativeAccessors(options: InitiativeAccessorOptions = {
       if (edge.kind === 'owned_by') return '#a78bfa';
       return '#aeb8c2';
     },
-    edgeWeight: (edge) => edge.weight ?? 0.5,
+    edgeWeight: (edge) => edge.weight ?? DEFAULT_EDGE_WEIGHT,
   };
 }
 

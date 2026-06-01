@@ -3,6 +3,10 @@ import type { GraphDataset, GraphEdge, GraphNode } from './types';
 export const MAJOR_PLANET_LIMIT_ALL = 96;
 export const MAJOR_PLANET_LIMIT_GROUP = 48;
 
+// Major nodes get bumped up the ranking by this fraction of the max degree,
+// plus a flat +1 tiebreaker, so they outrank equally-connected minor nodes.
+export const MAJOR_PLANET_RANK_BONUS = 0.22;
+
 export type PlanetSizingMode = 'accessor' | 'degree' | 'incoming' | 'outgoing';
 
 export interface NodeDegree {
@@ -141,9 +145,10 @@ export function rankPlanetNodes<NMeta = unknown>(
     maxDegree = Math.max(maxDegree, degreeValue(nodeDegrees.get(node.id), mode));
   });
 
+  const majorBonus = maxDegree * MAJOR_PLANET_RANK_BONUS + 1;
   return [...nodes].sort((left, right) => {
-    const leftScore = degreeValue(nodeDegrees.get(left.id), mode) + (left.major ? maxDegree * 0.22 + 1 : 0);
-    const rightScore = degreeValue(nodeDegrees.get(right.id), mode) + (right.major ? maxDegree * 0.22 + 1 : 0);
+    const leftScore = degreeValue(nodeDegrees.get(left.id), mode) + (left.major ? majorBonus : 0);
+    const rightScore = degreeValue(nodeDegrees.get(right.id), mode) + (right.major ? majorBonus : 0);
     return rightScore - leftScore || left.id.localeCompare(right.id);
   });
 }

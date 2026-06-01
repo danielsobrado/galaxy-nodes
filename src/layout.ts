@@ -33,11 +33,45 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const DEFAULT_SPACING = 260;
 const DEFAULT_CLUSTER_RADIUS = 92;
 
+// FNV-1a (32-bit) hash constants, used to derive deterministic seeds from string ids.
+const FNV_OFFSET_BASIS = 2166136261;
+const FNV_PRIME = 16777619;
+// Largest 32-bit unsigned value; divides a hash down into the [0, 1] unit range.
+const UINT32_MAX = 0xffffffff;
+// One full revolution in radians (a.k.a. tau).
+const FULL_CIRCLE = Math.PI * 2;
+
+// --- Galaxy group (cluster-center) placement ---
+// Random angular wobble layered on the golden-angle spiral so groups don't sit on a perfect arc.
+const GROUP_ANGLE_JITTER = Math.PI * 0.4;
+// A group's distance from the origin = spacing * (BASE + sqrt(index + 1) * GROWTH); spreads groups outward.
+const GROUP_DISTANCE_BASE = 0.45;
+const GROUP_DISTANCE_GROWTH = 0.78;
+// Vertical (y) spread of group centers, as a fraction of spacing — keeps the galaxy disk-shaped, not spherical.
+const GROUP_VERTICAL_SPREAD = 0.18;
+// Flattens group spread along z so the overall galaxy reads as a disk.
+const GROUP_DISK_FLATTEN = 0.55;
+
+// --- Node placement within a cluster ---
+// Padding added beyond the furthest node when sizing a generated cluster radius.
+const CLUSTER_RADIUS_PADDING = 36;
+// Half-step so the innermost node samples the middle of its radial band rather than the exact center.
+const RADIAL_SAMPLE_OFFSET = 0.5;
+// Node radius spans clusterRadius * BASE up to clusterRadius * (BASE + SPAN) as radialProgress goes 0 → 1.
+const NODE_RADIUS_BASE = 0.16;
+const NODE_RADIUS_SPAN = 0.9;
+// Random positional jitter, as a fraction of cluster radius.
+const NODE_JITTER = 0.08;
+// Vertical (y) spread of nodes within a cluster, as a fraction of cluster radius.
+const NODE_VERTICAL_SPREAD = 0.28;
+// Flattens node spread along z so each cluster reads as a disk.
+const NODE_DISK_FLATTEN = 0.72;
+
 function hashString(value: string) {
-  let hash = 2166136261;
+  let hash = FNV_OFFSET_BASIS;
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
+    hash = Math.imul(hash, FNV_PRIME);
   }
   return hash >>> 0;
 }
@@ -74,7 +108,7 @@ function validateOptionalRadius(value: number | undefined, path: string) {
 }
 
 function seededUnit(seed: string | number | undefined, key: string) {
-  return hashString(`${seed ?? 'galaxy-nodes'}:${key}`) / 0xffffffff;
+  return hashString(`${seed ?? 'galaxy-nodes'}:${key}`) / UINT32_MAX;
 }
 
 function seededSigned(seed: string | number | undefined, key: string) {
@@ -170,7 +204,7 @@ function radiusForNodes(nodes: GraphNode[], positions: Map<string, Vec3>, center
     const dx = position.x - center.x;
     const dy = position.y - center.y;
     const dz = position.z - center.z;
-    radius = Math.max(radius, Math.sqrt(dx * dx + dy * dy + dz * dz) + 36);
+    radius = Math.max(radius, Math.sqrt(dx * dx + dy * dy + dz * dz) + CLUSTER_RADIUS_PADDING);
   }
   return radius;
 }
@@ -183,12 +217,12 @@ function groupCenter(
   key: string,
 ): Vec3 {
   if (count <= 1) return { x: 0, y: 0, z: 0 };
-  const angle = index * GOLDEN_ANGLE + seededUnit(seed, `${key}:angle`) * Math.PI * 0.4;
-  const distance = spacing * (0.45 + Math.sqrt(index + 1) * 0.78);
+  const angle = index * GOLDEN_ANGLE + seededUnit(seed, `${key}:angle`) * GROUP_ANGLE_JITTER;
+  const distance = spacing * (GROUP_DISTANCE_BASE + Math.sqrt(index + 1) * GROUP_DISTANCE_GROWTH);
   return {
     x: Math.cos(angle) * distance,
-    y: seededSigned(seed, `${key}:y`) * spacing * 0.18,
-    z: Math.sin(angle) * distance * 0.55,
+    y: seededSigned(seed, `${key}:y`) * spacing * GROUP_VERTICAL_SPREAD,
+    z: Math.sin(angle) * distance * GROUP_DISK_FLATTEN,
   };
 }
 
@@ -201,14 +235,14 @@ function nodePosition(
   seed: string | number | undefined,
 ): Vec3 {
   const idHash = seededUnit(seed, `${node.id}:angle`);
-  const angle = (index * GOLDEN_ANGLE + idHash * Math.PI * 2) % (Math.PI * 2);
-  const radialProgress = count <= 1 ? 0 : Math.sqrt((index + 0.5) / count);
-  const radius = clusterRadius * (0.16 + radialProgress * 0.9);
-  const jitter = clusterRadius * 0.08;
+  const angle = (index * GOLDEN_ANGLE + idHash * FULL_CIRCLE) % FULL_CIRCLE;
+  const radialProgress = count <= 1 ? 0 : Math.sqrt((index + RADIAL_SAMPLE_OFFSET) / count);
+  const radius = clusterRadius * (NODE_RADIUS_BASE + radialProgress * NODE_RADIUS_SPAN);
+  const jitter = clusterRadius * NODE_JITTER;
   return {
     x: center.x + Math.cos(angle) * radius + seededSigned(seed, `${node.id}:jx`) * jitter,
-    y: center.y + seededSigned(seed, `${node.id}:jy`) * clusterRadius * 0.28,
-    z: center.z + Math.sin(angle) * radius * 0.72 + seededSigned(seed, `${node.id}:jz`) * jitter,
+    y: center.y + seededSigned(seed, `${node.id}:jy`) * clusterRadius * NODE_VERTICAL_SPREAD,
+    z: center.z + Math.sin(angle) * radius * NODE_DISK_FLATTEN + seededSigned(seed, `${node.id}:jz`) * jitter,
   };
 }
 
