@@ -7,7 +7,7 @@ import type {
   GalaxySceneFailure,
   GalaxySceneProps,
 } from './GalaxyScene';
-import type { GraphLayoutInput } from './layout';
+import type { GraphLayoutInput } from '../domain/layout';
 import type {
   EdgeEndpoint,
   GalaxyCameraView,
@@ -19,7 +19,7 @@ import type {
   ResolvedAccessors,
   SpaceDirection,
   Vec3,
-} from './types';
+} from '../domain/types';
 
 export interface GraphStats {
   nodes: number;

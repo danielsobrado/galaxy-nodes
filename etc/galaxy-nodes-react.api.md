@@ -5,7 +5,7 @@
 ```ts
 
 import { JSX } from 'react/jsx-runtime';
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 // @public (undocumented)
 export interface CameraCommand {

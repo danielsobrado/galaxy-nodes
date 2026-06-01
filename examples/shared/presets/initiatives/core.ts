@@ -1,5 +1,5 @@
-import { formatCompactNumber } from '../../../../src/data';
-import type { GraphAccessors, GraphCluster, GraphDataset, GraphEdge, GraphNode, Vec3 } from '../../../../src/types';
+import { formatCompactNumber } from '../../../../src/domain/data';
+import type { GraphAccessors, GraphCluster, GraphDataset, GraphEdge, GraphNode, Vec3 } from '../../../../src/domain/types';
 
 /**
  * Corporate initiative demo preset, rebuilt on top of the generic engine: a

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSceneFallbackViewModel, type GalaxySceneFailure } from './sceneFallback';
-import type { GraphDataset } from './types';
+import type { GraphDataset } from '../domain/types';
 
 describe('scene fallback view model', () => {
   const dataset: GraphDataset = {

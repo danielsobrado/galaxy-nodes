@@ -6,10 +6,10 @@ import {
   type GalaxyRenderer,
   type GalaxyRendererOptions,
 } from './core';
-import './styles.css';
-import type { GraphDataset } from './types';
+import '../styles.css';
+import type { GraphDataset } from '../domain/types';
 
-const VISUAL_BASELINE_PATH = 'src/__screenshots__/core-renderer-galaxy.png';
+const VISUAL_BASELINE_PATH = 'src/engine/__screenshots__/core-renderer-galaxy.png';
 const UPDATE_SCREENSHOTS = Boolean(import.meta.env.VITE_UPDATE_GALAXY_SCREENSHOTS);
 
 const dataset: GraphDataset = {

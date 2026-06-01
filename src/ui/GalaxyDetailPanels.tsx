@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { GitBranch, Navigation, Radar, Upload } from 'lucide-react';
-import type { EdgeEndpoint, GraphEdge, GraphNode, ResolvedAccessors } from './types';
+import type { EdgeEndpoint, GraphEdge, GraphNode, ResolvedAccessors } from '../domain/types';
 import type { GalaxyGraphLabels, LargeGraphDetailContext } from './galaxyGraphVisualizerTypes';
 import { edgeDisplayText, nodeDisplayText } from './galaxyGraphVisualizerUtils';
 

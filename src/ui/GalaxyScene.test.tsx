@@ -2,9 +2,9 @@ import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GalaxyScene, { type GalaxySceneProps } from './GalaxyScene';
-import { createGalaxyRenderer } from './core';
-import type { GalaxyRenderer, GalaxyRendererCallbacks, GalaxyRendererOptions } from './core';
-import type { GraphDataset } from './types';
+import { createGalaxyRenderer } from '../engine/core';
+import type { GalaxyRenderer, GalaxyRendererCallbacks, GalaxyRendererOptions } from '../engine/core';
+import type { GraphDataset } from '../domain/types';
 
 const mocks = vi.hoisted(() => ({
   latestCallbacks: null as GalaxyRendererCallbacks | null,
@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   } as GalaxyRenderer,
 }));
 
-vi.mock('./core', async (importOriginal) => {
+vi.mock('../engine/core', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...(actual as object),

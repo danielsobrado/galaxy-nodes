@@ -10,7 +10,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import type { CameraCommand } from './GalaxyScene';
-import type { GraphEdge, GraphNode, SpaceDirection } from './types';
+import type { GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
 import type { GalaxyGraphLabels } from './galaxyGraphVisualizerTypes';
 
 export interface GalaxySideRailProps<NMeta, EMeta> {

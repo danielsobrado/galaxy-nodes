@@ -1,4 +1,4 @@
-import type { GraphDataset, GraphEdge, GraphNode } from './types';
+import type { GraphDataset, GraphEdge, GraphNode } from '../domain/types';
 
 export const MAJOR_PLANET_LIMIT_ALL = 96;
 export const MAJOR_PLANET_LIMIT_GROUP = 48;

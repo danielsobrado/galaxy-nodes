@@ -462,6 +462,19 @@ npm install
 npm run dev
 ```
 
+### Source layout
+
+The library source is grouped by concern under `src/`:
+
+| Folder | Responsibility |
+| --- | --- |
+| `domain/` | Framework-neutral graph model: `types`, `data` (parsing/accessors), `layout`. |
+| `engine/` | The three.js renderer and scene internals: `core` (the `galaxy-nodes/core` entry), plus `scene*`, `materials`, `edges`, `markers`, `labels`, `environment`. |
+| `ui/` | React components: `GalaxyGraphVisualizer`, `GalaxyScene`, and their panels/helpers. |
+| `adapters/` | The published entry barrels: `index` (root), `react`, `vue`, `angular`. |
+
+Tests live next to their subjects (`*.test.ts(x)`), and `styles.css` stays at the `src/` root. Public import paths (`galaxy-nodes`, `galaxy-nodes/core`, `galaxy-nodes/react`, …) are unaffected by this internal grouping.
+
 The dev server runs `examples/basic`, which imports the library through the package export path. Build the package and example separately:
 
 ```bash
@@ -479,7 +492,7 @@ Run the full contribution gate locally with:
 npm run ci
 ```
 
-Browser-mode WebGL tests run through the pinned Playwright version in `devDependencies` and compare against `src/__screenshots__/core-renderer-galaxy.png`. To refresh that checked-in visual baseline after an intentional renderer change, run `VITE_UPDATE_GALAXY_SCREENSHOTS=1 npm run test:browser` on macOS/Linux, or `$env:VITE_UPDATE_GALAXY_SCREENSHOTS='1'; npm run test:browser; Remove-Item Env:VITE_UPDATE_GALAXY_SCREENSHOTS` in PowerShell, then review the PNG diff before committing it. The visual assertion allows a small SwiftShader pixel tolerance, so only refresh the baseline when the rendered scene change is expected.
+Browser-mode WebGL tests run through the pinned Playwright version in `devDependencies` and compare against `src/engine/__screenshots__/core-renderer-galaxy.png`. To refresh that checked-in visual baseline after an intentional renderer change, run `VITE_UPDATE_GALAXY_SCREENSHOTS=1 npm run test:browser` on macOS/Linux, or `$env:VITE_UPDATE_GALAXY_SCREENSHOTS='1'; npm run test:browser; Remove-Item Env:VITE_UPDATE_GALAXY_SCREENSHOTS` in PowerShell, then review the PNG diff before committing it. The visual assertion allows a small SwiftShader pixel tolerance, so only refresh the baseline when the rendered scene change is expected.
 
 API compatibility is locked with API Extractor reports under `etc/*.api.md`, and API documentation is generated with TypeDoc:
 

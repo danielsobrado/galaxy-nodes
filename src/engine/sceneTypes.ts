@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { GraphEdge } from './types';
+import type { GraphEdge } from '../domain/types';
 
 export interface SceneEdgeEndpoint {
   group?: string;

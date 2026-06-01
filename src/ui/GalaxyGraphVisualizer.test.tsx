@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GalaxyGraphVisualizer from './GalaxyGraphVisualizer';
 import type { CameraCommand, GalaxySceneProps } from './GalaxyScene';
-import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode } from './types';
+import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode } from '../domain/types';
 
 let latestSceneProps: GalaxySceneProps | null = null;
 let sceneRenderCount = 0;

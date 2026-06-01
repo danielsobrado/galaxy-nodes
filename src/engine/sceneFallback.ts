@@ -1,5 +1,5 @@
-import { formatCompactNumber } from './data';
-import type { GraphDataset } from './types';
+import { formatCompactNumber } from '../domain/data';
+import type { GraphDataset } from '../domain/types';
 
 export type GalaxySceneFailureReason = 'webgl-unavailable' | 'context-lost' | 'scene-error';
 

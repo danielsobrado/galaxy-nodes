@@ -1,4 +1,4 @@
-export { default as GalaxyGraphVisualizer } from './GalaxyGraphVisualizer';
+export { default as GalaxyGraphVisualizer } from '../ui/GalaxyGraphVisualizer';
 export type {
   GalaxyGraphVisualizerOptions,
   GalaxyGraphVisualizerProps,
@@ -8,8 +8,8 @@ export type {
   LargeGraphDetailContext,
   LargeGraphExpandRequest,
   LargeGraphOptions,
-} from './GalaxyGraphVisualizer';
-export { default as GalaxyScene } from './GalaxyScene';
+} from '../ui/GalaxyGraphVisualizer';
+export { default as GalaxyScene } from '../ui/GalaxyScene';
 export type {
   CameraCommand,
   GalaxyGraphTheme,
@@ -19,9 +19,9 @@ export type {
   GalaxySceneFailureReason,
   GalaxySceneProps,
   PlanetSizingMode,
-} from './GalaxyScene';
-export { getGalaxyRendererContextBudget } from './core';
-export type { GalaxyRendererContextBudget } from './core';
+} from '../ui/GalaxyScene';
+export { getGalaxyRendererContextBudget } from '../engine/core';
+export type { GalaxyRendererContextBudget } from '../engine/core';
 export {
   defaultEdgeColor,
   defaultEdgeLabel,
@@ -37,10 +37,10 @@ export {
   mergeGraphDataset,
   parseGraphDataset,
   resolveAccessors,
-} from './data';
-export type { MergeGraphDatasetOptions, ParsedGraphDataset } from './data';
-export { resolveGraphLayout } from './layout';
-export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from './layout';
+} from '../domain/data';
+export type { MergeGraphDatasetOptions, ParsedGraphDataset } from '../domain/data';
+export { resolveGraphLayout } from '../domain/layout';
+export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from '../domain/layout';
 export type {
   EdgeEndpoint,
   GalaxyCameraView,
@@ -53,4 +53,4 @@ export type {
   ResolvedAccessors,
   SpaceDirection,
   Vec3,
-} from './types';
+} from '../domain/types';

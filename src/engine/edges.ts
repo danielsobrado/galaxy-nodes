@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { GraphEdge, ResolvedAccessors } from './types';
+import type { GraphEdge, ResolvedAccessors } from '../domain/types';
 import type { EdgeEndpoints, EdgeVisualState } from './sceneTypes';
 import {
   EDGE_CURVE_DEFAULT_LIFT,

@@ -5,7 +5,7 @@
     "ignoreDeprecations": "6.0",
     "noEmit": true,
     "paths": {
-      "galaxy-nodes": ["../../src/index.ts"],
+      "galaxy-nodes": ["../../src/adapters/index.ts"],
       "galaxy-nodes/presets/initiatives": ["../shared/presets/initiatives.tsx"],
       "galaxy-nodes/styles.css": ["../../src/styles.css"]
     },

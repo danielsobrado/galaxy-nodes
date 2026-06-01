@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { GraphEdge, GraphNode, ResolvedAccessors } from './types';
+import type { GraphEdge, GraphNode, ResolvedAccessors } from '../domain/types';
 import type { EdgeEndpoints, SceneLabel } from './sceneTypes';
 import {
   CLUSTER_LABEL_INDEX_A,

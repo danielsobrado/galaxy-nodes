@@ -20,7 +20,7 @@ export default defineConfig({
       },
       {
         find: 'galaxy-nodes',
-        replacement: fileURLToPath(new URL('../../src/index.ts', import.meta.url)),
+        replacement: fileURLToPath(new URL('../../src/adapters/index.ts', import.meta.url)),
       },
     ],
   },

@@ -1,7 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { parseGraphDataset } from '../../../src/data';
-import type { GalaxyGraphVisualizerProps } from '../../../src/GalaxyGraphVisualizer';
-import type { GraphAccessors } from '../../../src/types';
+import { parseGraphDataset } from '../../../src/domain/data';
+import type { GalaxyGraphVisualizerProps } from '../../../src/ui/GalaxyGraphVisualizer';
+import type { GraphAccessors } from '../../../src/domain/types';
 import {
   CATEGORY_COLORS,
   createInitiativeAccessors,

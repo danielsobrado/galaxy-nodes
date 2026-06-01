@@ -1,4 +1,4 @@
-export { default as GalaxyGraphVisualizer } from './GalaxyGraphVisualizer';
+export { default as GalaxyGraphVisualizer } from '../ui/GalaxyGraphVisualizer';
 export type {
   GalaxyGraphVisualizerOptions,
   GalaxyGraphVisualizerProps,
@@ -8,8 +8,8 @@ export type {
   LargeGraphDetailContext,
   LargeGraphExpandRequest,
   LargeGraphOptions,
-} from './GalaxyGraphVisualizer';
-export { default as GalaxyScene } from './GalaxyScene';
+} from '../ui/GalaxyGraphVisualizer';
+export { default as GalaxyScene } from '../ui/GalaxyScene';
 export type {
   CameraCommand,
   GalaxyGraphTheme,
@@ -19,4 +19,4 @@ export type {
   GalaxySceneFailureReason,
   GalaxySceneProps,
   PlanetSizingMode,
-} from './GalaxyScene';
+} from '../ui/GalaxyScene';

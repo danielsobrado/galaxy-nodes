@@ -1,12 +1,12 @@
-import { createGalaxyRenderer } from './core';
-import type { GalaxyRendererCallbacks, GalaxyRendererOptions } from './core';
+import { createGalaxyRenderer } from '../engine/core';
+import type { GalaxyRendererCallbacks, GalaxyRendererOptions } from '../engine/core';
 
 export {
   createGalaxyRenderer,
   DEFAULT_GRAPH_EDGE_BUDGET,
   getGalaxyRendererContextBudget,
   mergeGraphDataset,
-} from './core';
+} from '../engine/core';
 
 /**
  * Angular-named alias for the imperative core renderer. It does not declare
@@ -41,4 +41,4 @@ export type {
   PlanetSizingMode,
   SpaceDirection,
   Vec3,
-} from './core';
+} from '../engine/core';

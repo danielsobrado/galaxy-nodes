@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { GitBranch, Radar } from 'lucide-react';
-import { formatCompactNumber, getEdgeId } from '../../../src/data';
-import type { EdgeEndpoint, GraphEdge, GraphNode } from '../../../src/types';
+import { formatCompactNumber, getEdgeId } from '../../../src/domain/data';
+import type { EdgeEndpoint, GraphEdge, GraphNode } from '../../../src/domain/types';
 import { formatInitiativeMoney, type InitiativeNodeMeta } from './initiatives/core';
 
 export * from './initiatives/core';

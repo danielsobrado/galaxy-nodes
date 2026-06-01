@@ -1,5 +1,5 @@
 import { type CSSProperties } from 'react';
-import { formatCompactNumber, getEdgeId } from './data';
+import { formatCompactNumber, getEdgeId } from '../domain/data';
 import type { GalaxyCameraView, GalaxyGraphTheme } from './GalaxyScene';
 import type {
   EdgeEndpoint,
@@ -9,7 +9,7 @@ import type {
   ResolvedAccessors,
   SpaceDirection,
   Vec3,
-} from './types';
+} from '../domain/types';
 import type {
   AsyncDetailState,
   GalaxyAccessibleSummaryContext,

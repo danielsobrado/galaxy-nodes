@@ -13,7 +13,7 @@ import {
   writeVisiblePointSizes,
   type PlanetSizingMode,
 } from './sceneData';
-import type { GraphDataset, GraphNode } from './types';
+import type { GraphDataset, GraphNode } from '../domain/types';
 
 describe('scene data helpers', () => {
   const nodes: GraphNode[] = [

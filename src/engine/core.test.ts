@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createGalaxyRenderer, type GalaxyRendererOptions } from './core';
-import type { GraphDataset } from './types';
+import type { GraphDataset } from '../domain/types';
 
 const dataset: GraphDataset = {
   nodes: [{ id: 'alpha', label: 'Alpha', major: true }],

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { getEdgeId, resolveAccessors } from './data';
+import { getEdgeId, resolveAccessors } from '../domain/data';
 import {
   canUseDOM,
   detectWebGLAvailability,
@@ -11,7 +11,7 @@ import {
   type GalaxyRendererContextBudget,
   type ResolvedGalaxyMotion,
 } from './environment';
-import { resolveGraphLayout, type GraphLayoutInput } from './layout';
+import { resolveGraphLayout, type GraphLayoutInput } from '../domain/layout';
 import {
   buildSceneNodeIndex,
   buildNodeDegrees,
@@ -37,7 +37,7 @@ import type {
   ResolvedAccessors,
   SpaceDirection,
   Vec3,
-} from './types';
+} from '../domain/types';
 import {
   MAX_STAR_COUNT,
   QUIET_STAR_COUNT,
@@ -2364,10 +2364,10 @@ export {
   mergeGraphDataset,
   parseGraphDataset,
   resolveAccessors,
-} from './data';
-export type { MergeGraphDatasetOptions, ParsedGraphDataset } from './data';
-export { resolveGraphLayout } from './layout';
-export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from './layout';
+} from '../domain/data';
+export type { MergeGraphDatasetOptions, ParsedGraphDataset } from '../domain/data';
+export { resolveGraphLayout } from '../domain/layout';
+export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from '../domain/layout';
 export type { PlanetSizingMode } from './sceneData';
 export type {
   EdgeEndpoint,
@@ -2381,4 +2381,4 @@ export type {
   ResolvedAccessors,
   SpaceDirection,
   Vec3,
-} from './types';
+} from '../domain/types';

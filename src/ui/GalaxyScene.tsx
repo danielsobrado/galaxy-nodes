@@ -4,9 +4,9 @@ import {
   type GalaxyRenderer,
   type GalaxyRendererCallbacks,
   type GalaxyRendererOptions,
-} from './core';
-import { createSceneFallbackViewModel, type GalaxySceneFailure } from './sceneFallback';
-import type { GalaxyCameraView, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from './types';
+} from '../engine/core';
+import { createSceneFallbackViewModel, type GalaxySceneFailure } from '../engine/sceneFallback';
+import type { GalaxyCameraView, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
 
 export type {
   CameraCommand,
@@ -14,8 +14,8 @@ export type {
   GalaxyMotionPreference,
   GalaxyPlanetSizingOptions,
   PlanetSizingMode,
-} from './core';
-export type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
+} from '../engine/core';
+export type { GalaxySceneFailure, GalaxySceneFailureReason } from '../engine/sceneFallback';
 
 export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unknown> extends GalaxyRendererOptions<
   NMeta,

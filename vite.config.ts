@@ -7,11 +7,11 @@ export default defineConfig({
     sourcemap: true,
     lib: {
       entry: {
-        angular: 'src/angular.ts',
-        core: 'src/core.ts',
-        index: 'src/index.ts',
-        react: 'src/react.ts',
-        vue: 'src/vue.ts',
+        angular: 'src/adapters/angular.ts',
+        core: 'src/engine/core.ts',
+        index: 'src/adapters/index.ts',
+        react: 'src/adapters/react.ts',
+        vue: 'src/adapters/vue.ts',
       },
       formats: ['es', 'cjs'],
       fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : 'cjs'}`,

@@ -10,21 +10,25 @@ const verbose = process.argv.includes('--verbose');
 const declarationFolder = 'temp/declarations';
 const rollupFolder = 'dist';
 
+// [reportName, declarationInputPath, rollupOutputPath]
+// Source files live in subfolders (adapters/, engine/), so tsc emits nested
+// declarations under temp/declarations/. The rollup output stays flat in dist/
+// so the published package.json `exports` paths remain unchanged.
 const entryPoints = [
-  ['galaxy-nodes', 'index.d.ts'],
-  ['galaxy-nodes-core', 'core.d.ts'],
-  ['galaxy-nodes-react', 'react.d.ts'],
-  ['galaxy-nodes-vue', 'vue.d.ts'],
-  ['galaxy-nodes-angular', 'angular.d.ts'],
+  ['galaxy-nodes', 'adapters/index.d.ts', 'index.d.ts'],
+  ['galaxy-nodes-core', 'engine/core.d.ts', 'core.d.ts'],
+  ['galaxy-nodes-react', 'adapters/react.d.ts', 'react.d.ts'],
+  ['galaxy-nodes-vue', 'adapters/vue.d.ts', 'vue.d.ts'],
+  ['galaxy-nodes-angular', 'adapters/angular.d.ts', 'angular.d.ts'],
 ];
 
 let failed = false;
 
-for (const [reportName, entryPoint] of entryPoints) {
+for (const [reportName, declarationInput, rollupOutput] of entryPoints) {
   const extractorConfig = ExtractorConfig.prepare({
     configObject: {
       projectFolder,
-      mainEntryPointFilePath: `<projectFolder>/${declarationFolder}/${entryPoint}`,
+      mainEntryPointFilePath: `<projectFolder>/${declarationFolder}/${declarationInput}`,
       newlineKind: 'lf',
       compiler: {
         tsconfigFilePath: '<projectFolder>/tsconfig.build.json',
@@ -41,7 +45,7 @@ for (const [reportName, entryPoint] of entryPoints) {
       },
       dtsRollup: {
         enabled: true,
-        untrimmedFilePath: `<projectFolder>/${rollupFolder}/${entryPoint}`,
+        untrimmedFilePath: `<projectFolder>/${rollupFolder}/${rollupOutput}`,
       },
       tsdocMetadata: {
         enabled: false,

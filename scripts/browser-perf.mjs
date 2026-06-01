@@ -141,7 +141,7 @@ async function run() {
     server: { hmr: false, host: '127.0.0.1', port: 0, watch: null },
     resolve: {
       alias: [
-        { find: /^galaxy-nodes$/, replacement: path.join(projectRoot, 'src/index.ts') },
+        { find: /^galaxy-nodes$/, replacement: path.join(projectRoot, 'src/adapters/index.ts') },
         {
           find: /^galaxy-nodes-presets-initiatives-core$/,
           replacement: path.join(projectRoot, 'examples/shared/presets/initiatives/core.ts'),
