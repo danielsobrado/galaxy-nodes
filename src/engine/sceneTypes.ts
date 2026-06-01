@@ -26,7 +26,8 @@ export interface EdgeVisualState<EMeta = unknown> {
   edge: GraphEdge<EMeta>;
   endpoints: EdgeEndpoints;
   geometryKey: string;
-  hit: THREE.Mesh;
+  /** Per-edge raycast proxy; only created in tube (quality) render mode. */
+  hit: THREE.Mesh | null;
   id: string;
   visible: boolean;
   visualRange: EdgeVisualRange | null;

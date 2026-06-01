@@ -180,9 +180,11 @@ import {
   HOVER_LABEL_MIN_HEIGHT,
   HOVER_LABEL_HEIGHT_FACTOR,
   WORLD_ROTATION_SPEED,
+  EDGE_LINE_SEGMENTS,
+  SCALE_RENDER_ELEMENT_THRESHOLD,
 } from './sceneConstants';
 import { dimColor, makeGlowTexture, makePlanetTexture, planetColor, pointCloudColor } from './materials';
-import { createTubeGeometry, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
+import { createEdgeLineGeometry, createTubeGeometry, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
 import { createEndpointMarker, createHoverNodeMarker, setHoverNodeMarkerVisible, setMarkerVisible } from './markers';
 import {
   edgeDisplayLabel,
@@ -233,6 +235,39 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
   planetSizing?: GalaxyPlanetSizingOptions;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
+  /**
+   * Expected final element count (nodes + edges) for streamed/progressive datasets.
+   * The render tier is chosen up front from this hint so a graph that grows past the
+   * scale threshold mid-stream is never rebuilt from tubes to lines. Construction-time
+   * only; changing it after mount has no effect until the scene rebuilds.
+   */
+  expectedSize?: number;
+  /**
+   * Edge render tier. `'auto'` (default) uses tube edges for small graphs and switches
+   * to lightweight line edges past ~{@link SCALE_RENDER_ELEMENT_THRESHOLD} elements;
+   * `'quality'` forces tubes, `'scale'` forces lines. Construction-time only.
+   */
+  renderMode?: GalaxyRenderMode;
+}
+
+export type GalaxyRenderMode = 'auto' | 'quality' | 'scale';
+export type EdgeRenderMode = 'tube' | 'line';
+
+/**
+ * Pick the edge render tier. Honors an explicit `renderMode`, otherwise compares the
+ * larger of the declared `expectedSize` and the current element count against the
+ * measured scale threshold (see scripts/browser-perf.mjs).
+ */
+export function resolveEdgeRenderMode(
+  nodeCount: number,
+  edgeCount: number,
+  expectedSize: number | undefined,
+  renderMode: GalaxyRenderMode | undefined,
+): EdgeRenderMode {
+  if (renderMode === 'quality') return 'tube';
+  if (renderMode === 'scale') return 'line';
+  const elements = Math.max(expectedSize ?? 0, nodeCount + edgeCount);
+  return elements >= SCALE_RENDER_ELEMENT_THRESHOLD ? 'line' : 'tube';
 }
 
 export interface GalaxyPlanetSizingOptions {
@@ -508,6 +543,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   initialShowClusters: boolean,
   initialGalaxyMode: boolean,
   initialMotion: ResolvedGalaxyMotion,
+  edgeRenderMode: EdgeRenderMode,
   layoutInput: GraphLayoutInput | undefined,
   accessorsInput: GraphAccessors<NMeta, EMeta> | undefined,
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
@@ -908,7 +944,10 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       }
     `,
   });
-  const edgeVisualMesh = new THREE.Mesh(edgeVisualGeometry, edgeVisualMaterial);
+  const edgeVisualMesh =
+    edgeRenderMode === 'line'
+      ? new THREE.LineSegments(edgeVisualGeometry, edgeVisualMaterial)
+      : new THREE.Mesh(edgeVisualGeometry, edgeVisualMaterial);
   edgeVisualMesh.userData.type = 'edge-visuals';
   edgeVisualMesh.frustumCulled = false;
   world.add(edgeVisualMesh);
@@ -1581,6 +1620,15 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     }
   }
 
+  // Source geometry written into the merged edge buffer: a sampled polyline in scale
+  // (line) mode, a tube in quality mode. Both expose position+normal so the range
+  // writer is identical; only the per-edge vertex count differs (~16 vs ~1000).
+  function edgeVisualSourceGeometry(spec: ReturnType<typeof getEdgeSpec>) {
+    return edgeRenderMode === 'line'
+      ? createEdgeLineGeometry(spec.curve, EDGE_LINE_SEGMENTS)
+      : createTubeGeometry(spec.curve, spec.visualSegments, spec.radius).toNonIndexed();
+  }
+
   function refreshEdgeGeometry(state: EdgeVisualState<EMeta>) {
     const source = resolveEndpoint(
       state.edge.source,
@@ -1600,7 +1648,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     );
     if (!source || !target) {
       state.visible = false;
-      state.hit.userData.pickable = false;
+      if (state.hit) state.hit.userData.pickable = false;
       edgeEndpoints.delete(state.id);
       return;
     }
@@ -1610,7 +1658,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const spec = getEdgeSpec(state.edge, state.endpoints, accessors as ResolvedAccessors<unknown, EMeta>, galaxyMode);
     const appearanceKey = `${spec.color}:${spec.opacity.toFixed(4)}`;
     if (state.geometryKey !== spec.geometryKey || state.appearanceKey !== appearanceKey) {
-      const visualGeometry = createTubeGeometry(spec.curve, spec.visualSegments, spec.radius).toNonIndexed();
+      const visualGeometry = edgeVisualSourceGeometry(spec);
       const vertexCount = visualGeometry.getAttribute('position').count;
       const canReuseRange = Boolean(state.visualRange && state.visualRange.count === vertexCount);
       if (state.visualRange && !canReuseRange) {
@@ -1620,15 +1668,16 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       writeEdgeVisualRange(range, visualGeometry, tmpEdgeAppearanceColor.set(spec.color), spec.opacity);
       state.visualRange = range;
       visualGeometry.dispose();
-      state.hit.geometry.dispose();
-      state.hit.geometry = createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius);
+      if (state.hit) {
+        state.hit.geometry.dispose();
+        state.hit.geometry = createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius);
+      }
       state.geometryKey = spec.geometryKey;
       state.appearanceKey = appearanceKey;
       state.baseOpacity = spec.opacity;
     }
 
-    const hitMaterial = state.hit.material as THREE.MeshBasicMaterial;
-    hitMaterial.color.set(spec.color);
+    if (state.hit) (state.hit.material as THREE.MeshBasicMaterial).color.set(spec.color);
   }
 
   function updateEdgeVisibility() {
@@ -1642,7 +1691,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       const connectedToSelectedNode = Boolean(selectedNodeHighlight?.connectedEdgeIds.has(state.id));
       const visible = visibleByGroup || selected || connectedToSelectedNode;
       state.visible = visible;
-      state.hit.userData.pickable = visible;
+      if (state.hit) state.hit.userData.pickable = visible;
     });
   }
 
@@ -1661,30 +1710,37 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const edgeId = getEdgeId(edge, index);
     const endpoints = { source, target };
     const spec = getEdgeSpec(edge, endpoints, accessors as ResolvedAccessors<unknown, EMeta>, galaxyMode);
-    const visualGeometry = createTubeGeometry(spec.curve, spec.visualSegments, spec.radius).toNonIndexed();
+    const visualGeometry = edgeVisualSourceGeometry(spec);
     const visualRange = allocateEdgeVisualRange(edgeId, visualGeometry);
     writeEdgeVisualRange(visualRange, visualGeometry, tmpEdgeAppearanceColor.set(spec.color), spec.opacity);
     visualGeometry.dispose();
 
-    const hit = new THREE.Mesh(
-      createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius),
-      new THREE.MeshBasicMaterial({
-        color: spec.color,
-        transparent: true,
-        opacity: 0,
-        depthWrite: false,
-      }),
-    );
-    hit.userData.edgeId = edgeId;
-    hit.userData.type = 'edge';
-    hit.userData.pickable = true;
-    // The hit tube never renders: its additive material is fully transparent so it
-    // contributes nothing to the image, and three.js raycasting ignores `visible`.
-    // Keeping it invisible removes one draw call per edge (halving edge draw calls)
-    // while it remains pickable; eligibility is gated by userData.pickable instead.
-    hit.visible = false;
-    interactiveEdgeMeshes.push(hit);
-    world.add(hit);
+    // Quality mode keeps a per-edge invisible hit tube for raycast picking. Scale (line)
+    // mode skips it: at 100k+ edges that is 100k+ Object3Ds plus an O(N) array spread and
+    // raycast on every pointermove. Edge highlighting still works there via node selection
+    // (connectedEdgeIds drives aState); only direct edge-click picking is unavailable.
+    let hit: THREE.Mesh | null = null;
+    if (edgeRenderMode === 'tube') {
+      hit = new THREE.Mesh(
+        createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius),
+        new THREE.MeshBasicMaterial({
+          color: spec.color,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+        }),
+      );
+      hit.userData.edgeId = edgeId;
+      hit.userData.type = 'edge';
+      hit.userData.pickable = true;
+      // The hit tube never renders: its additive material is fully transparent so it
+      // contributes nothing to the image, and three.js raycasting ignores `visible`.
+      // Keeping it invisible removes one draw call per edge (halving edge draw calls)
+      // while it remains pickable; eligibility is gated by userData.pickable instead.
+      hit.visible = false;
+      interactiveEdgeMeshes.push(hit);
+      world.add(hit);
+    }
 
     const state = {
       appearanceKey: `${spec.color}:${spec.opacity.toFixed(4)}`,
@@ -2647,6 +2703,12 @@ function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         state.options.showClusters,
         state.options.galaxyMode,
         state.resolvedMotion,
+        resolveEdgeRenderMode(
+          state.options.dataset.nodes.length,
+          state.options.dataset.edges.length,
+          state.options.expectedSize,
+          state.options.renderMode,
+        ),
         state.options.layout,
         state.options.accessors,
         state.options.planetSizing,

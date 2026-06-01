@@ -38,8 +38,14 @@ function parseArgs(argv) {
     throw new Error('sizes must include at least one positive integer.');
   }
 
+  const mode = String(args.get('mode') ?? 'auto');
+  if (!['auto', 'quality', 'scale'].includes(mode)) {
+    throw new Error('mode must be one of auto, quality, scale.');
+  }
+
   return {
     json: args.get('json') === 'true',
+    mode,
     sizes,
   };
 }
@@ -61,7 +67,9 @@ import { GalaxyGraphVisualizer } from 'galaxy-nodes';
 import { generateGalaxyDataset } from 'galaxy-nodes-presets-initiatives-core';
 import 'galaxy-nodes/styles.css';
 
-const size = Number(new URLSearchParams(location.search).get('size') ?? '10000');
+const params = new URLSearchParams(location.search);
+const size = Number(params.get('size') ?? '10000');
+const renderMode = params.get('mode') ?? 'auto';
 const dataset = generateGalaxyDataset(size);
 document.documentElement.style.background = '#050608';
 document.body.style.margin = '0';
@@ -87,7 +95,7 @@ function tick(now) {
 requestAnimationFrame(tick);
 
 createRoot(document.getElementById('root')).render(
-  <GalaxyGraphVisualizer dataset={dataset} options={{ motionPreference: 'full' }} />,
+  <GalaxyGraphVisualizer dataset={dataset} options={{ motionPreference: 'full', renderMode }} />,
 );
 
 window.__galaxyPerf = {
@@ -163,7 +171,9 @@ async function run() {
   try {
     for (const size of args.sizes) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, reducedMotion: 'no-preference' });
-      await page.goto(`http://127.0.0.1:${address.port}/?size=${size}`, { waitUntil: 'networkidle' });
+      await page.goto(`http://127.0.0.1:${address.port}/?size=${size}&mode=${args.mode}`, {
+        waitUntil: 'networkidle',
+      });
       await page.waitForSelector('canvas, .scene-fallback', { timeout: 120_000 });
       await page.waitForTimeout(4_000);
       const sample = await page.evaluate(() => window.__galaxyPerf.sample());

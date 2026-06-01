@@ -219,6 +219,14 @@ export const EDGE_OPACITY_BASE = 0.075;
 export const EDGE_OPACITY_PER_WEIGHT = 0.1;
 export const EDGE_FILAMENT_VISUAL_SEGMENTS = 36;
 export const EDGE_VISUAL_SEGMENTS = 28;
+// Polyline segments per edge in scale (line) render mode. A sampled curve keeps the
+// galaxy arc while costing ~EDGE_LINE_SEGMENTS*2 vertices/edge instead of the ~1k a
+// tube needs, which is what makes large graphs (100k+ elements) fit in memory.
+export const EDGE_LINE_SEGMENTS = 10;
+// Switch the default ('auto') render mode from tube to line edges past this many total
+// elements (nodes + edges). Measured from scripts/browser-perf.mjs: heap and max-frame
+// stalls climb steeply beyond ~25k (359 MB / 583 ms at 25k -> 847 MB / 2433 ms at 100k).
+export const SCALE_RENDER_ELEMENT_THRESHOLD = 24000;
 export const EDGE_FILAMENT_HIT_SEGMENTS = 16;
 export const EDGE_HIT_SEGMENTS = 18;
 export const EDGE_FILAMENT_HIT_RADIUS = 10;

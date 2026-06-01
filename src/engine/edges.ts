@@ -70,6 +70,32 @@ export function createTubeGeometry(curve: THREE.Curve<THREE.Vector3>, segments: 
   return new THREE.TubeGeometry(curve, segments, radius, 6, false);
 }
 
+// Lightweight edge geometry for scale (line) mode: the curve sampled into a
+// LineSegments-compatible vertex pair list (a,b, b,c, ...). It carries the same
+// `position`/`normal` attributes the merged edge buffer expects (normals are zeroed
+// because the edge shader ignores them), so the existing range-writer can consume it
+// unchanged - only the vertex count drops from ~1k per edge to segments*2.
+export function createEdgeLineGeometry(curve: THREE.Curve<THREE.Vector3>, segments: number) {
+  const points = curve.getPoints(segments);
+  const segmentCount = Math.max(1, points.length - 1);
+  const positions = new Float32Array(segmentCount * 2 * 3);
+  for (let index = 0; index < segmentCount; index += 1) {
+    const a = points[index];
+    const b = points[index + 1];
+    const offset = index * 6;
+    positions[offset] = a.x;
+    positions[offset + 1] = a.y;
+    positions[offset + 2] = a.z;
+    positions[offset + 3] = b.x;
+    positions[offset + 4] = b.y;
+    positions[offset + 5] = b.z;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(positions.length), 3));
+  return geometry;
+}
+
 export function selectedEdgeLabelPosition<EMeta>(
   state: EdgeVisualState<EMeta>,
   accessors: ResolvedAccessors<unknown, EMeta>,

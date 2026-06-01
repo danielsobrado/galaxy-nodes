@@ -149,6 +149,39 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(getGalaxyRendererContextBudget().active).toBe(0);
   });
 
+  it('renders scale mode as a single LineSegments edge mesh with no per-edge hit proxies', async () => {
+    const mergedEdgeVisuals: THREE.Object3D[] = [];
+    const edgeHitProxies: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visuals') mergedEdgeVisuals.push(object);
+        if (object.userData.type === 'edge') edgeHitProxies.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    const onSceneFailure = vi.fn();
+    const { host } = await mountRenderer({ onSceneFailure }, { renderMode: 'scale' });
+
+    expect(onSceneFailure).not.toHaveBeenCalled();
+    expect(mergedEdgeVisuals).toHaveLength(1);
+    // Scale mode draws edges as lines and creates no per-edge raycast tubes.
+    expect(mergedEdgeVisuals[0]).toBeInstanceOf(THREE.LineSegments);
+    expect(edgeHitProxies).toHaveLength(0);
+
+    const canvas = getCanvas(host);
+    expect(canvas.width).toBeGreaterThan(0);
+
+    activeRenderer?.dispose();
+    activeRenderer = null;
+    expect(host.childElementCount).toBe(0);
+    expect(getGalaxyRendererContextBudget().active).toBe(0);
+  });
+
   it('appends streamed nodes and edges in place without rebuilding the scene', async () => {
     const onSceneReady = vi.fn();
     const { host } = await mountRenderer({ onSceneReady });
@@ -224,7 +257,7 @@ describe('createGalaxyRenderer in Chromium', () => {
   });
 });
 
-async function mountRenderer(callbacks = {}) {
+async function mountRenderer(callbacks = {}, optionsOverride: Partial<GalaxyRendererOptions> = {}) {
   restoreRandom = useDeterministicRandom();
   await page.viewport(960, 640);
   const wrapper = document.createElement('div');
@@ -240,7 +273,7 @@ async function mountRenderer(callbacks = {}) {
   wrapper.appendChild(host);
   document.body.appendChild(wrapper);
 
-  activeRenderer = createGalaxyRenderer(host, rendererOptions(), callbacks);
+  activeRenderer = createGalaxyRenderer(host, { ...rendererOptions(), ...optionsOverride }, callbacks);
   await vi.waitFor(() => expect(host.querySelector('canvas')).not.toBeNull(), { timeout: 5_000 });
   await waitForFrames(4);
   return { host, wrapper };

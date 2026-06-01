@@ -4,6 +4,7 @@ import type {
   GalaxyGraphTheme,
   GalaxyMotionPreference,
   GalaxyPlanetSizingOptions,
+  GalaxyRenderMode,
   GalaxySceneFailure,
   GalaxySceneProps,
 } from './GalaxyScene';
@@ -31,9 +32,13 @@ export interface GraphStats {
 export interface GalaxyGraphVisualizerOptions {
   accessibleSummaryLimit?: number;
   datasetSizes?: readonly number[];
+  /** Expected final element count (nodes + edges); picks the render tier up front for streamed data. */
+  expectedSize?: number;
   galaxyMode?: boolean;
   motionPreference?: GalaxyMotionPreference;
   planetSizing?: GalaxyPlanetSizingOptions;
+  /** Edge render tier: 'auto' (default), 'quality' (tube edges), or 'scale' (lightweight line edges). */
+  renderMode?: GalaxyRenderMode;
   showClusters?: boolean;
   showControls?: boolean;
   showDatasetSizeControls?: boolean;

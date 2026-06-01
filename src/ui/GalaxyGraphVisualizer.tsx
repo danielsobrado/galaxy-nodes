@@ -539,6 +539,8 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         paused={!playing}
         motionPreference={options?.motionPreference}
         planetSizing={options?.planetSizing}
+        expectedSize={options?.expectedSize}
+        renderMode={options?.renderMode}
         theme={theme}
         cameraCommand={cameraCommand}
         selectedNodeId={currentSelectedNodeId}
