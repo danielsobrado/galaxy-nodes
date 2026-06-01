@@ -1,0 +1,58 @@
+name: Bug report
+description: Report a reproducible Galaxy Nodes problem.
+title: '[Bug]: '
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. A small reproduction is the fastest path to a fix.
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      description: Which version of galaxy-nodes are you using?
+      placeholder: '0.1.0'
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Link to a repo, StackBlitz, or paste the smallest code/data sample that reproduces the issue.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include console errors when available.
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - React component
+        - Framework-neutral core
+        - Layout/data parsing
+        - Styling/theme
+        - Docs/demo
+        - Build/package
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Browser, OS, framework, and bundler versions.
+      placeholder: 'Chrome 125, Windows 11, React 19, Vite 8'
