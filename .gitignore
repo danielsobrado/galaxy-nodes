@@ -13,3 +13,5 @@ examples/next/out/
 *.log
 .DS_Store
 .history/
+pkg/
+

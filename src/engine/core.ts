@@ -96,8 +96,6 @@ import {
   FOCUS_DISTANCE_INNER,
   FOCUS_DISTANCE_OUTER,
   FOCUS_DISTANCE_DIM_FACTOR,
-  POINT_COLOR_LERP,
-  POINT_COLOR_BRIGHTEN,
   POINT_CAPACITY_GROWTH_FACTOR,
   POINT_CAPACITY_GROWTH_PAD,
   STAR_DISTANCE_MIN,
@@ -116,9 +114,7 @@ import {
   PLANET_RADIUS_FACTOR,
   NODE_IMAGE_SCALE_FACTOR,
   NODE_IMAGE_MIN_SCALE,
-  DIM_COLOR_LERP,
   DIM_COLOR_MULTIPLIER,
-  PLANET_COLOR_WHITEN,
   PLANET_SCALE_SELECTED,
   PLANET_SCALE_RELATED,
   PLANET_SCALE_SECOND_DEGREE,
@@ -136,29 +132,6 @@ import {
   RING_TILT_Y,
   MAJOR_LABEL_NODE_SIZE_FACTOR,
   MAJOR_LABEL_RADIUS_FACTOR,
-  MAJOR_LABEL_LIMIT_GROUPED,
-  MAJOR_LABEL_LIMIT_TOP,
-  MAJOR_LABEL_INTERVAL,
-  CLUSTER_LABEL_LIMIT_GROUPED,
-  CLUSTER_LABEL_INDEX_A,
-  CLUSTER_LABEL_INDEX_B,
-  MARKER_ATMOSPHERE_OPACITY_BASE,
-  MARKER_ATMOSPHERE_OPACITY_SPAN,
-  MARKER_CORE_OPACITY_BASE,
-  MARKER_CORE_OPACITY_SPAN,
-  MARKER_INNER_RING_OPACITY_BASE,
-  MARKER_INNER_RING_OPACITY_SPAN,
-  MARKER_OUTER_RING_OPACITY_BASE,
-  MARKER_OUTER_RING_OPACITY_SPAN,
-  MARKER_MIN_SCALE,
-  MARKER_ATMOSPHERE_SCALE,
-  MARKER_CORE_SCALE,
-  MARKER_INNER_RING_SCALE,
-  MARKER_OUTER_RING_SCALE,
-  HOVER_BALL_OPACITY,
-  HOVER_BALL_RADIUS_FACTOR,
-  HOVER_BALL_MIN_SCALE,
-  HOVER_BALL_MAX_SCALE,
   HOVER_BALL_SPIN,
   HIGHLIGHT_MARKER_SCALE_NEAR,
   HIGHLIGHT_MARKER_SCALE_FAR,
@@ -182,26 +155,7 @@ import {
   ENDPOINT_NODE_SIZE_FACTOR_MINOR,
   CLUSTER_ENDPOINT_MIN_RADIUS,
   CLUSTER_ENDPOINT_RADIUS_FACTOR,
-  EDGE_CURVE_DEFAULT_LIFT,
-  EDGE_CURVE_DISTANCE_LIFT,
   EDGE_MIDPOINT_LERP,
-  EDGE_FILAMENT_LIFT_GALAXY,
-  EDGE_FILAMENT_LIFT_DEFAULT,
-  EDGE_LIFT_BASE,
-  EDGE_LIFT_PER_WEIGHT,
-  EDGE_FILAMENT_RADIUS,
-  EDGE_RADIUS_BASE,
-  EDGE_RADIUS_PER_WEIGHT,
-  EDGE_FILAMENT_OPACITY_GALAXY,
-  EDGE_FILAMENT_OPACITY_DEFAULT,
-  EDGE_OPACITY_BASE,
-  EDGE_OPACITY_PER_WEIGHT,
-  EDGE_FILAMENT_VISUAL_SEGMENTS,
-  EDGE_VISUAL_SEGMENTS,
-  EDGE_FILAMENT_HIT_SEGMENTS,
-  EDGE_HIT_SEGMENTS,
-  EDGE_FILAMENT_HIT_RADIUS,
-  EDGE_HIT_RADIUS,
   EDGE_OPACITY_SELECTED_CAP,
   EDGE_OPACITY_SELECTED_BOOST,
   EDGE_OPACITY_HOVER_CAP,
@@ -226,24 +180,12 @@ import {
   HOVER_LABEL_MIN_HEIGHT,
   HOVER_LABEL_HEIGHT_FACTOR,
   WORLD_ROTATION_SPEED,
-  tmpProjected,
 } from './sceneConstants';
 import { dimColor, makeGlowTexture, makePlanetTexture, planetColor, pointCloudColor } from './materials';
-import { createTubeGeometry, curvedEdgeCurve, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
-import {
-  createEndpointMarker,
-  createHoverNodeMarker,
-  setHoverNodeMarkerVisible,
-  setMarkerColor,
-  setMarkerStrength,
-  setMarkerVisible,
-} from './markers';
+import { createTubeGeometry, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
+import { createEndpointMarker, createHoverNodeMarker, setHoverNodeMarkerVisible, setMarkerVisible } from './markers';
 import {
   edgeDisplayLabel,
-  firstStringValue,
-  formatRelationshipLabel,
-  isPlainRecord,
-  makeLabel,
   makeSceneLabel,
   nodeDisplayLabel,
   selectedEdgeDisplayLabel,
@@ -257,7 +199,6 @@ import type {
   EdgeVisualRange,
   EdgeVisualState,
   EndpointMarker,
-  HoverNodeMarker,
   SceneEdgeEndpoint,
   SceneLabel,
 } from './sceneTypes';
@@ -593,6 +534,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   // full-motion ambient animation is running. Starts true so the first frame paints.
   let needsRender = true;
   let hasActivePulse = false;
+  let bloomActive = false;
   let pulseTime = 0;
   let lastPulseTimestamp = performance.now();
   const graphLayout = resolveGraphLayout(dataset, layoutInput);
@@ -625,7 +567,12 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const bloomComposer = new EffectComposer(renderer);
   bloomComposer.renderToScreen = false;
   const bloomRenderPass = new RenderPass(scene, camera, null, new THREE.Color(0x000000), 1);
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), BLOOM_STRENGTH, BLOOM_RADIUS, BLOOM_THRESHOLD);
+  const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(width, height),
+    BLOOM_STRENGTH,
+    BLOOM_RADIUS,
+    BLOOM_THRESHOLD,
+  );
   bloomComposer.addPass(bloomRenderPass);
   bloomComposer.addPass(bloomPass);
 
@@ -655,40 +602,21 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     }),
     'baseTexture',
   );
+  const emptyBloomTexture = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+  emptyBloomTexture.needsUpdate = true;
   const outputPass = new AcesOutputPass();
   finalComposer.addPass(finalRenderPass);
   finalComposer.addPass(finalBloomPass);
   finalComposer.addPass(outputPass);
 
-  const darkMaterial = new THREE.MeshBasicMaterial({ color: 'black' });
-  const darkenedMaterials = new Map<string, { material: THREE.Material | THREE.Material[]; object: MaterialObject }>();
-
-  type MaterialObject = THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
+  let refreshBloomActive: (() => void) | null = null;
 
   function setBloomLayer(object: THREE.Object3D, enabled: boolean) {
     object.traverse((entry) => {
       if (enabled) entry.layers.enable(BLOOM_LAYER);
       else entry.layers.disable(BLOOM_LAYER);
     });
-  }
-
-  function darkenNonBloom() {
-    scene.traverse((object) => {
-      const materialObject = object as MaterialObject;
-      if (object.layers.isEnabled(BLOOM_LAYER) || !materialObject.material) return;
-
-      darkenedMaterials.set(object.uuid, { material: materialObject.material, object: materialObject });
-      materialObject.material = Array.isArray(materialObject.material)
-        ? materialObject.material.map(() => darkMaterial)
-        : darkMaterial;
-    });
-  }
-
-  function restoreMaterials() {
-    darkenedMaterials.forEach(({ material, object }) => {
-      object.material = material;
-    });
-    darkenedMaterials.clear();
+    refreshBloomActive?.();
   }
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -1031,7 +959,11 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
     const label = makeSceneLabel(labelsRoot, 'cluster-label');
     labels.push(label);
-    label.position.set(cluster.center.x, cluster.center.y + cluster.radius * CLUSTER_LABEL_HEIGHT_FACTOR, cluster.center.z);
+    label.position.set(
+      cluster.center.x,
+      cluster.center.y + cluster.radius * CLUSTER_LABEL_HEIGHT_FACTOR,
+      cluster.center.z,
+    );
 
     return {
       group: cluster.group,
@@ -1590,7 +1522,12 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     replaceEdgeVisualAttributes();
   }
 
-  function writeEdgeVisualRange(range: EdgeVisualRange, geometry: THREE.BufferGeometry, color: THREE.Color, baseOpacity: number) {
+  function writeEdgeVisualRange(
+    range: EdgeVisualRange,
+    geometry: THREE.BufferGeometry,
+    color: THREE.Color,
+    baseOpacity: number,
+  ) {
     const sourcePosition = geometry.getAttribute('position');
     const sourceNormal = geometry.getAttribute('normal');
     if (!sourcePosition || !sourceNormal) return;
@@ -1774,7 +1711,10 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   // streamed chunk never rebuilds the whole point cloud.
   function growPointBuffers(prevCount: number, nextCount: number) {
     if (nextCount > pointCapacity) {
-      const nextCapacity = Math.max(nextCount, Math.ceil(pointCapacity * POINT_CAPACITY_GROWTH_FACTOR) + POINT_CAPACITY_GROWTH_PAD);
+      const nextCapacity = Math.max(
+        nextCount,
+        Math.ceil(pointCapacity * POINT_CAPACITY_GROWTH_FACTOR) + POINT_CAPACITY_GROWTH_PAD,
+      );
       const grow = (source: Float32Array, stride: number) => {
         const next = new Float32Array(nextCapacity * stride);
         next.set(source.subarray(0, prevCount * stride));
@@ -1886,6 +1826,13 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   edgeBloomBatch.layers.set(BLOOM_LAYER);
   world.add(edgeBloomBatch);
   let edgeBloomGeometry: THREE.BufferGeometry | null = null;
+  refreshBloomActive = () => {
+    bloomActive =
+      edgeBloomBatch.visible ||
+      hoverNodeMarker.group.visible ||
+      endpointMarkers.some((marker) => marker.group.visible) ||
+      nodeHighlightMarkers.some(({ marker }) => marker.group.visible);
+  };
 
   function appendEdgeBloomGeometry(
     positions: number[],
@@ -1922,13 +1869,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
             ? (theme?.panelAccentColor ?? '#46f4bc')
             : accessors.edgeColor(state.edge),
       );
-      appendEdgeBloomGeometry(
-        positions,
-        colors,
-        state,
-        color,
-        hovered ? HOVER_EDGE_RADIUS_FACTOR : 1.25,
-      );
+      appendEdgeBloomGeometry(positions, colors, state, color, hovered ? HOVER_EDGE_RADIUS_FACTOR : 1.25);
     });
 
     edgeBloomGeometry?.dispose();
@@ -1936,6 +1877,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       edgeBloomGeometry = null;
       edgeBloomBatch.geometry = edgeBloomEmptyGeometry;
       edgeBloomBatch.visible = false;
+      refreshBloomActive?.();
       return;
     }
 
@@ -1945,6 +1887,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeBloomGeometry.computeBoundingSphere();
     edgeBloomBatch.geometry = edgeBloomGeometry;
     edgeBloomBatch.visible = true;
+    refreshBloomActive?.();
   }
 
   function applyEdgeAppearance() {
@@ -1998,7 +1941,9 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const secondaryEndpoint = selectedEndpoints?.target ?? null;
     pointsMaterial.uniforms.globalOpacity.value = hasSelection ? SELECTION_POINT_OPACITY : 1;
     const focusPosition = selectedEndpoints
-      ? selectionFocusPosition.copy(selectedEndpoints.source.position).lerp(selectedEndpoints.target.position, EDGE_MIDPOINT_LERP)
+      ? selectionFocusPosition
+          .copy(selectedEndpoints.source.position)
+          .lerp(selectedEndpoints.target.position, EDGE_MIDPOINT_LERP)
       : (selectedNodeEndpoint?.position ?? null);
     applyFocusState(hasSelection, focusPosition);
 
@@ -2267,13 +2212,15 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const target = new THREE.Vector3(position.x, position.y, position.z).applyQuaternion(world.quaternion);
     const nodeSize = Math.max(accessors.nodeSize(node), planetRadius(node));
     controls.target.copy(target);
-    camera.position.copy(target).add(
-      new THREE.Vector3(
-        nodeSize * FOCUS_NODE_OFFSET_X_SCALE + FOCUS_NODE_OFFSET_X_BASE,
-        nodeSize * FOCUS_NODE_OFFSET_Y_SCALE + FOCUS_NODE_OFFSET_Y_BASE,
-        nodeSize * FOCUS_NODE_OFFSET_Z_SCALE + FOCUS_NODE_OFFSET_Z_BASE,
-      ),
-    );
+    camera.position
+      .copy(target)
+      .add(
+        new THREE.Vector3(
+          nodeSize * FOCUS_NODE_OFFSET_X_SCALE + FOCUS_NODE_OFFSET_X_BASE,
+          nodeSize * FOCUS_NODE_OFFSET_Y_SCALE + FOCUS_NODE_OFFSET_Y_BASE,
+          nodeSize * FOCUS_NODE_OFFSET_Z_SCALE + FOCUS_NODE_OFFSET_Z_BASE,
+        ),
+      );
     controls.update();
     emitCameraView();
   }
@@ -2287,13 +2234,15 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const midpoint = sourcePosition.clone().lerp(targetPosition, EDGE_MIDPOINT_LERP);
     const distance = Math.max(FOCUS_EDGE_MIN_DISTANCE, sourcePosition.distanceTo(targetPosition));
     controls.target.copy(midpoint);
-    camera.position.copy(midpoint).add(
-      new THREE.Vector3(
-        distance * FOCUS_EDGE_OFFSET_XY_SCALE + FOCUS_EDGE_OFFSET_X_BASE,
-        distance * FOCUS_EDGE_OFFSET_XY_SCALE + FOCUS_EDGE_OFFSET_Y_BASE,
-        distance * FOCUS_EDGE_OFFSET_Z_SCALE + FOCUS_EDGE_OFFSET_Z_BASE,
-      ),
-    );
+    camera.position
+      .copy(midpoint)
+      .add(
+        new THREE.Vector3(
+          distance * FOCUS_EDGE_OFFSET_XY_SCALE + FOCUS_EDGE_OFFSET_X_BASE,
+          distance * FOCUS_EDGE_OFFSET_XY_SCALE + FOCUS_EDGE_OFFSET_Y_BASE,
+          distance * FOCUS_EDGE_OFFSET_Z_SCALE + FOCUS_EDGE_OFFSET_Z_BASE,
+        ),
+      );
     controls.update();
     emitCameraView();
   }
@@ -2432,13 +2381,13 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       });
     }
 
-    camera.layers.set(BLOOM_LAYER);
-    darkenNonBloom();
-    try {
+    if (bloomActive) {
+      camera.layers.set(BLOOM_LAYER);
       bloomComposer.render();
-    } finally {
-      restoreMaterials();
       camera.layers.set(0);
+      finalBloomPass.uniforms!.bloomTexture.value = bloomComposer.renderTarget2.texture;
+    } else {
+      finalBloomPass.uniforms!.bloomTexture.value = emptyBloomTexture;
     }
     finalComposer.render();
   }
@@ -2485,7 +2434,6 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
       controls.removeEventListener('change', emitCameraView);
       controls.dispose();
-      restoreMaterials();
       scene.traverse((object) => {
         const mesh = object as THREE.Mesh;
         if (mesh.geometry) mesh.geometry.dispose();
@@ -2503,7 +2451,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       outputPass.dispose();
       bloomComposer.dispose();
       finalComposer.dispose();
-      darkMaterial.dispose();
+      emptyBloomTexture.dispose();
       renderer.dispose();
       renderer.domElement.remove();
       labelsRoot.remove();
@@ -2821,7 +2769,12 @@ export {
 } from '../domain/data';
 export type { MergeGraphDatasetOptions, ParsedGraphDataset } from '../domain/data';
 export { resolveGraphLayout } from '../domain/layout';
-export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from '../domain/layout';
+export type {
+  GraphLayoutInput,
+  GraphLayoutOptions,
+  ResolvedGraphLayout,
+  ResolvedLayoutCluster,
+} from '../domain/layout';
 export type { PlanetSizingMode } from './sceneData';
 export type {
   EdgeEndpoint,

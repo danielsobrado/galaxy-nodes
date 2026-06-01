@@ -15,6 +15,7 @@ export default tseslint.config(
       'examples/next/.next/',
       'examples/next/out/',
       'node_modules/',
+      'pkg/',
       'temp/',
       '*.tsbuildinfo',
       'demo/memgraph/api/',

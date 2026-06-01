@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import type { GraphEdge } from '../domain/types';
 
 export interface SceneEdgeEndpoint {
