@@ -35,6 +35,18 @@ const DEFAULT_EDGE_COLOR = '#6bd7ff';
 const FILAMENT_EDGE_COLOR = '#aeb8c2';
 export const DEFAULT_GRAPH_EDGE_BUDGET = 12_000;
 
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function positiveFiniteOrDefault(value: number | undefined, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function unitFiniteOrDefault(value: number | undefined, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value) ? clamp(value, 0, 1) : fallback;
+}
+
 function hashString(value: string) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -51,7 +63,7 @@ export function defaultNodeColor(node: GraphNode): string {
 }
 
 export function defaultNodeSize(node: GraphNode): number {
-  return node.size ?? 1;
+  return positiveFiniteOrDefault(node.size, 1);
 }
 
 export function defaultNodeLabel(node: GraphNode): string | null {
@@ -72,7 +84,7 @@ export function defaultEdgeColor(edge: GraphEdge): string {
 }
 
 export function defaultEdgeWeight(edge: GraphEdge): number {
-  return edge.weight ?? 0.5;
+  return unitFiniteOrDefault(edge.weight, 0.5);
 }
 
 export function defaultEdgeLabel(edge: GraphEdge): string | null {
@@ -127,6 +139,14 @@ function readOptionalPositiveNumber(record: Record<string, unknown>, key: string
   return value;
 }
 
+function readOptionalUnitNumber(record: Record<string, unknown>, key: string, path: string) {
+  const value = readOptionalNumber(record, key, path);
+  if (value !== undefined && (value < 0 || value > 1)) {
+    throw new Error(`${path}.${key} must be between 0 and 1 when provided.`);
+  }
+  return value;
+}
+
 function readOptionalBoolean(record: Record<string, unknown>, key: string, path: string) {
   const value = record[key];
   if (value === undefined) return undefined;
@@ -165,7 +185,7 @@ function parseNode<TMeta = unknown>(value: unknown, index: number): GraphNode<TM
   if (name !== undefined) node.name = name;
   const type = readOptionalString(value, 'type', path);
   if (type !== undefined) node.type = type;
-  const size = readOptionalNumber(value, 'size', path);
+  const size = readOptionalPositiveNumber(value, 'size', path);
   if (size !== undefined) node.size = size;
   const major = readOptionalBoolean(value, 'major', path);
   if (major !== undefined) node.major = major;
@@ -199,7 +219,7 @@ function parseEdge<TMeta = unknown>(value: unknown, index: number): GraphEdge<TM
   if (name !== undefined) edge.name = name;
   const type = readOptionalString(value, 'type', path);
   if (type !== undefined) edge.type = type;
-  const weight = readOptionalNumber(value, 'weight', path);
+  const weight = readOptionalUnitNumber(value, 'weight', path);
   if (weight !== undefined) edge.weight = weight;
   const kind = readOptionalString(value, 'kind', path);
   if (kind !== undefined) edge.kind = kind;
@@ -280,15 +300,21 @@ function edgeMergeKey(edge: GraphEdge) {
   return edge.id ?? `${edge.kind ?? 'edge'}:${edge.source}->${edge.target}`;
 }
 
-function trimEdges<EMeta>(edges: GraphEdge<EMeta>[], edgeBudget: number) {
-  if (edgeBudget <= 0) return [];
-  if (edges.length <= edgeBudget) return edges;
+function normalizeEdgeBudget(edgeBudget: number) {
+  if (!Number.isFinite(edgeBudget)) return DEFAULT_GRAPH_EDGE_BUDGET;
+  return Math.max(0, Math.floor(edgeBudget));
+}
 
-  const filaments = edges.filter((edge) => edge.kind === 'filament').slice(0, edgeBudget);
-  const relationshipBudget = Math.max(0, edgeBudget - filaments.length);
+function trimEdges<EMeta>(edges: GraphEdge<EMeta>[], edgeBudget: number) {
+  const limit = normalizeEdgeBudget(edgeBudget);
+  if (limit <= 0) return [];
+  if (edges.length <= limit) return edges;
+
+  const filaments = edges.filter((edge) => edge.kind === 'filament').slice(0, limit);
+  const relationshipBudget = Math.max(0, limit - filaments.length);
   const relationships = edges
     .filter((edge) => edge.kind !== 'filament')
-    .sort((left, right) => (right.weight ?? 0.5) - (left.weight ?? 0.5))
+    .sort((left, right) => defaultEdgeWeight(right) - defaultEdgeWeight(left))
     .slice(0, relationshipBudget);
 
   return [...filaments, ...relationships];

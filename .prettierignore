@@ -1,5 +1,6 @@
 dist/
 docs/api/
+docs/demo/assets/
 coverage/
 temp/
 etc/*.api.md

@@ -145,9 +145,20 @@ describe('createGalaxyRenderer in Chromium', () => {
       ...dataset,
       nodes: [
         ...dataset.nodes,
-        { id: 'delta', label: 'Delta', group: 'core', major: true, color: '#c9a6ff', size: 10, position: { x: 120, y: -140, z: 180 } },
+        {
+          id: 'delta',
+          label: 'Delta',
+          group: 'core',
+          major: true,
+          color: '#c9a6ff',
+          size: 10,
+          position: { x: 120, y: -140, z: 180 },
+        },
       ],
-      edges: [...dataset.edges, { id: 'links', source: 'hub', target: 'delta', label: 'links', weight: 0.7, color: '#c9a6ff' }],
+      edges: [
+        ...dataset.edges,
+        { id: 'links', source: 'hub', target: 'delta', label: 'links', weight: 0.7, color: '#c9a6ff' },
+      ],
     };
 
     activeRenderer?.update({ ...rendererOptions(), dataset: appended });

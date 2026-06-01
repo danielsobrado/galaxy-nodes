@@ -135,17 +135,16 @@ interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
 }
 
 function withContextReservation<NMeta, EMeta>(runtime: SceneRuntime<NMeta, EMeta>, release: () => void) {
-  let released = false;
+  let disposed = false;
   return {
     ...runtime,
     dispose: () => {
+      if (disposed) return;
+      disposed = true;
       try {
         runtime.dispose();
       } finally {
-        if (!released) {
-          released = true;
-          release();
-        }
+        release();
       }
     },
   };
@@ -718,6 +717,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   let theme = initialTheme;
   let accessors = resolveAccessors(accessorsInput);
   let planetSizing = resolvePlanetSizing(planetSizingInput);
+  let sceneDisposed = false;
   // Render-on-demand flag. The animation loop only submits a frame when something
   // actually changed (camera moved, hover/selection updated, data appended), unless
   // full-motion ambient animation is running. Starts true so the first frame paints.
@@ -1776,6 +1776,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   function updatePlanetSizing(nextPlanetSizing: GalaxyPlanetSizingOptions | undefined) {
     planetSizing = resolvePlanetSizing(nextPlanetSizing);
+    updatePointAppearance();
     updateEdges();
     updateSelection(selectedNodeId, selectedEdgeId);
     updateHoverHighlight();
@@ -2032,6 +2033,13 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host.addEventListener('keydown', handleKeyDown);
   host.addEventListener('keyup', handleKeyUp);
   window.addEventListener('resize', resize);
+  const resizeObserver =
+    typeof ResizeObserver === 'function'
+      ? new ResizeObserver(() => {
+          resize();
+        })
+      : null;
+  resizeObserver?.observe(host);
   emitCameraView();
 
   function animate() {
@@ -2126,8 +2134,11 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updateTheme: wake(updateTheme),
     appendDataset: wake(appendDataset),
     dispose: () => {
+      if (sceneDisposed) return;
+      sceneDisposed = true;
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
+      resizeObserver?.disconnect();
       host.removeEventListener('keydown', handleKeyDown);
       host.removeEventListener('keyup', handleKeyUp);
       renderer.domElement.removeEventListener('pointermove', handlePointerMove);
@@ -2212,10 +2223,13 @@ function reportRendererFailure<NMeta = unknown, EMeta = unknown, CMeta = unknown
   error?: unknown,
 ) {
   const nextFailure: GalaxySceneFailure = { reason, message, error };
-  state.runtime?.dispose();
-  state.runtime = null;
-  clearSceneDom(host as HTMLDivElement);
-  state.callbacks.onSceneFailure?.(nextFailure);
+  try {
+    state.runtime?.dispose();
+  } finally {
+    state.runtime = null;
+    clearSceneDom(host as HTMLDivElement);
+    state.callbacks.onSceneFailure?.(nextFailure);
+  }
 }
 
 function configureMotion<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: CoreState<NMeta, EMeta, CMeta>) {
@@ -2434,6 +2448,7 @@ export function createGalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = u
       patchRuntime(state);
     },
     dispose: () => {
+      if (state.disposed) return;
       state.disposed = true;
       state.motionCleanup?.();
       state.motionCleanup = null;

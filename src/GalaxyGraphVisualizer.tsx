@@ -474,6 +474,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [liveMessage, setLiveMessage] = useState('');
   const expansionAbortRef = useRef<AbortController | null>(null);
   const cameraViewRef = useRef<GalaxyCameraView | null>(null);
+  const cameraCommandNonceRef = useRef(0);
   const accessibleSummaryId = useId();
   const chromeLabels = useMemo(() => ({ ...DEFAULT_GALAXY_GRAPH_LABELS, ...labels }), [labels]);
 
@@ -497,6 +498,13 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     setExpandError(null);
     setExpanding(false);
   }, [dataset, edgeBudget, largeGraphEnabled]);
+
+  useEffect(() => {
+    return () => {
+      expansionAbortRef.current?.abort();
+      expansionAbortRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (options?.showClusters !== undefined) setShowClusters(options.showClusters);
@@ -599,7 +607,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   const issueCameraCommand = useCallback(
     (command: Omit<CameraCommand, 'nonce'>) => {
-      const nextCommand = { ...command, nonce: Date.now() } as CameraCommand;
+      const nextCommand = { ...command, nonce: (cameraCommandNonceRef.current += 1) } as CameraCommand;
       setCameraCommand(nextCommand);
       onNavigate?.(nextCommand);
     },

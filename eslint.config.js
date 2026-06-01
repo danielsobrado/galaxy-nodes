@@ -10,6 +10,7 @@ export default tseslint.config(
       'dist/',
       '.site/',
       'docs/api/',
+      'docs/demo/assets/',
       'examples/basic/dist/',
       'examples/next/.next/',
       'examples/next/out/',
