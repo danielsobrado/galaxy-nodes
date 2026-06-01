@@ -1,4 +1,5 @@
 import { page, commands, userEvent } from '@vitest/browser/context';
+import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createGalaxyRenderer,
@@ -78,6 +79,7 @@ afterEach(() => {
   activeRenderer = null;
   restoreRandom?.();
   restoreRandom = null;
+  vi.restoreAllMocks();
   document.body.innerHTML = '';
 });
 
@@ -88,6 +90,19 @@ describe('createGalaxyRenderer in Chromium', () => {
     const onSelectEdge = vi.fn();
     const onSceneReady = vi.fn();
     const onSceneFailure = vi.fn();
+    const addedMergedEdgeVisuals: THREE.Object3D[] = [];
+    const addedPerEdgeVisuals: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visuals') addedMergedEdgeVisuals.push(object);
+        if (object.userData.edgeId && object.userData.type !== 'edge') addedPerEdgeVisuals.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
     const { host } = await mountRenderer({
       onHoverNode,
       onSceneReady,
@@ -101,6 +116,8 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(canvas.height).toBeGreaterThan(0);
     expect(host.querySelector('.scene-labels')).not.toBeNull();
     expect(host.querySelectorAll('.node-label').length).toBeGreaterThanOrEqual(dataset.nodes.length);
+    expect(addedMergedEdgeVisuals).toHaveLength(1);
+    expect(addedPerEdgeVisuals).toHaveLength(0);
     expect(onSceneReady).toHaveBeenCalledTimes(1);
     expect(onSceneFailure).not.toHaveBeenCalled();
     expect(getGalaxyRendererContextBudget().active).toBe(1);

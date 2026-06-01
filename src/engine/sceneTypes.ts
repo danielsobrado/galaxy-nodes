@@ -15,13 +15,21 @@ export interface EdgeEndpoints {
   target: SceneEdgeEndpoint;
 }
 
+export interface EdgeVisualRange {
+  count: number;
+  start: number;
+}
+
 export interface EdgeVisualState<EMeta = unknown> {
+  appearanceKey: string;
+  baseOpacity: number;
   edge: GraphEdge<EMeta>;
   endpoints: EdgeEndpoints;
   geometryKey: string;
   hit: THREE.Mesh;
   id: string;
-  visual: THREE.Mesh;
+  visible: boolean;
+  visualRange: EdgeVisualRange | null;
 }
 
 export interface EndpointMarker {

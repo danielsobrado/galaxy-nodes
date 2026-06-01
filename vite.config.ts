@@ -17,7 +17,18 @@ export default defineConfig({
       fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : 'cjs'}`,
     },
     rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime', 'three', 'three/examples/jsm/controls/OrbitControls.js'],
+      external: [
+        'react',
+        'react-dom',
+        'react/jsx-runtime',
+        'three',
+        'three/examples/jsm/controls/OrbitControls.js',
+        'three/examples/jsm/postprocessing/EffectComposer.js',
+        'three/examples/jsm/postprocessing/RenderPass.js',
+        'three/examples/jsm/postprocessing/UnrealBloomPass.js',
+        'three/examples/jsm/postprocessing/ShaderPass.js',
+        'three/examples/jsm/postprocessing/OutputPass.js',
+      ],
     },
   },
 });

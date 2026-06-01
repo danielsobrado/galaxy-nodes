@@ -21,6 +21,11 @@ export const CAMERA_MOVE_DISTANCE = 80;
 export const MAX_PIXEL_RATIO = 1.75;
 // ACES tone-mapping exposure; >1 lifts the additive glow without clipping highlights.
 export const TONE_MAPPING_EXPOSURE = 1.1;
+export const BLOOM_LAYER = 1;
+export const BLOOM_STRENGTH = 0.7;
+export const BLOOM_RADIUS = 0.35;
+// Layer-gated bloom only renders selected highlight objects, so no luminance cutoff is needed.
+export const BLOOM_THRESHOLD = 0.0;
 // Exponential fog density. Galaxy mode fogs harder so distant arms dissolve into the void.
 export const FOG_DENSITY_GALAXY = 0.00068;
 export const FOG_DENSITY_DEFAULT = 0.00042;
@@ -63,6 +68,14 @@ export const POINT_SECOND_DEGREE_TINT = 0.6;
 export const POINT_UNRELATED_DIM = 0.48;
 // Whole point-cloud opacity while a selection is active, so the selection stands out.
 export const SELECTION_POINT_OPACITY = 0.28;
+// Focus-mode dimming applied once when selection changes.
+export const FOCUS_STAR_DIM_FACTOR = 0.36;
+export const FOCUS_CLUSTER_DIM_FACTOR = 0.42;
+export const FOCUS_FOG_DENSITY_MULTIPLIER = 1.18;
+// Distance focus around the selected node/edge, in graph-space units.
+export const FOCUS_DISTANCE_INNER = 190;
+export const FOCUS_DISTANCE_OUTER = 760;
+export const FOCUS_DISTANCE_DIM_FACTOR = 0.38;
 // Point base color treatment: lerp toward the off-white tint, then a slight brighten.
 export const POINT_COLOR_LERP = 0.12;
 export const POINT_COLOR_BRIGHTEN = 1.02;
