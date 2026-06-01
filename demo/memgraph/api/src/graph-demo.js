@@ -1,4 +1,4 @@
-// NOTE: This is a standalone copy of the generator in ../../../../src/presets/markets-core.ts,
+// NOTE: This is a standalone copy of the generator in ../../../../src/presets/initiatives/core.ts,
 // kept self-contained so the demo container has no dependency on the library
 // source. It uses different cluster/major-node constants on purpose (smaller,
 // seed-oriented dataset). Keep the GraphDataset shape in sync if the library's
@@ -85,6 +85,12 @@ function relationshipKind(rand) {
   return 'signal';
 }
 
+function assertGraphCount(count) {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error('Demo graph node count must be a positive integer.');
+  }
+}
+
 function buildClusters(count, rand) {
   const clusterCount = Math.max(12, Math.min(28, Math.round(count / 450)));
   const arms = 4;
@@ -120,6 +126,7 @@ function makeNodeLabel(index, category, rand) {
 }
 
 export function generateDemoGraph(count = 8000) {
+  assertGraphCount(count);
   const rand = mulberry32(count * 97 + 42);
   const clusters = buildClusters(count, rand);
   const nodes = [];

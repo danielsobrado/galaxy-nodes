@@ -5,12 +5,7 @@ import {
   type InitiativeAccessorOptions,
 } from './initiatives/core';
 
-export {
-  CATEGORY_COLORS,
-  DATASET_SIZES,
-  generateGalaxyDataset,
-  INITIATIVE_CATEGORIES,
-} from './initiatives/core';
+export { CATEGORY_COLORS, DATASET_SIZES, generateGalaxyDataset, INITIATIVE_CATEGORIES } from './initiatives/core';
 export type {
   DatasetSize,
   InitiativeCategory as Category,

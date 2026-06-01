@@ -207,8 +207,15 @@ function relationshipKind(rand: () => number) {
   return 'signal';
 }
 
+function assertDatasetCount(count: number) {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error('Galaxy initiative dataset size must be a positive integer.');
+  }
+}
+
 /** Generate a deterministic, seeded galaxy of corporate initiatives. */
 export function generateGalaxyDataset(count: DatasetSize | number = 75_000): InitiativeDataset {
+  assertDatasetCount(count);
   const rand = mulberry32(count * 97 + 42);
   const builds = buildClusters(count, rand);
   const nodes: InitiativeNode[] = [];
@@ -331,9 +338,7 @@ function nodeMeta(node: GraphNode<InitiativeNodeMeta> | null): InitiativeNodeMet
  * result to avoid redundant buffer refreshes on parent renders. The accessors
  * read the generic `node.meta` payload, so they plug straight into the engine.
  */
-export function createInitiativeAccessors(
-  options: InitiativeAccessorOptions = {},
-): GraphAccessors<InitiativeNodeMeta> {
+export function createInitiativeAccessors(options: InitiativeAccessorOptions = {}): GraphAccessors<InitiativeNodeMeta> {
   const sharpMoney = options.sharpMoney ?? true;
 
   return {

@@ -8,7 +8,7 @@ const port = Number(process.env.PORT ?? 8787);
 app.use(cors());
 
 // Emits the generic galaxy-nodes shape: structural fields at the top level and
-// the domain payload under `meta`, matching the corporate demo preset's MarketNodeMeta.
+// the domain payload under `meta`, matching the corporate demo preset's InitiativeNodeMeta.
 function toNumber(value) {
   return typeof value?.toNumber === 'function' ? value.toNumber() : Number(value);
 }
@@ -138,7 +138,7 @@ app.get('/health', async (_request, response) => {
 });
 
 app.get('/graph', async (request, response) => {
-  const limit = Math.max(1, Math.min(Number(request.query.limit ?? 100000), 100000));
+  const limit = readInt(request.query.limit, 100000, 100000);
   const category = typeof request.query.category === 'string' ? request.query.category : 'All';
   const session = driver.session();
 

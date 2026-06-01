@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   defaultEdgeColor,
+  defaultEdgeLabel,
   defaultEdgeWeight,
   defaultNodeColor,
   defaultNodeImage,
@@ -52,6 +53,8 @@ describe('parseGraphDataset', () => {
           id: 'a',
           position: { x: 0, y: 0, z: 0 },
           label: 'A',
+          name: 'Node A',
+          type: 'service',
           size: 4,
           major: true,
           group: 'g',
@@ -65,6 +68,8 @@ describe('parseGraphDataset', () => {
     });
     expect(parsed.nodes[0]).toMatchObject({
       label: 'A',
+      name: 'Node A',
+      type: 'service',
       size: 4,
       major: true,
       group: 'g',
@@ -102,6 +107,20 @@ describe('parseGraphDataset', () => {
     expect(() => parseGraphDataset({ nodes: [], edges: [{ source: 'a' }], clusters: [] })).toThrow(
       /edges\[0\]\.target/,
     );
+  });
+
+  it('keeps optional relationship display fields when present', () => {
+    const parsed = parseGraphDataset({
+      nodes: [],
+      edges: [{ source: 'a', target: 'b', label: 'Pipeline coverage', name: 'Coverage link', type: 'impacts' }],
+      clusters: [],
+    });
+
+    expect(parsed.edges[0]).toMatchObject({
+      label: 'Pipeline coverage',
+      name: 'Coverage link',
+      type: 'impacts',
+    });
   });
 
   it('defaults generatedAt when absent', () => {
@@ -143,11 +162,18 @@ describe('default accessors', () => {
     expect(defaultNodeSize(sampleNode({ size: 7 }))).toBe(7);
     expect(defaultNodeLabel(sampleNode())).toBeNull();
     expect(defaultNodeLabel(sampleNode({ label: 'hi' }))).toBe('hi');
+    expect(defaultNodeLabel(sampleNode({ name: 'Name fallback' }))).toBe('Name fallback');
+    expect(defaultNodeLabel(sampleNode({ type: 'Type fallback' }))).toBe('Type fallback');
     expect(defaultNodeImage(sampleNode())).toBeNull();
     expect(defaultNodeImage(sampleNode({ image: '/a.png' }))).toBe('/a.png');
     expect(defaultNodeRing(sampleNode())).toBe(false);
     expect(defaultNodeRing(sampleNode({ ring: true }))).toBe(true);
     expect(defaultEdgeWeight({ source: 'a', target: 'b' })).toBe(0.5);
+    expect(defaultEdgeLabel({ source: 'a', target: 'b', label: 'Label' })).toBe('Label');
+    expect(defaultEdgeLabel({ source: 'a', target: 'b', name: 'Name' })).toBe('Name');
+    expect(defaultEdgeLabel({ source: 'a', target: 'b', type: 'Type' })).toBe('Type');
+    expect(defaultEdgeLabel({ source: 'a', target: 'b', kind: 'depends_on' })).toBe('depends_on');
+    expect(defaultEdgeLabel({ source: 'a', target: 'b', id: 'edge-major-5' })).toBeNull();
   });
 
   it('colors filament edges differently from relationships', () => {
@@ -163,6 +189,7 @@ describe('default accessors', () => {
     expect(resolved.nodeImage(sampleNode({ image: '/image.png' }))).toBe('/image.png');
     expect(resolved.nodeRing(sampleNode({ ring: true }))).toBe(true);
     expect(typeof resolved.edgeColor({ source: 'a', target: 'b' })).toBe('string');
+    expect(resolved.edgeLabel({ source: 'a', target: 'b', name: 'custom edge' })).toBe('custom edge');
   });
 });
 
@@ -234,6 +261,21 @@ describe('mergeGraphDataset', () => {
     }));
 
     expect(mergeGraphDataset({ nodes: [], edges }, {}).edges).toHaveLength(DEFAULT_GRAPH_EDGE_BUDGET);
+  });
+
+  it('keeps filament-only graphs inside the edge budget', () => {
+    const edges = Array.from({ length: 5 }, (_, index) => ({
+      id: `filament-${index}`,
+      source: `cluster-${index}`,
+      target: `cluster-${index + 1}`,
+      kind: 'filament',
+    }));
+
+    expect(mergeGraphDataset({ nodes: [], edges }, {}, { edgeBudget: 3 }).edges.map((edge) => edge.id)).toEqual([
+      'filament-0',
+      'filament-1',
+      'filament-2',
+    ]);
   });
 });
 

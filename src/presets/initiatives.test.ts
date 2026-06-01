@@ -16,6 +16,11 @@ describe('generateGalaxyDataset', () => {
     expect(generateGalaxyDataset(10_000).nodes).toHaveLength(10_000);
   });
 
+  it('rejects invalid custom dataset sizes', () => {
+    expect(() => generateGalaxyDataset(0)).toThrow(/positive integer/);
+    expect(() => generateGalaxyDataset(10.5)).toThrow(/positive integer/);
+  });
+
   it('is deterministic for a given size (ignoring the timestamp)', () => {
     const first = generateGalaxyDataset(10_000);
     const second = generateGalaxyDataset(10_000);
