@@ -1,22 +1,32 @@
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
-const siteDir = '.site';
+const siteDir = process.argv[2] ?? process.env.SITE_DIR ?? '.site';
 const demoSource = 'examples/basic/dist';
 const demoTarget = path.join(siteDir, 'demo');
 const apiSource = 'docs/api';
 const apiTarget = path.join(siteDir, 'api');
+const isDocsMode = path.resolve(siteDir) === path.resolve('docs');
 
 if (!existsSync(demoSource)) {
   throw new Error(`Missing ${demoSource}. Run npm run build:example first.`);
 }
 
 await mkdir(siteDir, { recursive: true });
+await rm(demoTarget, { recursive: true, force: true });
+if (!isDocsMode) {
+  await rm(apiTarget, { recursive: true, force: true });
+}
+await rm(path.join(siteDir, 'index.html'), { force: true });
+await rm(path.join(siteDir, '.nojekyll'), { force: true });
+
 await cp(demoSource, demoTarget, { recursive: true });
 
-if (!existsSync(path.join(apiTarget, 'index.html')) && existsSync(path.join(apiSource, 'index.html'))) {
-  await cp(apiSource, apiTarget, { recursive: true });
+if (existsSync(path.join(apiSource, 'index.html'))) {
+  if (!isDocsMode) {
+    await cp(apiSource, apiTarget, { recursive: true });
+  }
 }
 
 await writeFile(

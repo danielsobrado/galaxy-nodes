@@ -37,6 +37,44 @@ function graphApiHeaders(token: string | undefined, headers?: HeadersInit): Head
   return nextHeaders;
 }
 
+const STREAM_CHUNK_NODES = 28;
+
+// Self-contained stand-in for a streaming backend: synthesize one progressive chunk of
+// new initiatives anchored to an existing node and returned as a patch. The library
+// merges and appends it in place (no full scene rebuild), so `npm run dev` demonstrates
+// progressive loading even without the optional Memgraph API running.
+function synthesizeExpansionPatch(
+  request: LargeGraphExpandRequest,
+  chunkId: number,
+): GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta> {
+  const stamp = `stream-${chunkId}`;
+  const batch = generateGalaxyDataset(STREAM_CHUNK_NODES);
+  const anchorId =
+    request.nodeId ??
+    (request.loadedNodeIds.length ? request.loadedNodeIds[chunkId % request.loadedNodeIds.length] : batch.nodes[0].id);
+
+  const nodes = batch.nodes.map((node, index) => ({
+    ...node,
+    id: `${stamp}-${index}`,
+    position: undefined, // omit so the built-in layout places appended nodes near their group
+    major: index === 0, // surface one planet per chunk so the new cluster is labeled
+    group: request.activeGroup ?? node.group,
+  }));
+
+  const edges = [
+    { id: `${stamp}-anchor`, source: anchorId, target: nodes[0].id, weight: 0.85, kind: 'supports' },
+    ...nodes.slice(0, -1).map((node, index) => ({
+      id: `${stamp}-link-${index}`,
+      source: node.id,
+      target: nodes[index + 1].id,
+      weight: 0.5,
+      kind: 'impacts',
+    })),
+  ];
+
+  return { nodes, edges };
+}
+
 export default function App() {
   const graphApiUrl = (import.meta.env.VITE_GRAPH_API_URL as string | undefined) ?? 'http://127.0.0.1:8787';
   const graphApiToken = import.meta.env.VITE_GRAPH_API_TOKEN as string | undefined;
@@ -46,6 +84,7 @@ export default function App() {
   const [sharpMoney, setSharpMoney] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const streamChunkRef = useRef(0);
 
   // Memoize so parent renders do not force redundant color/size buffer refreshes.
   const accessors = useMemo(() => createInitiativeAccessors({ sharpMoney }), [sharpMoney]);
@@ -61,11 +100,25 @@ export default function App() {
   );
   const largeGraph = useMemo<LargeGraphOptions<InitiativeNodeMeta, unknown, InitiativeClusterMeta>>(
     () => ({
-      enabled: dbStatus === 'loaded',
+      // Always enabled so the progressive "load more" controls are available out of the
+      // box. When the Memgraph API is connected we stream real neighborhoods; otherwise
+      // we synthesize chunks locally — either way the library appends them in place.
+      enabled: true,
+      // Keep the merged edge set untrimmed so appended chunks always extend the existing
+      // prefix and take the in-place append path (rather than a budget-trim rebuild).
+      edgeBudget: 20_000,
       async expandGraph(
         request: LargeGraphExpandRequest,
         signal: AbortSignal,
       ): Promise<GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta>> {
+        if (dbStatus !== 'loaded') {
+          // Simulate streaming latency so the loading state and incremental append are
+          // visible, then hand back a locally synthesized chunk.
+          await new Promise((resolve) => setTimeout(resolve, 280));
+          if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+          streamChunkRef.current += 1;
+          return synthesizeExpansionPatch(request, streamChunkRef.current);
+        }
         const url = new URL(
           request.type === 'node' && request.nodeId
             ? `${apiBase}/graph/expand/node/${encodeURIComponent(request.nodeId)}`
@@ -88,6 +141,9 @@ export default function App() {
         return (await response.json()) as GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta>;
       },
       async loadEdgeDetail(edge, _endpoints, signal) {
+        // Offline demo nodes/edges carry their detail in `meta`, so only the API-backed
+        // graph needs a remote fetch.
+        if (dbStatus !== 'loaded') return null;
         const response = await fetchGraphApi(`${apiBase}/graph/edge/${encodeURIComponent(getEdgeId(edge))}/detail`, {
           signal,
         });
@@ -95,6 +151,7 @@ export default function App() {
         return response.json();
       },
       async loadNodeDetail(node, signal) {
+        if (dbStatus !== 'loaded') return null;
         const response = await fetchGraphApi(`${apiBase}/graph/node/${encodeURIComponent(node.id)}/detail`, { signal });
         if (!response.ok) throw new Error(`Node detail returned ${response.status}`);
         return response.json();

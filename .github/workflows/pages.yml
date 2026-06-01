@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -39,17 +39,35 @@ jobs:
         run: npm run build:example -- --base /${{ github.event.repository.name }}/demo/
 
       - name: Build API docs
-        run: npm run docs:api -- --out .site/api
+        run: npm run docs:api -- --out docs/api
 
       - name: Assemble Pages site
         run: npm run docs:site
 
+      - name: Assemble docs folder for Pages source
+        run: node scripts/build-pages-site.mjs docs
+
       - name: Upload Pages artifact
+        if: vars.PAGES_PUBLISH_MODE == 'actions'
         uses: actions/upload-pages-artifact@v3
         with:
           path: .site
 
+      - name: Sync docs folder output
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git add docs/index.html docs/.nojekyll docs/demo
+          if [ -d docs/api ]; then
+            git add -f docs/api
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: sync docs site output [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
   deploy:
+    if: vars.PAGES_PUBLISH_MODE == 'actions'
     needs: build
     runs-on: ubuntu-latest
     environment:
