@@ -9,6 +9,8 @@ examples/next/.next/
 examples/next/out/
 examples/next/next-env.d.ts
 node_modules/
+pkg/
+.claude/
 package-lock.json
 *.tsbuildinfo
 *.log

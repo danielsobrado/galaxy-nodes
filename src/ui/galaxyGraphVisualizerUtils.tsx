@@ -10,11 +10,7 @@ import type {
   SpaceDirection,
   Vec3,
 } from '../domain/types';
-import type {
-  AsyncDetailState,
-  GalaxyAccessibleSummaryContext,
-  GalaxyGraphLabels,
-} from './galaxyGraphVisualizerTypes';
+import type { AsyncDetailState, GalaxyAccessibleSummaryContext, GalaxyGraphLabels } from './galaxyGraphVisualizerTypes';
 
 export const DEFAULT_GALAXY_GRAPH_LABELS: GalaxyGraphLabels = {
   accessibleEdgesHeading: 'Edges',

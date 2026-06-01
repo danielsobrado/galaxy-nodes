@@ -466,12 +466,12 @@ npm run dev
 
 The library source is grouped by concern under `src/`:
 
-| Folder | Responsibility |
-| --- | --- |
-| `domain/` | Framework-neutral graph model: `types`, `data` (parsing/accessors), `layout`. |
-| `engine/` | The three.js renderer and scene internals: `core` (the `galaxy-nodes/core` entry), plus `scene*`, `materials`, `edges`, `markers`, `labels`, `environment`. |
-| `ui/` | React components: `GalaxyGraphVisualizer`, `GalaxyScene`, and their panels/helpers. |
-| `adapters/` | The published entry barrels: `index` (root), `react`, `vue`, `angular`. |
+| Folder      | Responsibility                                                                                                                                              |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `domain/`   | Framework-neutral graph model: `types`, `data` (parsing/accessors), `layout`.                                                                               |
+| `engine/`   | The three.js renderer and scene internals: `core` (the `galaxy-nodes/core` entry), plus `scene*`, `materials`, `edges`, `markers`, `labels`, `environment`. |
+| `ui/`       | React components: `GalaxyGraphVisualizer`, `GalaxyScene`, and their panels/helpers.                                                                         |
+| `adapters/` | The published entry barrels: `index` (root), `react`, `vue`, `angular`.                                                                                     |
 
 Tests live next to their subjects (`*.test.ts(x)`), and `styles.css` stays at the `src/` root. Public import paths (`galaxy-nodes`, `galaxy-nodes/core`, `galaxy-nodes/react`, …) are unaffected by this internal grouping.
 

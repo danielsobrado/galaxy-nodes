@@ -1,14 +1,5 @@
 import { type ReactNode } from 'react';
-import {
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ChevronDown,
-  ChevronUp,
-  Focus,
-  RotateCcw,
-} from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, Focus, RotateCcw } from 'lucide-react';
 import type { CameraCommand } from './GalaxyScene';
 import type { GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
 import type { GalaxyGraphLabels } from './galaxyGraphVisualizerTypes';

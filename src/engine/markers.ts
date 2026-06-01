@@ -86,7 +86,8 @@ export function setMarkerStrength(marker: EndpointMarker, strength: number) {
   const clamped = Math.max(0, Math.min(1, strength));
   (marker.atmosphere.material as THREE.MeshBasicMaterial).opacity =
     MARKER_ATMOSPHERE_OPACITY_BASE + clamped * MARKER_ATMOSPHERE_OPACITY_SPAN;
-  (marker.core.material as THREE.MeshBasicMaterial).opacity = MARKER_CORE_OPACITY_BASE + clamped * MARKER_CORE_OPACITY_SPAN;
+  (marker.core.material as THREE.MeshBasicMaterial).opacity =
+    MARKER_CORE_OPACITY_BASE + clamped * MARKER_CORE_OPACITY_SPAN;
   (marker.innerRing.material as THREE.MeshBasicMaterial).opacity =
     MARKER_INNER_RING_OPACITY_BASE + clamped * MARKER_INNER_RING_OPACITY_SPAN;
   (marker.outerRing.material as THREE.MeshBasicMaterial).opacity =

@@ -6,7 +6,14 @@ import {
   type GalaxyRendererOptions,
 } from '../engine/core';
 import { createSceneFallbackViewModel, type GalaxySceneFailure } from '../engine/sceneFallback';
-import type { GalaxyCameraView, GraphAccessors, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
+import type {
+  GalaxyCameraView,
+  GraphAccessors,
+  GraphDataset,
+  GraphEdge,
+  GraphNode,
+  SpaceDirection,
+} from '../domain/types';
 
 export type {
   CameraCommand,

@@ -1,5 +1,12 @@
 import { formatCompactNumber } from '../../../../src/domain/data';
-import type { GraphAccessors, GraphCluster, GraphDataset, GraphEdge, GraphNode, Vec3 } from '../../../../src/domain/types';
+import type {
+  GraphAccessors,
+  GraphCluster,
+  GraphDataset,
+  GraphEdge,
+  GraphNode,
+  Vec3,
+} from '../../../../src/domain/types';
 
 /**
  * Corporate initiative demo preset, rebuilt on top of the generic engine: a
@@ -236,7 +243,8 @@ function buildClusters(count: number, rand: () => number): ClusterBuild[] {
   for (let index = 0; index < clusterCount; index += 1) {
     const arm = index % arms;
     const armOffset = (arm / arms) * TAU;
-    const distance = CLUSTER_INNER_RADIUS + Math.pow(index / clusterCount, CLUSTER_RADIAL_EXPONENT) * CLUSTER_RADIAL_SPAN;
+    const distance =
+      CLUSTER_INNER_RADIUS + Math.pow(index / clusterCount, CLUSTER_RADIAL_EXPONENT) * CLUSTER_RADIAL_SPAN;
     const twist = distance * SPIRAL_TWIST_PER_UNIT;
     const angle = armOffset + twist + randBetween(rand, -CLUSTER_ANGLE_SCATTER, CLUSTER_ANGLE_SCATTER);
     const y = gaussian(rand) * CLUSTER_Y_THICKNESS + Math.sin(angle * DISK_WARP_FREQUENCY) * DISK_WARP_AMPLITUDE;

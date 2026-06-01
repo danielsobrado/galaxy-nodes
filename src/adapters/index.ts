@@ -40,7 +40,12 @@ export {
 } from '../domain/data';
 export type { MergeGraphDatasetOptions, ParsedGraphDataset } from '../domain/data';
 export { resolveGraphLayout } from '../domain/layout';
-export type { GraphLayoutInput, GraphLayoutOptions, ResolvedGraphLayout, ResolvedLayoutCluster } from '../domain/layout';
+export type {
+  GraphLayoutInput,
+  GraphLayoutOptions,
+  ResolvedGraphLayout,
+  ResolvedLayoutCluster,
+} from '../domain/layout';
 export type {
   EdgeEndpoint,
   GalaxyCameraView,

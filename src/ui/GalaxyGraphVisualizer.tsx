@@ -3,7 +3,13 @@ import { CircleDot, Layers3, Pause, Play, Search, Sparkles } from 'lucide-react'
 import GalaxyScene from './GalaxyScene';
 import { GalaxyDetailPanels } from './GalaxyDetailPanels';
 import { GalaxySideRail } from './GalaxySideRail';
-import { DEFAULT_GRAPH_EDGE_BUDGET, formatCompactNumber, getEdgeId, mergeGraphDataset, resolveAccessors } from '../domain/data';
+import {
+  DEFAULT_GRAPH_EDGE_BUDGET,
+  formatCompactNumber,
+  getEdgeId,
+  mergeGraphDataset,
+  resolveAccessors,
+} from '../domain/data';
 import type { CameraCommand } from './GalaxyScene';
 import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
 import {

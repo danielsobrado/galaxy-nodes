@@ -91,13 +91,13 @@ export const STAR_SIZE = 1.25;
 export const STAR_OPACITY = 0.2;
 
 // ── Cluster / planet / ring / image materials ────────────────────────────────
-export const GLOW_SPRITE_OPACITY = 0.055;
+export const GLOW_SPRITE_OPACITY = 0.09;
 // Cluster label floats this fraction of the cluster radius above its center.
 export const CLUSTER_LABEL_HEIGHT_FACTOR = 0.85;
 // Cluster glow sprite scale relative to its radius (galaxy mode blooms larger).
 export const CLUSTER_SPRITE_SCALE_GALAXY = 1.18;
 export const CLUSTER_SPRITE_SCALE_DEFAULT = 0.92;
-export const PLANET_MATERIAL_OPACITY = 0.34;
+export const PLANET_MATERIAL_OPACITY = 0.44;
 export const RING_MATERIAL_OPACITY = 0.12;
 export const NODE_IMAGE_SPRITE_OPACITY = 0.94;
 export const NODE_IMAGE_MAX_ANISOTROPY = 4;
