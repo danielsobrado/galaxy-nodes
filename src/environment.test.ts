@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { canUseDOM, detectWebGLAvailability, resolveMotionPreference } from './environment';
+import {
+  canUseDOM,
+  detectWebGLAvailability,
+  getGalaxyRendererContextBudget,
+  reserveGalaxyRendererContext,
+  resetGalaxyRendererContextBudgetForTests,
+  resolveMotionPreference,
+} from './environment';
 
 describe('environment helpers', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    resetGalaxyRendererContextBudgetForTests();
   });
 
   it('resolves explicit motion preferences without reading media queries', () => {
@@ -67,5 +75,35 @@ describe('environment helpers', () => {
     });
 
     expect(detectWebGLAvailability()).toEqual({ available: true });
+  });
+
+  it('limits active Galaxy renderer context reservations and releases them idempotently', () => {
+    const releases: Array<() => void> = [];
+
+    for (let index = 0; index < getGalaxyRendererContextBudget().limit; index += 1) {
+      const release = reserveGalaxyRendererContext();
+      expect(release).toEqual(expect.any(Function));
+      releases.push(release!);
+    }
+
+    expect(getGalaxyRendererContextBudget()).toMatchObject({ active: releases.length, remaining: 0 });
+    expect(reserveGalaxyRendererContext()).toBeNull();
+
+    releases[0]();
+    releases[0]();
+
+    expect(getGalaxyRendererContextBudget().active).toBe(releases.length - 1);
+    expect(reserveGalaxyRendererContext()).toEqual(expect.any(Function));
+  });
+
+  it('supports caller-provided renderer context limits', () => {
+    const firstRelease = reserveGalaxyRendererContext(1);
+
+    expect(firstRelease).toEqual(expect.any(Function));
+    expect(getGalaxyRendererContextBudget(1)).toEqual({ active: 1, limit: 1, remaining: 0 });
+    expect(reserveGalaxyRendererContext(1)).toBeNull();
+
+    firstRelease?.();
+    expect(getGalaxyRendererContextBudget(1)).toEqual({ active: 0, limit: 1, remaining: 1 });
   });
 });

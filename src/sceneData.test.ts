@@ -11,6 +11,7 @@ import {
   selectPlanetOverlayNodesBySizing,
   selectMajorOverlayNodes,
   writeVisiblePointSizes,
+  type PlanetSizingMode,
 } from './sceneData';
 import type { GraphDataset, GraphNode } from './types';
 
@@ -90,6 +91,28 @@ describe('scene data helpers', () => {
     expect(
       selectPlanetOverlayNodesBySizing(index, graph.nodes, degrees, 'degree', null, 1).map((node) => node.id),
     ).toEqual(['hub']);
+  });
+
+  it('memoizes degree ranking when a cache is supplied', () => {
+    const graph: GraphDataset = {
+      nodes: [
+        { id: 'hub', group: 'Alpha' },
+        { id: 'leaf', group: 'Alpha' },
+      ],
+      edges: [{ source: 'hub', target: 'leaf' }],
+    };
+    const index = buildSceneNodeIndex(graph.nodes);
+    const degrees = buildNodeDegrees(graph);
+    const cache = new Map<PlanetSizingMode, GraphNode[]>();
+
+    selectPlanetOverlayNodesBySizing(index, graph.nodes, degrees, 'degree', null, undefined, undefined, cache);
+    const ranked = cache.get('degree');
+    expect(ranked).toBeDefined();
+
+    // A second refresh (different group filter) must reuse the cached ranking
+    // rather than re-sorting every node.
+    selectPlanetOverlayNodesBySizing(index, graph.nodes, degrees, 'degree', 'Alpha', undefined, undefined, cache);
+    expect(cache.get('degree')).toBe(ranked);
   });
 
   it('computes degree-based planet size multipliers without WebGL', () => {

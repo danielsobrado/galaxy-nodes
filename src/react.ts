@@ -2,6 +2,8 @@ export { default as GalaxyGraphVisualizer } from './GalaxyGraphVisualizer';
 export type {
   GalaxyGraphVisualizerOptions,
   GalaxyGraphVisualizerProps,
+  GalaxyAccessibleSummaryContext,
+  GalaxyGraphLabels,
   GraphStats,
   LargeGraphDetailContext,
   LargeGraphExpandRequest,
@@ -16,4 +18,5 @@ export type {
   GalaxySceneFailure,
   GalaxySceneFailureReason,
   GalaxySceneProps,
+  PlanetSizingMode,
 } from './GalaxyScene';

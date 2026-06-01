@@ -1,7 +1,12 @@
 import { createGalaxyRenderer } from './core';
 import type { GalaxyRendererCallbacks, GalaxyRendererOptions } from './core';
 
-export { createGalaxyRenderer, DEFAULT_GRAPH_EDGE_BUDGET, mergeGraphDataset } from './core';
+export {
+  createGalaxyRenderer,
+  DEFAULT_GRAPH_EDGE_BUDGET,
+  getGalaxyRendererContextBudget,
+  mergeGraphDataset,
+} from './core';
 
 /**
  * Vue-named alias for the imperative core renderer. It does not install Vue
@@ -22,6 +27,7 @@ export type {
   GalaxyPlanetSizingOptions,
   GalaxyRenderer,
   GalaxyRendererCallbacks,
+  GalaxyRendererContextBudget,
   GalaxyRendererOptions,
   GalaxySceneFailure,
   GalaxySceneFailureReason,
@@ -32,6 +38,7 @@ export type {
   GraphDatasetPatch,
   GraphEdge,
   GraphNode,
+  PlanetSizingMode,
   SpaceDirection,
   Vec3,
 } from './core';

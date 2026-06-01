@@ -156,13 +156,19 @@ export function selectPlanetOverlayNodesBySizing<NMeta = unknown>(
   activeGroup: string | null,
   limitAll = MAJOR_PLANET_LIMIT_ALL,
   limitGroup = MAJOR_PLANET_LIMIT_GROUP,
+  rankedCache?: Map<PlanetSizingMode, GraphNode<NMeta>[]>,
 ) {
   if (mode === 'accessor') return selectMajorOverlayNodes(nodeIndex, activeGroup, limitAll, limitGroup);
 
+  // Ranking is O(n log n) over every node; reuse a per-mode cache across overlay
+  // refreshes when the caller supplies one (the dataset is fixed for the scene's
+  // lifetime, so the ranking never changes once computed).
+  const cached = rankedCache?.get(mode);
+  const ranked = cached ?? rankPlanetNodes(nodes, nodeDegrees, mode);
+  if (!cached) rankedCache?.set(mode, ranked);
+
   const limit = activeGroup === null ? limitAll : Math.min(limitGroup, limitAll);
-  return rankPlanetNodes(nodes, nodeDegrees, mode)
-    .filter((node) => activeGroup === null || node.group === activeGroup)
-    .slice(0, limit);
+  return ranked.filter((node) => activeGroup === null || node.group === activeGroup).slice(0, limit);
 }
 
 export function planetSizeMultiplierForDegree(

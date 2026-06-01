@@ -58,4 +58,27 @@ describe('createGalaxyRenderer', () => {
     expect(firstFailure).toHaveBeenCalledTimes(1);
     expect(secondFailure).toHaveBeenCalledTimes(1);
   });
+
+  it('reports context-budget failures before creating another renderer', () => {
+    vi.mocked(HTMLCanvasElement.prototype.getContext).mockReturnValue({} as never);
+    const host = document.createElement('div');
+    const onContextBudgetExceeded = vi.fn();
+    const onSceneFailure = vi.fn();
+
+    const renderer = createGalaxyRenderer(
+      host,
+      { ...options, contextLimit: 0 },
+      { onContextBudgetExceeded, onSceneFailure },
+    );
+
+    expect(onContextBudgetExceeded).toHaveBeenCalledWith({ active: 0, limit: 0, remaining: 0 });
+    expect(onSceneFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('supported limit of 0'),
+        reason: 'webgl-unavailable',
+      }),
+    );
+
+    renderer.dispose();
+  });
 });

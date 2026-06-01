@@ -24,6 +24,39 @@ export interface WebGLAvailability {
   message?: string;
 }
 
+const DEFAULT_WEBGL_CONTEXT_LIMIT = 12;
+let activeGalaxyRendererContexts = 0;
+
+export interface GalaxyRendererContextBudget {
+  active: number;
+  limit: number;
+  remaining: number;
+}
+
+export function getGalaxyRendererContextBudget(limit = DEFAULT_WEBGL_CONTEXT_LIMIT): GalaxyRendererContextBudget {
+  return {
+    active: activeGalaxyRendererContexts,
+    limit,
+    remaining: Math.max(0, limit - activeGalaxyRendererContexts),
+  };
+}
+
+export function reserveGalaxyRendererContext(limit = DEFAULT_WEBGL_CONTEXT_LIMIT): (() => void) | null {
+  if (activeGalaxyRendererContexts >= limit) return null;
+  activeGalaxyRendererContexts += 1;
+  let released = false;
+
+  return () => {
+    if (released) return;
+    released = true;
+    activeGalaxyRendererContexts = Math.max(0, activeGalaxyRendererContexts - 1);
+  };
+}
+
+export function resetGalaxyRendererContextBudgetForTests() {
+  activeGalaxyRendererContexts = 0;
+}
+
 export function detectWebGLAvailability(): WebGLAvailability {
   if (!canUseDOM()) {
     return { available: false, message: 'This environment does not provide a browser DOM.' };
