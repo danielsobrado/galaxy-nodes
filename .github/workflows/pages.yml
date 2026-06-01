@@ -1,0 +1,80 @@
+name: Demo and API docs
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Build live demo
+        run: npm run build:example -- --base /${{ github.event.repository.name }}/demo/
+
+      - name: Build API docs
+        run: npm run docs:api -- --out docs/api
+
+      - name: Assemble Pages site
+        run: npm run docs:site
+
+      - name: Assemble docs folder for Pages source
+        run: node scripts/build-pages-site.mjs docs
+
+      - name: Upload Pages artifact
+        if: vars.PAGES_PUBLISH_MODE == 'actions'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .site
+
+      - name: Sync docs folder output
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git add docs/index.html docs/.nojekyll docs/demo
+          if [ -d docs/api ]; then
+            git add -f docs/api
+          fi
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: sync docs site output [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          fi
+
+  deploy:
+    if: vars.PAGES_PUBLISH_MODE == 'actions'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

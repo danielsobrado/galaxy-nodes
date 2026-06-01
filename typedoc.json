@@ -1,0 +1,9 @@
+{
+  "entryPoints": ["src/index.ts", "src/presets/initiatives.tsx"],
+  "entryPointStrategy": "expand",
+  "out": "docs/api",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "readme": "README.md",
+  "plugin": []
+}

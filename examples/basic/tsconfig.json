@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "noEmit": true,
+    "paths": {
+      "galaxy-nodes": ["../../src/index.ts"],
+      "galaxy-nodes/presets/initiatives": ["../../src/presets/initiatives.tsx"],
+      "galaxy-nodes/styles.css": ["../../src/styles.css"]
+    },
+    "types": ["vite/client"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

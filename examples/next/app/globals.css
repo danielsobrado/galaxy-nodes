@@ -1,0 +1,17 @@
+html,
+body {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  margin: 0;
+  background: #050608;
+}
+
+body {
+  min-height: 100vh;
+}
+
+.next-example-shell {
+  width: 100vw;
+  height: 100vh;
+}
