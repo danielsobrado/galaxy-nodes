@@ -178,12 +178,20 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   const selectedNode = useMemo(() => {
     if (selectedNodeId !== undefined) return graphDataset.nodes.find((node) => node.id === selectedNodeId) ?? null;
-    return internalSelectedNode && graphDataset.nodes.includes(internalSelectedNode) ? internalSelectedNode : null;
+    // Resolve the uncontrolled selection by id, not object identity: dataset transforms
+    // like mergeGraphDataset (Expand neighbors) produce new node objects, so an identity
+    // check would drop the selection and the scene would lose its focus highlight.
+    if (!internalSelectedNode) return null;
+    return graphDataset.nodes.find((node) => node.id === internalSelectedNode.id) ?? null;
   }, [graphDataset.nodes, internalSelectedNode, selectedNodeId]);
 
   const selectedEdge = useMemo(() => {
     if (selectedEdgeId !== undefined) return (selectedEdgeId !== null && edgeByDisplayId.get(selectedEdgeId)) || null;
-    return internalSelectedEdge && graphDataset.edges.includes(internalSelectedEdge) ? internalSelectedEdge : null;
+    if (!internalSelectedEdge) return null;
+    // Keep the reference when it survives a dataset change; otherwise re-resolve by id so
+    // Expand neighbors does not drop an edge selection.
+    if (graphDataset.edges.includes(internalSelectedEdge)) return internalSelectedEdge;
+    return edgeByDisplayId.get(getEdgeId(internalSelectedEdge)) ?? null;
   }, [graphDataset.edges, edgeByDisplayId, internalSelectedEdge, selectedEdgeId]);
 
   const stats = useMemo<GraphStats>(() => {

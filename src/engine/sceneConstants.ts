@@ -62,6 +62,10 @@ export const DEFAULT_PLANET_SIZE_STRENGTH = 0.82;
 // Base point size before per-node size and distance attenuation; galaxy mode runs larger.
 export const POINT_BASE_SIZE_GALAXY = 2.7;
 export const POINT_BASE_SIZE_DEFAULT = 2.25;
+// Floor (in device pixels) for a rendered point sprite. Points that shrink below ~1px
+// flicker on and off as they cross pixel centres while the camera moves; keeping a
+// minimum footprint trades a hair of extra glow for stable, non-blinking far points.
+export const POINT_MIN_PIXEL_SIZE = 1.5;
 // Adaptive density compensation. Additive node/edge blending sums to pure white where
 // thousands of elements overlap, so per-element opacity is scaled down as the graph
 // grows. Graphs at/below the reference count are untouched (the dense-but-not-blown-out
@@ -77,19 +81,20 @@ export const POINT_FIRST_DEGREE_TINT = 0.74;
 export const POINT_SECOND_DEGREE_TINT = 0.6;
 // Dimming applied to unrelated points while any node/edge is selected.
 export const POINT_UNRELATED_DIM = 0.48;
-// Whole point-cloud opacity while a selection is active, so the selection stands out.
-// Kept fairly high so selecting does not visibly darken the whole backdrop.
-export const SELECTION_POINT_OPACITY = 0.55;
-// Focus-mode dimming applied once when selection changes. These are intentionally
-// gentle: the ambient starfield/dust is the backdrop, so dimming it hard makes the
-// background appear to jump to black when a node is selected.
-export const FOCUS_STAR_DIM_FACTOR = 0.85;
-export const FOCUS_CLUSTER_DIM_FACTOR = 0.7;
+// Selection focus is done by brightening the selected node + its edges (and dimming the
+// non-connected edges), NOT by darkening the ambient field. Dimming the whole point
+// cloud / starfield on selection made the backdrop visibly jump toward black, so these
+// ambient multipliers are kept at 1 (no change). Per-node focus still comes from
+// POINT_UNRELATED_DIM and per-edge focus from EDGE_OPACITY_UNRELATED_DIM.
+export const SELECTION_POINT_OPACITY = 1.0;
+export const FOCUS_STAR_DIM_FACTOR = 1.0;
+export const FOCUS_CLUSTER_DIM_FACTOR = 1.0;
 export const FOCUS_FOG_DENSITY_MULTIPLIER = 1.0;
-// Distance focus around the selected node/edge, in graph-space units.
+// Distance focus around the selected node/edge, in graph-space units. The dim factor is
+// 1 (disabled) so selecting does not darken everything away from the focus point.
 export const FOCUS_DISTANCE_INNER = 190;
 export const FOCUS_DISTANCE_OUTER = 760;
-export const FOCUS_DISTANCE_DIM_FACTOR = 0.62;
+export const FOCUS_DISTANCE_DIM_FACTOR = 1.0;
 // Point base color treatment: lerp toward the off-white tint, then a slight brighten.
 export const POINT_COLOR_LERP = 0.12;
 export const POINT_COLOR_BRIGHTEN = 1.02;

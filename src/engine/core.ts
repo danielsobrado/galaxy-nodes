@@ -83,6 +83,7 @@ import {
   DEFAULT_PLANET_SIZE_STRENGTH,
   POINT_BASE_SIZE_GALAXY,
   POINT_BASE_SIZE_DEFAULT,
+  POINT_MIN_PIXEL_SIZE,
   POINT_SIZE_SELECTED,
   POINT_SIZE_FIRST_DEGREE,
   POINT_SIZE_SECOND_DEGREE,
@@ -792,6 +793,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     uniforms: {
       pixelRatio: { value: renderer.getPixelRatio() },
       baseSize: { value: galaxyMode ? POINT_BASE_SIZE_GALAXY : POINT_BASE_SIZE_DEFAULT },
+      minPointSize: { value: POINT_MIN_PIXEL_SIZE * renderer.getPixelRatio() },
       globalOpacity: { value: 1 },
       densityScale: { value: resolveDensityScale(dataset.nodes.length) },
       focusActive: { value: 0 },
@@ -808,6 +810,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       varying float vFocus;
       uniform float pixelRatio;
       uniform float baseSize;
+      uniform float minPointSize;
       uniform float focusActive;
       uniform vec3 focusPosition;
       uniform float focusInner;
@@ -819,7 +822,9 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
         float attenuation = clamp(300.0 / -mvPosition.z, 0.36, 3.65);
         vSharpness = smoothstep(0.9, 2.8, attenuation);
-        gl_PointSize = size * baseSize * attenuation * pixelRatio;
+        // Floor the footprint so far points never go sub-pixel (which makes them blink
+        // as the camera moves); the floor is already in device pixels.
+        gl_PointSize = max(minPointSize, size * baseSize * attenuation * pixelRatio);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,
@@ -2171,6 +2176,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     bloomComposer.setSize(nextWidth, nextHeight);
     finalComposer.setSize(nextWidth, nextHeight);
     pointsMaterial.uniforms.pixelRatio.value = renderer.getPixelRatio();
+    pointsMaterial.uniforms.minPointSize.value = POINT_MIN_PIXEL_SIZE * renderer.getPixelRatio();
     needsRender = true;
   }
 
