@@ -253,7 +253,7 @@ export const EDGE_OPACITY_HOVER_CAP = 0.54;
 export const EDGE_OPACITY_HOVER_BOOST = 0.26;
 export const EDGE_OPACITY_CONNECTED_CAP = 0.82;
 export const EDGE_OPACITY_CONNECTED_BOOST = 0.52;
-export const EDGE_OPACITY_UNRELATED_DIM = 0.28;
+export const EDGE_OPACITY_UNRELATED_DIM = 0.1;
 // Hover-edge overlay: its own opacity and how much fatter than the base tube it draws.
 export const HOVER_EDGE_OVERLAY_OPACITY = 0.34;
 export const HOVER_EDGE_RADIUS_FACTOR = 1.85;
