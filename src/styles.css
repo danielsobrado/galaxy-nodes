@@ -1,5 +1,5 @@
 .galaxy-nodes {
-  --gn-bg: #050608;
+  --gn-bg: #000000;
   --gn-no: #ff6f86;
   --gn-panel-accent: #46f4bc;
   --gn-selected: #ffffff;
@@ -11,10 +11,7 @@
   min-height: 480px;
   overflow: hidden;
   color: #f2f6f4;
-  background:
-    radial-gradient(circle at 55% 52%, rgba(95, 255, 218, 0.1), transparent 30%),
-    radial-gradient(circle at 28% 70%, rgba(255, 111, 134, 0.08), transparent 26%),
-    linear-gradient(180deg, var(--gn-bg) 0%, #0c0f16 54%, var(--gn-bg) 100%);
+  background: var(--gn-bg);
   font-family:
     Inter,
     ui-sans-serif,

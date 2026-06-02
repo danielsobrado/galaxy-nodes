@@ -44,6 +44,7 @@ export interface GalaxyGraphVisualizerOptions {
   showDatasetSizeControls?: boolean;
   showDetailPanel?: boolean;
   showGroupNav?: boolean;
+  showKeyLegend?: boolean;
   showLegend?: boolean;
   showNavigationControls?: boolean;
   showSearch?: boolean;
@@ -174,6 +175,8 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   initialGroup?: string | null;
   /** Replaces the legend strip; nothing renders without it. */
   legend?: ReactNode;
+  /** Optional keyboard/mouse shortcut legend overlay. */
+  keyLegend?: ReactNode;
   /** Optional built-in spatial layout. Omit for auto, pass false to require authored coordinates. */
   layout?: GraphLayoutInput;
   /** Localized labels for built-in chrome and the non-visual graph summary. */

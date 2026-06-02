@@ -154,6 +154,31 @@ describe('GalaxyGraphVisualizer', () => {
     expect(onDatasetSizeChange).toHaveBeenCalledWith(10);
   });
 
+  it('shows and hides legend and key legend overlays from options', () => {
+    const { rerender } = render(
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        legend={<span>Relationship legend</span>}
+        keyLegend={<div aria-label="Shortcut legend">Shortcut legend</div>}
+      />,
+    );
+
+    expect(screen.getByText('Relationship legend')).toBeTruthy();
+    expect(screen.getByLabelText('Shortcut legend')).toBeTruthy();
+
+    rerender(
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        legend={<span>Relationship legend</span>}
+        keyLegend={<div aria-label="Shortcut legend">Shortcut legend</div>}
+        options={{ showKeyLegend: false, showLegend: false }}
+      />,
+    );
+
+    expect(screen.queryByText('Relationship legend')).toBeNull();
+    expect(screen.queryByLabelText('Shortcut legend')).toBeNull();
+  });
+
   it('renders a non-visual graph summary and wires it to the scene description', () => {
     render(<GalaxyGraphVisualizer dataset={dataset} />);
 
@@ -259,6 +284,30 @@ describe('GalaxyGraphVisualizer', () => {
       ),
     );
     await waitFor(() => expect(screen.getByTestId('galaxy-scene').dataset.nodeCount).toBe('3'));
+  });
+
+  it('keeps an uncontrolled edge selection by display id across expansion merges', async () => {
+    const secondEdge: GraphEdge = { source: 'beta', target: 'alpha', kind: 'supports', weight: 0.4 };
+    const edgeDataset: GraphDataset = { ...dataset, edges: [edge, secondEdge] };
+    const expandGraph = vi.fn().mockResolvedValue({ nodes: [{ id: 'gamma', label: 'Gamma' }], edges: [] });
+    render(<GalaxyGraphVisualizer dataset={edgeDataset} largeGraph={{ enabled: true, expandGraph }} />);
+
+    act(() => {
+      latestSceneProps?.onSelectEdge(secondEdge);
+      latestSceneProps?.onCameraViewChange?.({
+        direction: { x: 0, y: 0, z: -1 },
+        position: { x: 10, y: 20, z: 30 },
+        right: { x: 1, y: 0, z: 0 },
+        target: { x: 0, y: 0, z: 0 },
+        up: { x: 0, y: 1, z: 0 },
+      });
+    });
+    expect(screen.getByTestId('galaxy-scene').dataset.selectedEdge).toBe('supports:beta->alpha:1');
+
+    fireEvent.click(screen.getByTitle('Load more forward'));
+
+    await waitFor(() => expect(screen.getByTestId('galaxy-scene').dataset.nodeCount).toBe('3'));
+    expect(screen.getByTestId('galaxy-scene').dataset.selectedEdge).toBe('supports:beta->alpha:1');
   });
 
   it('expands in a camera direction using the latest camera view', async () => {

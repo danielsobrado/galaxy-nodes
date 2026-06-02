@@ -120,6 +120,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     contextLimit?: number;
     // (undocumented)
     dataset: GraphDataset<NMeta, EMeta, CMeta>;
+    expectedSize?: number;
     // (undocumented)
     galaxyMode: boolean;
     // (undocumented)
@@ -130,6 +131,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     paused?: boolean;
     // (undocumented)
     planetSizing?: GalaxyPlanetSizingOptions;
+    renderMode?: GalaxyRenderMode;
     // (undocumented)
     selectedEdgeId: string | null;
     // (undocumented)

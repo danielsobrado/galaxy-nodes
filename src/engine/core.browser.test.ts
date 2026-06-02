@@ -91,7 +91,7 @@ describe('createGalaxyRenderer in Chromium', () => {
     const onSceneReady = vi.fn();
     const onSceneFailure = vi.fn();
     const addedMergedEdgeVisuals: THREE.Object3D[] = [];
-    const addedPerEdgeVisuals: THREE.Object3D[] = [];
+    const addedEdgeVisuals: THREE.Object3D[] = [];
     const originalAdd = THREE.Object3D.prototype.add;
     vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
       this: THREE.Object3D,
@@ -99,7 +99,7 @@ describe('createGalaxyRenderer in Chromium', () => {
     ) {
       objects.forEach((object) => {
         if (object.userData.type === 'edge-visuals') addedMergedEdgeVisuals.push(object);
-        if (object.userData.edgeId && object.userData.type !== 'edge') addedPerEdgeVisuals.push(object);
+        if (object.userData.type === 'edge-visual') addedEdgeVisuals.push(object);
       });
       return originalAdd.apply(this, objects);
     });
@@ -116,8 +116,9 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(canvas.height).toBeGreaterThan(0);
     expect(host.querySelector('.scene-labels')).not.toBeNull();
     expect(host.querySelectorAll('.node-label').length).toBeGreaterThanOrEqual(dataset.nodes.length);
-    expect(addedMergedEdgeVisuals).toHaveLength(1);
-    expect(addedPerEdgeVisuals).toHaveLength(0);
+    expect(addedMergedEdgeVisuals).toHaveLength(0);
+    expect(addedEdgeVisuals).toHaveLength(dataset.edges.length);
+    expect(addedEdgeVisuals.every((edge) => edge instanceof THREE.Mesh)).toBe(true);
     expect(onSceneReady).toHaveBeenCalledTimes(1);
     expect(onSceneFailure).not.toHaveBeenCalled();
     expect(getGalaxyRendererContextBudget().active).toBe(1);
@@ -149,8 +150,8 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(getGalaxyRendererContextBudget().active).toBe(0);
   });
 
-  it('renders scale mode as a single LineSegments edge mesh with no per-edge hit proxies', async () => {
-    const mergedEdgeVisuals: THREE.Object3D[] = [];
+  it('renders scale mode as per-edge LineSegments with no per-edge hit proxies', async () => {
+    const edgeVisuals: THREE.Object3D[] = [];
     const edgeHitProxies: THREE.Object3D[] = [];
     const originalAdd = THREE.Object3D.prototype.add;
     vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
@@ -158,7 +159,7 @@ describe('createGalaxyRenderer in Chromium', () => {
       ...objects: THREE.Object3D[]
     ) {
       objects.forEach((object) => {
-        if (object.userData.type === 'edge-visuals') mergedEdgeVisuals.push(object);
+        if (object.userData.type === 'edge-visual') edgeVisuals.push(object);
         if (object.userData.type === 'edge') edgeHitProxies.push(object);
       });
       return originalAdd.apply(this, objects);
@@ -168,9 +169,9 @@ describe('createGalaxyRenderer in Chromium', () => {
     const { host } = await mountRenderer({ onSceneFailure }, { renderMode: 'scale' });
 
     expect(onSceneFailure).not.toHaveBeenCalled();
-    expect(mergedEdgeVisuals).toHaveLength(1);
+    expect(edgeVisuals).toHaveLength(dataset.edges.length);
     // Scale mode draws edges as lines and creates no per-edge raycast tubes.
-    expect(mergedEdgeVisuals[0]).toBeInstanceOf(THREE.LineSegments);
+    expect(edgeVisuals.every((edge) => edge instanceof THREE.LineSegments)).toBe(true);
     expect(edgeHitProxies).toHaveLength(0);
 
     const canvas = getCanvas(host);
@@ -180,6 +181,179 @@ describe('createGalaxyRenderer in Chromium', () => {
     activeRenderer = null;
     expect(host.childElementCount).toBe(0);
     expect(getGalaxyRendererContextBudget().active).toBe(0);
+  });
+
+  it('renders relationships with the 0.1 additive BasicMaterial path, not a shader material', async () => {
+    const edgeVisuals: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visual') edgeVisuals.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    await mountRenderer({}, { renderMode: 'quality' });
+
+    expect(edgeVisuals).toHaveLength(dataset.edges.length);
+    const material = (edgeVisuals[0] as THREE.Mesh).material as THREE.MeshBasicMaterial;
+    expect(material).toBeInstanceOf(THREE.MeshBasicMaterial);
+    expect(material).not.toBeInstanceOf(THREE.ShaderMaterial);
+    expect(material.blending).toBe(THREE.AdditiveBlending);
+    expect(material.transparent).toBe(true);
+    expect(material.depthWrite).toBe(false);
+    expect(material.opacity).toBeCloseTo(0.075 + 0.9 * 0.1, 5);
+  });
+
+  it('dims unrelated edges when an edge is selected', async () => {
+    const focusDataset: GraphDataset = {
+      generatedAt: 'edge-focus-test',
+      nodes: [
+        { id: 'a', label: 'A', group: 'core', position: { x: -180, y: 0, z: 0 }, size: 9 },
+        { id: 'b', label: 'B', group: 'core', position: { x: 0, y: 0, z: 0 }, size: 9 },
+        { id: 'c', label: 'C', group: 'core', position: { x: 180, y: 0, z: 0 }, size: 9 },
+        { id: 'd', label: 'D', group: 'outer', position: { x: 180, y: 160, z: 0 }, size: 9 },
+      ],
+      edges: [
+        { id: 'selected', source: 'a', target: 'b', weight: 0.9 },
+        { id: 'connected', source: 'b', target: 'c', weight: 0.7 },
+        { id: 'unrelated', source: 'c', target: 'd', weight: 0.6 },
+      ],
+    };
+    const edgeVisuals: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visual') edgeVisuals.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    await mountRenderer({}, { dataset: focusDataset, selectedEdgeId: 'selected' });
+    await waitForFrames(2);
+
+    const materials = edgeMaterialsById(edgeVisuals);
+    expect(materials.get('selected')?.opacity).toBeGreaterThan(0.7);
+    expect(materials.get('connected')?.opacity).toBeLessThan(0.06);
+    expect(materials.get('unrelated')?.opacity).toBeLessThan(0.05);
+  });
+
+  it('dims incident edges when a high-degree node is selected', async () => {
+    const hubDataset: GraphDataset = {
+      generatedAt: 'node-focus-cap-test',
+      nodes: [
+        { id: 'hub', label: 'Hub', group: 'core', position: { x: 0, y: 0, z: 0 }, size: 12 },
+        ...Array.from({ length: 50 }, (_, index) => ({
+          id: `leaf-${index}`,
+          label: `Leaf ${index}`,
+          group: 'core',
+          position: { x: 120 + index * 5, y: index % 2 ? 80 : -80, z: 0 },
+          size: 6,
+        })),
+      ],
+      edges: Array.from({ length: 50 }, (_, index) => ({
+        id: `edge-${index}`,
+        source: 'hub',
+        target: `leaf-${index}`,
+        weight: index / 49,
+      })),
+    };
+    const edgeVisuals: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visual') edgeVisuals.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    await mountRenderer({}, { dataset: hubDataset, renderMode: 'scale', selectedNodeId: 'hub' });
+    await waitForFrames(2);
+
+    const opacities = edgeVisuals.map((edge) => edgeMaterial(edge).opacity);
+    expect(opacities.filter((opacity) => opacity > 0.5)).toHaveLength(14);
+    expect(opacities.filter((opacity) => opacity < 0.06)).toHaveLength(36);
+  });
+
+  it('keeps relationship colors when edges are dimmed by node selection', async () => {
+    const colorDataset: GraphDataset = {
+      generatedAt: 'edge-highlight-color-test',
+      nodes: [
+        { id: 'hub', label: 'Hub', group: 'core', position: { x: 0, y: 0, z: 0 }, size: 12 },
+        { id: 'red', label: 'Red', group: 'core', position: { x: 140, y: -50, z: 0 }, size: 7 },
+        { id: 'blue', label: 'Blue', group: 'core', position: { x: 140, y: 50, z: 0 }, size: 7 },
+      ],
+      edges: [
+        { id: 'red-edge', source: 'hub', target: 'red', weight: 0.9, color: '#ff0000' },
+        { id: 'blue-edge', source: 'hub', target: 'blue', weight: 0.8, color: '#0000ff' },
+      ],
+    };
+    const edgeVisuals: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visual') edgeVisuals.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    await mountRenderer({}, { dataset: colorDataset, selectedNodeId: 'hub' });
+    await waitForFrames(2);
+
+    const materials = edgeMaterialsById(edgeVisuals);
+    expect(materials.get('red-edge')?.color.r).toBeGreaterThan(0.9);
+    expect(materials.get('red-edge')?.color.g).toBeLessThan(0.1);
+    expect(materials.get('red-edge')?.color.b).toBeLessThan(0.1);
+    expect(materials.get('blue-edge')?.color.r).toBeLessThan(0.1);
+    expect(materials.get('blue-edge')?.color.g).toBeLessThan(0.1);
+    expect(materials.get('blue-edge')?.color.b).toBeGreaterThan(0.9);
+  });
+
+  it('keeps node colors when connected nodes are highlighted', async () => {
+    const colorDataset: GraphDataset = {
+      generatedAt: 'node-highlight-color-test',
+      nodes: [
+        { id: 'hub', label: 'Hub', group: 'core', position: { x: 0, y: 0, z: 0 }, size: 12, color: '#ffffff' },
+        { id: 'red', label: 'Red', group: 'core', position: { x: 140, y: -50, z: 0 }, size: 7, color: '#ff0000' },
+        { id: 'blue', label: 'Blue', group: 'core', position: { x: 140, y: 50, z: 0 }, size: 7, color: '#0000ff' },
+      ],
+      edges: [
+        { id: 'red-edge', source: 'hub', target: 'red', weight: 0.9 },
+        { id: 'blue-edge', source: 'hub', target: 'blue', weight: 0.8 },
+      ],
+    };
+    const pointClouds: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'node-points') pointClouds.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    await mountRenderer({}, { dataset: colorDataset, selectedNodeId: 'hub' });
+    await waitForFrames(2);
+
+    const pointColors = pointColorsByIndex(pointClouds[0]);
+    expect(pointColors[1][0]).toBeGreaterThan(pointColors[1][1]);
+    expect(pointColors[1][0]).toBeGreaterThan(pointColors[1][2]);
+    expect(pointColors[2][2]).toBeGreaterThan(pointColors[2][0]);
+    expect(pointColors[2][2]).toBeGreaterThan(pointColors[2][1]);
   });
 
   it('appends streamed nodes and edges in place without rebuilding the scene', async () => {
@@ -305,6 +479,31 @@ function getCanvas(host: HTMLElement) {
     throw new Error('Expected Galaxy Nodes to mount a WebGL canvas.');
   }
   return canvas;
+}
+
+function edgeMaterial(object: THREE.Object3D) {
+  const material = (object as THREE.Mesh | THREE.LineSegments).material;
+  if (!(material instanceof THREE.MeshBasicMaterial) && !(material instanceof THREE.LineBasicMaterial)) {
+    throw new Error('Expected edge BasicMaterial.');
+  }
+  return material;
+}
+
+function edgeMaterialsById(objects: THREE.Object3D[]) {
+  return new Map(objects.map((object) => [String(object.userData.edgeId), edgeMaterial(object)]));
+}
+
+function pointColorsByIndex(object: THREE.Object3D) {
+  const geometry = (object as THREE.Points).geometry;
+  const colorAttribute = geometry.getAttribute('color');
+  if (!(colorAttribute instanceof THREE.BufferAttribute)) {
+    throw new Error('Expected point color buffer attribute.');
+  }
+  return Array.from({ length: colorAttribute.count }, (_, index) => [
+    colorAttribute.getX(index),
+    colorAttribute.getY(index),
+    colorAttribute.getZ(index),
+  ]);
 }
 
 function waitForFrames(count: number) {
