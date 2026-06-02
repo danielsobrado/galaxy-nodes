@@ -143,6 +143,22 @@ Override the system preference only when your product has its own motion setting
 
 Use `motionPreference: 'full'` to force ambient motion, or omit the option to follow the user's OS/browser preference.
 
+## Chrome Visibility
+
+The visualizer chrome can be toggled through `options`. Pass `legend` for the color/status legend and `keyLegend` for a keyboard or mouse shortcut overlay; disable either one with `showLegend` or `showKeyLegend`.
+
+```tsx
+<GalaxyGraphVisualizer
+  dataset={dataset}
+  legend={<GraphLegend />}
+  keyLegend={<ShortcutLegend />}
+  options={{
+    showLegend: true,
+    showKeyLegend: false,
+  }}
+/>
+```
+
 ## WebGL Fallback
 
 If WebGL is unavailable, scene initialization fails, or the browser loses the WebGL context, the component renders an accessible fallback panel with dataset counts. Scene-only controls are disabled while the renderer is unavailable, and recoverable failures include a retry button.

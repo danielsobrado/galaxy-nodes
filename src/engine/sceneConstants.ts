@@ -7,6 +7,7 @@ export const NODE_HIGHLIGHT_MARKER_LIMIT = 42;
 export const NODE_HIGHLIGHT_FIRST_DEGREE_LIMIT = 18;
 export const NODE_HIGHLIGHT_SECOND_DEGREE_LIMIT = 24;
 export const SELECTED_NODE_RELATIONSHIP_LABEL_LIMIT = 18;
+export const SELECTED_NODE_EDGE_FOCUS_LIMIT = 14;
 // Factor applied to each RGB channel to dim points hidden by the active group filter.
 export const DIMMED_POINT_COLOR_FACTOR = 0.36;
 // Per-frame camera step for WASD/arrow movement (shift multiplies by KEY_SHIFT_BOOST).
@@ -20,15 +21,15 @@ export const CAMERA_MOVE_DISTANCE = 80;
 // Cap devicePixelRatio so retina/4K panels don't quadruple the fragment cost.
 export const MAX_PIXEL_RATIO = 1.75;
 // ACES tone-mapping exposure; >1 lifts the additive glow without clipping highlights.
-export const TONE_MAPPING_EXPOSURE = 1.1;
+export const TONE_MAPPING_EXPOSURE = 0.92;
 export const BLOOM_LAYER = 1;
 // MSAA sample count for the final composer's render target. Rendering the scene through
 // EffectComposer bypasses the canvas `antialias` flag (that only covers the default
 // framebuffer), so without this the offscreen pass is aliased and thin edges shimmer
 // while the camera moves. 0 disables (e.g. WebGL1, where it is ignored anyway).
 export const RENDER_MSAA_SAMPLES = 4;
-export const BLOOM_STRENGTH = 0.35;
-export const BLOOM_RADIUS = 0.35;
+export const BLOOM_STRENGTH = 0.16;
+export const BLOOM_RADIUS = 0.18;
 // Layer-gated bloom only renders selected highlight objects, so no luminance cutoff is needed.
 export const BLOOM_THRESHOLD = 0.0;
 // Exponential fog density. Galaxy mode fogs harder so distant arms dissolve into the void.
@@ -107,10 +108,10 @@ export const STAR_DISTANCE_MIN = 1600;
 export const STAR_DISTANCE_SPAN = 2100;
 export const STAR_VERTICAL_SPREAD = 900;
 export const STAR_SIZE = 1.25;
-export const STAR_OPACITY = 0.2;
+export const STAR_OPACITY = 0.08;
 
 // ── Cluster / planet / ring / image materials ────────────────────────────────
-export const GLOW_SPRITE_OPACITY = 0.09;
+export const GLOW_SPRITE_OPACITY = 0.025;
 // Cluster label floats this fraction of the cluster radius above its center.
 export const CLUSTER_LABEL_HEIGHT_FACTOR = 0.85;
 // Cluster glow sprite scale relative to its radius (galaxy mode blooms larger).
@@ -169,25 +170,25 @@ export const CLUSTER_LABEL_INDEX_B = 9;
 
 // ── Endpoint & highlight markers ─────────────────────────────────────────────
 // Marker layer opacity = base + strength(0..1) * span, per concentric layer.
-export const MARKER_ATMOSPHERE_OPACITY_BASE = 0.06;
-export const MARKER_ATMOSPHERE_OPACITY_SPAN = 0.16;
-export const MARKER_CORE_OPACITY_BASE = 0.24;
-export const MARKER_CORE_OPACITY_SPAN = 0.46;
+export const MARKER_ATMOSPHERE_OPACITY_BASE = 0.02;
+export const MARKER_ATMOSPHERE_OPACITY_SPAN = 0.05;
+export const MARKER_CORE_OPACITY_BASE = 0.18;
+export const MARKER_CORE_OPACITY_SPAN = 0.32;
 export const MARKER_INNER_RING_OPACITY_BASE = 0.08;
 export const MARKER_INNER_RING_OPACITY_SPAN = 0.22;
 export const MARKER_OUTER_RING_OPACITY_BASE = 0.04;
 export const MARKER_OUTER_RING_OPACITY_SPAN = 0.13;
 // Marker layer scale relative to the (clamped) endpoint radius.
 export const MARKER_MIN_SCALE = 24;
-export const MARKER_ATMOSPHERE_SCALE = 0.54;
+export const MARKER_ATMOSPHERE_SCALE = 0.34;
 export const MARKER_CORE_SCALE = 0.3;
 export const MARKER_INNER_RING_SCALE = 0.94;
 export const MARKER_OUTER_RING_SCALE = 1.18;
 // Hover ball: opacity, radius factor, and clamp range for its scale.
 export const HOVER_BALL_OPACITY = 0.74;
-export const HOVER_BALL_RADIUS_FACTOR = 0.46;
-export const HOVER_BALL_MIN_SCALE = 8;
-export const HOVER_BALL_MAX_SCALE = 18;
+export const HOVER_BALL_RADIUS_FACTOR = 0.9;
+export const HOVER_BALL_MIN_SCALE = 6;
+export const HOVER_BALL_MAX_SCALE = 72;
 export const HOVER_BALL_SPIN = 0.004;
 // Highlight-marker scale/strength for 1st-degree (level 2) vs 2nd-degree (level 1) nodes.
 export const HIGHLIGHT_MARKER_SCALE_NEAR = 0.86;
@@ -250,15 +251,6 @@ export const EDGE_FILAMENT_HIT_SEGMENTS = 16;
 export const EDGE_HIT_SEGMENTS = 18;
 export const EDGE_FILAMENT_HIT_RADIUS = 10;
 export const EDGE_HIT_RADIUS = 8;
-// Edge opacity ramp by state: each tier is min(cap, baseOpacity + boost).
-export const EDGE_DEFAULT_BASE_OPACITY = 0.18;
-export const EDGE_OPACITY_SELECTED_CAP = 0.86;
-export const EDGE_OPACITY_SELECTED_BOOST = 0.56;
-export const EDGE_OPACITY_HOVER_CAP = 0.54;
-export const EDGE_OPACITY_HOVER_BOOST = 0.26;
-export const EDGE_OPACITY_CONNECTED_CAP = 0.82;
-export const EDGE_OPACITY_CONNECTED_BOOST = 0.52;
-export const EDGE_OPACITY_UNRELATED_DIM = 0.1;
 // Hover-edge overlay: its own opacity and how much fatter than the base tube it draws.
 export const HOVER_EDGE_OVERLAY_OPACITY = 0.34;
 export const HOVER_EDGE_RADIUS_FACTOR = 1.85;
@@ -283,8 +275,9 @@ export const HOVER_LABEL_MIN_HEIGHT = 12;
 export const HOVER_LABEL_HEIGHT_FACTOR = 0.72;
 
 // ── Ambient animation ────────────────────────────────────────────────────────
-// World auto-rotation per frame in full-motion galaxy mode (radians).
-export const WORLD_ROTATION_SPEED = 0.000035;
+// World auto-rotation per frame in full-motion galaxy mode (radians). Kept deliberately
+// slow so the Motion toggle is visible without making dense additive edge fields crawl.
+export const WORLD_ROTATION_SPEED = 0.000012;
 
 // Shared scratch projection vector. Used by setLabelPosition (labels.ts) and the
 // render loop in core.ts; kept here so both modules reference the same singleton.

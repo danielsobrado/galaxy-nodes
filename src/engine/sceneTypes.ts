@@ -15,11 +15,6 @@ export interface EdgeEndpoints {
   target: SceneEdgeEndpoint;
 }
 
-export interface EdgeVisualRange {
-  count: number;
-  start: number;
-}
-
 export interface EdgeVisualState<EMeta = unknown> {
   appearanceKey: string;
   baseOpacity: number;
@@ -29,8 +24,8 @@ export interface EdgeVisualState<EMeta = unknown> {
   /** Per-edge raycast proxy; only created in tube (quality) render mode. */
   hit: THREE.Mesh | null;
   id: string;
+  visual: THREE.Object3D;
   visible: boolean;
-  visualRange: EdgeVisualRange | null;
 }
 
 export interface EndpointMarker {

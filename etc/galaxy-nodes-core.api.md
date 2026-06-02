@@ -63,6 +63,9 @@ export interface EdgeEndpoint<NMeta = unknown> {
 }
 
 // @public (undocumented)
+export type EdgeRenderMode = 'tube' | 'line';
+
+// @public (undocumented)
 export function formatCompactNumber(value: number): string;
 
 // @public (undocumented)
@@ -158,6 +161,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     contextLimit?: number;
     // (undocumented)
     dataset: GraphDataset<NMeta, EMeta, CMeta>;
+    expectedSize?: number;
     // (undocumented)
     galaxyMode: boolean;
     // (undocumented)
@@ -168,6 +172,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     paused?: boolean;
     // (undocumented)
     planetSizing?: GalaxyPlanetSizingOptions;
+    renderMode?: GalaxyRenderMode;
     // (undocumented)
     selectedEdgeId: string | null;
     // (undocumented)
@@ -177,6 +182,9 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     // (undocumented)
     theme?: GalaxyGraphTheme;
 }
+
+// @public (undocumented)
+export type GalaxyRenderMode = 'auto' | 'quality' | 'scale';
 
 // @public (undocumented)
 export interface GalaxySceneFailure {
@@ -330,6 +338,12 @@ export function resolveAccessors<NMeta = unknown, EMeta = unknown>(accessors?: G
 // @public
 export type ResolvedAccessors<NMeta = unknown, EMeta = unknown> = Required<GraphAccessors<NMeta, EMeta>>;
 
+// Warning: (ae-unresolved-link) The @link reference could not be resolved: The package "galaxy-nodes" does not have an export "DENSITY_REFERENCE_COUNT"
+// Warning: (ae-unresolved-link) The @link reference could not be resolved: The package "galaxy-nodes" does not have an export "DENSITY_MIN_SCALE"
+//
+// @public
+export function resolveDensityScale(count: number): number;
+
 // @public (undocumented)
 export interface ResolvedGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
     // (undocumented)
@@ -361,6 +375,9 @@ export interface ResolvedLayoutCluster<TMeta = unknown> extends GraphCluster<TMe
     // (undocumented)
     radius: number;
 }
+
+// @public
+export function resolveEdgeRenderMode(nodeCount: number, edgeCount: number, expectedSize: number | undefined, renderMode: GalaxyRenderMode | undefined): EdgeRenderMode;
 
 // @public (undocumented)
 export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unknown>(dataset: GraphDataset<NMeta, EMeta, CMeta>, options?: GraphLayoutInput): ResolvedGraphLayout<NMeta, EMeta, CMeta>;

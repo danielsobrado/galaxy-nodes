@@ -244,12 +244,14 @@ export interface GalaxyGraphVisualizerOptions {
     accessibleSummaryLimit?: number;
     // (undocumented)
     datasetSizes?: readonly number[];
+    expectedSize?: number;
     // (undocumented)
     galaxyMode?: boolean;
     // (undocumented)
     motionPreference?: GalaxyMotionPreference;
     // (undocumented)
     planetSizing?: GalaxyPlanetSizingOptions;
+    renderMode?: GalaxyRenderMode;
     // (undocumented)
     showClusters?: boolean;
     // (undocumented)
@@ -260,6 +262,8 @@ export interface GalaxyGraphVisualizerOptions {
     showDetailPanel?: boolean;
     // (undocumented)
     showGroupNav?: boolean;
+    // (undocumented)
+    showKeyLegend?: boolean;
     // (undocumented)
     showLegend?: boolean;
     // (undocumented)
@@ -287,6 +291,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
     groups?: readonly string[];
     // (undocumented)
     initialGroup?: string | null;
+    keyLegend?: ReactNode;
     labels?: Partial<GalaxyGraphLabels>;
     // (undocumented)
     largeGraph?: LargeGraphOptions<NMeta, EMeta, CMeta>;

@@ -4,34 +4,22 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { getEdgeId, resolveAccessors } from '../domain/data';
-import {
-  canUseDOM,
-  detectWebGLAvailability,
-  getGalaxyRendererContextBudget,
-  reserveGalaxyRendererContext,
-  resolveMotionPreference,
-  type GalaxyMotionPreference,
-  type GalaxyRendererContextBudget,
-  type ResolvedGalaxyMotion,
-} from './environment';
+import { type ResolvedGalaxyMotion } from './environment';
 import { resolveGraphLayout, type GraphLayoutInput } from '../domain/layout';
 import {
   buildSceneNodeIndex,
   buildNodeDegrees,
   maxDegreeForMode as getMaxDegreeForMode,
   edgeMatchesActiveGroup,
-  getSceneRebuildKey,
   MAJOR_PLANET_LIMIT_ALL,
   MAJOR_PLANET_LIMIT_GROUP,
   planetSizeMultiplierForDegree,
   selectPlanetOverlayNodesBySizing,
   type PlanetSizingMode,
-  type ResolvedPlanetSizing,
   type SceneNodeIndex,
 } from './sceneData';
-import type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
+import type { GalaxySceneFailure } from './sceneFallback';
 import type {
   GraphAccessors,
   GalaxyCameraView,
@@ -51,6 +39,7 @@ import {
   NODE_HIGHLIGHT_FIRST_DEGREE_LIMIT,
   NODE_HIGHLIGHT_SECOND_DEGREE_LIMIT,
   SELECTED_NODE_RELATIONSHIP_LABEL_LIMIT,
+  SELECTED_NODE_EDGE_FOCUS_LIMIT,
   DIMMED_POINT_COLOR_FACTOR,
   KEY_MOVE_SPEED,
   KEY_MOVE_SPEED_VERTICAL,
@@ -78,27 +67,17 @@ import {
   KEY_LIGHT_DISTANCE,
   RIM_LIGHT_INTENSITY,
   RIM_LIGHT_DISTANCE,
-  DEFAULT_PLANET_SIZE_MIN,
-  DEFAULT_PLANET_SIZE_MAX,
-  DEFAULT_PLANET_SIZE_STRENGTH,
   POINT_BASE_SIZE_GALAXY,
   POINT_BASE_SIZE_DEFAULT,
   POINT_MIN_PIXEL_SIZE,
   POINT_SIZE_SELECTED,
   POINT_SIZE_FIRST_DEGREE,
   POINT_SIZE_SECOND_DEGREE,
-  POINT_FIRST_DEGREE_TINT,
-  POINT_SECOND_DEGREE_TINT,
   POINT_UNRELATED_DIM,
   SELECTION_POINT_OPACITY,
   FOCUS_STAR_DIM_FACTOR,
   FOCUS_CLUSTER_DIM_FACTOR,
   FOCUS_FOG_DENSITY_MULTIPLIER,
-  FOCUS_DISTANCE_INNER,
-  FOCUS_DISTANCE_OUTER,
-  FOCUS_DISTANCE_DIM_FACTOR,
-  POINT_CAPACITY_GROWTH_FACTOR,
-  POINT_CAPACITY_GROWTH_PAD,
   STAR_DISTANCE_MIN,
   STAR_DISTANCE_SPAN,
   STAR_VERTICAL_SPREAD,
@@ -157,13 +136,6 @@ import {
   CLUSTER_ENDPOINT_MIN_RADIUS,
   CLUSTER_ENDPOINT_RADIUS_FACTOR,
   EDGE_MIDPOINT_LERP,
-  EDGE_OPACITY_SELECTED_CAP,
-  EDGE_OPACITY_SELECTED_BOOST,
-  EDGE_OPACITY_HOVER_CAP,
-  EDGE_OPACITY_HOVER_BOOST,
-  EDGE_OPACITY_CONNECTED_CAP,
-  EDGE_OPACITY_CONNECTED_BOOST,
-  EDGE_OPACITY_UNRELATED_DIM,
   HOVER_EDGE_OVERLAY_OPACITY,
   HOVER_EDGE_RADIUS_FACTOR,
   FOCUS_NODE_OFFSET_X_SCALE,
@@ -181,12 +153,27 @@ import {
   HOVER_LABEL_MIN_HEIGHT,
   HOVER_LABEL_HEIGHT_FACTOR,
   WORLD_ROTATION_SPEED,
-  EDGE_LINE_SEGMENTS,
-  SCALE_RENDER_ELEMENT_THRESHOLD,
-  DENSITY_REFERENCE_COUNT,
-  DENSITY_MIN_SCALE,
   RENDER_MSAA_SAMPLES,
 } from './sceneConstants';
+import { createPointCloudMaterial } from './pointCloudMaterial';
+import { PointCloudBuffer } from './pointCloudBuffer';
+import {
+  resolveDensityScale,
+  resolvePlanetSizing,
+  type EdgeRenderMode,
+  type GalaxyGraphTheme,
+  type GalaxyPlanetSizingOptions,
+} from './rendererConfig';
+import type {
+  GalaxyRenderer,
+  GalaxyRendererCallbacks,
+  GalaxyRendererOptions,
+  MutableRef,
+  SceneCallbacks,
+  SceneRuntime,
+} from './rendererTypes';
+import { createGalaxyRendererController } from './rendererLifecycle';
+import { AcesOutputPass } from './postprocessing';
 import { dimColor, makeGlowTexture, makePlanetTexture, planetColor, pointCloudColor } from './materials';
 import { createEdgeLineGeometry, createTubeGeometry, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
 import { createEndpointMarker, createHoverNodeMarker, setHoverNodeMarkerVisible, setMarkerVisible } from './markers';
@@ -200,244 +187,17 @@ import {
   shouldShowClusterLabel,
   shouldShowMajorLabel,
 } from './labels';
-import type {
-  EdgeEndpoints,
-  EdgeVisualRange,
-  EdgeVisualState,
-  EndpointMarker,
-  SceneEdgeEndpoint,
-  SceneLabel,
-} from './sceneTypes';
+import type { EdgeEndpoints, EdgeVisualState, EndpointMarker, SceneEdgeEndpoint, SceneLabel } from './sceneTypes';
 
 export { getGalaxyRendererContextBudget } from './environment';
 export type { GalaxyMotionPreference, GalaxyRendererContextBudget } from './environment';
+export { resolveDensityScale, resolveEdgeRenderMode } from './rendererConfig';
+export type { EdgeRenderMode, GalaxyGraphTheme, GalaxyPlanetSizingOptions, GalaxyRenderMode } from './rendererConfig';
+export type { CameraCommand, GalaxyRenderer, GalaxyRendererCallbacks, GalaxyRendererOptions } from './rendererTypes';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
-
-export interface CameraCommand {
-  type: 'focus' | 'focus-edge' | 'move' | 'reset';
-  direction?: SpaceDirection;
-  edgeId?: string;
-  nodeId?: string;
-  nonce: number;
-}
-
-export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  dataset: GraphDataset<NMeta, EMeta, CMeta>;
-  /** Active group filter, or `null` to show everything. */
-  activeGroup: string | null;
-  showClusters: boolean;
-  galaxyMode: boolean;
-  layout?: GraphLayoutInput;
-  /** Visual accessors. They are now applied in place rather than rebuilding the scene. */
-  accessors?: GraphAccessors<NMeta, EMeta>;
-  theme?: GalaxyGraphTheme;
-  cameraCommand: CameraCommand | null;
-  /** Maximum active Galaxy renderer WebGL contexts allowed in this browser tab. Defaults to 12. */
-  contextLimit?: number;
-  motionPreference?: GalaxyMotionPreference;
-  paused?: boolean;
-  planetSizing?: GalaxyPlanetSizingOptions;
-  selectedNodeId: string | null;
-  selectedEdgeId: string | null;
-  /**
-   * Expected final element count (nodes + edges) for streamed/progressive datasets.
-   * The render tier is chosen up front from this hint so a graph that grows past the
-   * scale threshold mid-stream is never rebuilt from tubes to lines. Construction-time
-   * only; changing it after mount has no effect until the scene rebuilds.
-   */
-  expectedSize?: number;
-  /**
-   * Edge render tier. `'auto'` (default) uses tube edges for small graphs and switches
-   * to lightweight line edges past ~{@link SCALE_RENDER_ELEMENT_THRESHOLD} elements;
-   * `'quality'` forces tubes, `'scale'` forces lines. Construction-time only.
-   */
-  renderMode?: GalaxyRenderMode;
-}
-
-export type GalaxyRenderMode = 'auto' | 'quality' | 'scale';
-export type EdgeRenderMode = 'tube' | 'line';
-
-/**
- * Pick the edge render tier. Honors an explicit `renderMode`, otherwise compares the
- * larger of the declared `expectedSize` and the current element count against the
- * measured scale threshold (see scripts/browser-perf.mjs).
- */
-export function resolveEdgeRenderMode(
-  nodeCount: number,
-  edgeCount: number,
-  expectedSize: number | undefined,
-  renderMode: GalaxyRenderMode | undefined,
-): EdgeRenderMode {
-  if (renderMode === 'quality') return 'tube';
-  if (renderMode === 'scale') return 'line';
-  const elements = Math.max(expectedSize ?? 0, nodeCount + edgeCount);
-  return elements >= SCALE_RENDER_ELEMENT_THRESHOLD ? 'line' : 'tube';
-}
-
-/**
- * Adaptive per-element opacity multiplier that keeps additive node/edge blending from
- * saturating to white as the graph grows. Returns 1 at or below
- * {@link DENSITY_REFERENCE_COUNT} (the dense-but-readable look is left untouched), then
- * tapers as sqrt(reference / count), floored at {@link DENSITY_MIN_SCALE}.
- */
-export function resolveDensityScale(count: number): number {
-  if (count <= DENSITY_REFERENCE_COUNT) return 1;
-  return Math.max(DENSITY_MIN_SCALE, Math.min(1, Math.sqrt(DENSITY_REFERENCE_COUNT / count)));
-}
-
-export interface GalaxyPlanetSizingOptions {
-  /** `degree` uses all links, `incoming` uses target links, `outgoing` uses source links, `accessor` uses nodeSize only. */
-  mode?: PlanetSizingMode;
-  /** Multiplier applied to the final planet radius. */
-  scale?: number;
-  /** Lower visual multiplier for degree-based sizing. */
-  min?: number;
-  /** Upper visual multiplier for degree-based sizing. */
-  max?: number;
-  /** Higher values make hubs separate more strongly from low-degree nodes. */
-  strength?: number;
-}
-
-export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
-  onCameraViewChange?: (view: GalaxyCameraView) => void;
-  onContextBudgetExceeded?: (budget: GalaxyRendererContextBudget) => void;
-  onSceneFailure?: (failure: GalaxySceneFailure) => void;
-  onSceneReady?: () => void;
-  onSelectNode?: (node: GraphNode<NMeta> | null) => void;
-  onHoverNode?: (node: GraphNode<NMeta> | null) => void;
-  onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
-  onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
-}
-
-interface MutableRef<T> {
-  current: T;
-}
-
-type SceneCallbacks<NMeta = unknown, EMeta = unknown> = Required<
-  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onHoverEdge' | 'onHoverNode' | 'onSelectEdge' | 'onSelectNode'>
-> &
-  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange'>;
-
-export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  focusEdge: (edgeId: string) => void;
-  focusNode: (nodeId: string) => void;
-  moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
-  resetCamera: () => void;
-  retry: () => void;
-  update: (
-    options: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
-    callbacks?: GalaxyRendererCallbacks<NMeta, EMeta>,
-  ) => void;
-  dispose: () => void;
-}
-
-interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
-  focusEdge: (edgeId: string) => void;
-  focusNode: (nodeId: string) => void;
-  moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
-  resetCamera: () => void;
-  updateAccessors: (accessors: GraphAccessors<NMeta, EMeta> | undefined) => void;
-  updateActiveGroup: (activeGroup: string | null) => void;
-  updateClusterVisibility: (showClusters: boolean) => void;
-  updateGalaxyMode: (galaxyMode: boolean) => void;
-  updateMotionPreference: (motion: ResolvedGalaxyMotion) => void;
-  updatePlanetSizing: (planetSizing: GalaxyPlanetSizingOptions | undefined) => void;
-  updateSelection: (selectedNodeId: string | null, selectedEdgeId: string | null) => void;
-  updateTheme: (theme: GalaxyGraphTheme | undefined) => void;
-  appendDataset: (dataset: GraphDataset<NMeta, EMeta>) => void;
-  dispose: () => void;
-}
-
-class AcesOutputPass extends OutputPass {
-  render(
-    renderer: THREE.WebGLRenderer,
-    writeBuffer: THREE.WebGLRenderTarget,
-    readBuffer: THREE.WebGLRenderTarget,
-    deltaTime: number,
-    maskActive: boolean,
-  ) {
-    const previousToneMapping = renderer.toneMapping;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    try {
-      super.render(renderer, writeBuffer, readBuffer, deltaTime, maskActive);
-    } finally {
-      renderer.toneMapping = previousToneMapping;
-    }
-  }
-}
-
-function withContextReservation<NMeta, EMeta>(runtime: SceneRuntime<NMeta, EMeta>, release: () => void) {
-  let disposed = false;
-  return {
-    ...runtime,
-    dispose: () => {
-      if (disposed) return;
-      disposed = true;
-      try {
-        runtime.dispose();
-      } finally {
-        release();
-      }
-    },
-  };
-}
-
-/** Snapshot of the inputs each in-place updater consumes, used to diff `update()` calls. */
-interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
-  accessors: GraphAccessors<NMeta, EMeta> | undefined;
-  activeGroup: string | null;
-  galaxyMode: boolean;
-  planetSizing: GalaxyPlanetSizingOptions | undefined;
-  resolvedMotion: ResolvedGalaxyMotion;
-  selectedEdgeId: string | null;
-  selectedNodeId: string | null;
-  showClusters: boolean;
-  theme: GalaxyGraphTheme | undefined;
-}
-
-interface CoreState<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
-  appliedOptions: AppliedRendererState<NMeta, EMeta> | null;
-  callbacks: GalaxyRendererCallbacks<NMeta, EMeta>;
-  callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>;
-  disposed: boolean;
-  lastCameraCommandNonce: number | null;
-  motionCleanup: (() => void) | null;
-  options: GalaxyRendererOptions<NMeta, EMeta, CMeta>;
-  pausedRef: MutableRef<boolean>;
-  runtime: SceneRuntime<NMeta, EMeta> | null;
-  sceneKey: string;
-  resolvedMotion: ResolvedGalaxyMotion;
-}
-
-function noop() {
-  return undefined;
-}
 
 function vectorToVec3(vector: THREE.Vector3): Vec3 {
   return { x: vector.x, y: vector.y, z: vector.z };
-}
-
-function resolveRendererCallbacks<NMeta, EMeta>(
-  callbacks?: GalaxyRendererCallbacks<NMeta, EMeta>,
-): SceneCallbacks<NMeta, EMeta> {
-  return {
-    onCameraViewChange: callbacks?.onCameraViewChange,
-    onHoverEdge: callbacks?.onHoverEdge ?? noop,
-    onHoverNode: callbacks?.onHoverNode ?? noop,
-    onSelectEdge: callbacks?.onSelectEdge ?? noop,
-    onSelectNode: callbacks?.onSelectNode ?? noop,
-  };
-}
-
-function applyCameraCommand<NMeta, EMeta>(
-  runtime: SceneRuntime<NMeta, EMeta> | null,
-  cameraCommand: CameraCommand | null,
-) {
-  if (!cameraCommand || !runtime) return;
-  if (cameraCommand.type === 'reset') runtime.resetCamera();
-  if (cameraCommand.type === 'focus' && cameraCommand.nodeId) runtime.focusNode(cameraCommand.nodeId);
-  if (cameraCommand.type === 'focus-edge' && cameraCommand.edgeId) runtime.focusEdge(cameraCommand.edgeId);
-  if (cameraCommand.type === 'move' && cameraCommand.direction) runtime.moveCamera(cameraCommand.direction, 1.75);
 }
 
 interface NodeSelectionHighlight {
@@ -460,12 +220,6 @@ interface ClusterVisual {
   sprite: THREE.Sprite;
 }
 
-export interface GalaxyGraphTheme {
-  background?: string;
-  panelAccentColor?: string;
-  selectedColor?: string;
-}
-
 const CAMERA_HOME = new THREE.Vector3(120, 430, 1540);
 const TARGET_HOME = new THREE.Vector3(0, 0, 0);
 const tmpVector = new THREE.Vector3();
@@ -473,42 +227,7 @@ const tmpDirection = new THREE.Vector3();
 const tmpRight = new THREE.Vector3();
 const tmpMove = new THREE.Vector3();
 const tmpPointSelectionColor = new THREE.Color();
-const tmpPointSelectionTargetColor = new THREE.Color();
-const tmpEdgeAppearanceColor = new THREE.Color();
 const instanceDummy = new THREE.Object3D();
-const EDGE_STATE_SELECTED = 1;
-const EDGE_STATE_HOVERED = 2;
-const EDGE_STATE_CONNECTED = 4;
-const EDGE_STATE_DIMMED = 8;
-const EDGE_STATE_VISIBLE = 16;
-
-const DEFAULT_PLANET_SIZING: ResolvedPlanetSizing = {
-  mode: 'accessor',
-  scale: 1,
-  min: DEFAULT_PLANET_SIZE_MIN,
-  max: DEFAULT_PLANET_SIZE_MAX,
-  strength: DEFAULT_PLANET_SIZE_STRENGTH,
-};
-
-function getLayoutKey(layout?: GraphLayoutInput) {
-  if (layout === false) return 'off';
-  if (!layout) return 'auto';
-
-  return JSON.stringify({
-    clusterRadius: layout.clusterRadius,
-    preserveExistingPositions: layout.preserveExistingPositions,
-    seed: layout.seed,
-    spacing: layout.spacing,
-    strategy: layout.strategy,
-  });
-}
-
-function resolvePlanetSizing(planetSizing?: GalaxyPlanetSizingOptions): ResolvedPlanetSizing {
-  return {
-    ...DEFAULT_PLANET_SIZING,
-    ...planetSizing,
-  };
-}
 
 function resolveEndpoint<NMeta, EMeta>(
   id: string,
@@ -545,12 +264,6 @@ function isTypingTarget(target: EventTarget | null) {
   );
 }
 
-function clearSceneDom(host: HTMLDivElement) {
-  Array.from(host.children).forEach((child) => {
-    if (child.tagName === 'CANVAS' || child.classList.contains('scene-labels')) child.remove();
-  });
-}
-
 function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host: HTMLDivElement,
   dataset: GraphDataset<NMeta, EMeta, CMeta>,
@@ -574,6 +287,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   let selectedNodeId: string | null = null;
   let selectedEdgeId: string | null = null;
   let selectedNodeHighlight: NodeSelectionHighlight | null = null;
+  let selectedEdgeHighlight: NodeSelectionHighlight | null = null;
   let hoveredNodeId: string | null = null;
   let hoveredEdgeId: string | null = null;
   let theme = initialTheme;
@@ -603,7 +317,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   renderer.setSize(width, height);
-  renderer.setClearColor(theme?.background ?? '#07090d', 1);
+  renderer.setClearColor(theme?.background ?? '#000000', 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
@@ -757,239 +471,16 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const incidentEdgeIdsByNodeId = new Map<string, Set<string>>();
   const neighborNodeIdsByNodeId = new Map<string, Set<string>>();
   const interactiveEdgeMeshes: THREE.Object3D[] = [];
-  const edgeVisualRanges = new Map<string, EdgeVisualRange>();
 
-  // Point-cloud attribute buffers grow on incremental append (see growPointBuffers).
-  // They are over-allocated with spare capacity so streamed chunks rarely reallocate,
-  // and the geometry draw range caps rendering/picking to the live node count.
-  let pointCapacity = dataset.nodes.length;
-  let pointPositions = new Float32Array(pointCapacity * 3);
-  let basePointColors = new Float32Array(pointCapacity * 3);
-  let pointColors = new Float32Array(pointCapacity * 3);
-  let basePointSizes = new Float32Array(pointCapacity);
-  let visiblePointSizes = new Float32Array(pointCapacity);
-
-  dataset.nodes.forEach((node, index) => {
-    const position = nodePositions.get(node.id)!;
-    pointPositions[index * 3] = position.x;
-    pointPositions[index * 3 + 1] = position.y;
-    pointPositions[index * 3 + 2] = position.z;
+  const pointBuffer = new PointCloudBuffer(dataset.nodes, nodePositions);
+  const pointsMaterial = createPointCloudMaterial({
+    galaxyMode,
+    nodeCount: dataset.nodes.length,
+    pixelRatio: renderer.getPixelRatio(),
   });
-
-  const pointsGeometry = new THREE.BufferGeometry();
-  let pointColorAttribute = new THREE.BufferAttribute(pointColors, 3);
-  let pointSizeAttribute = new THREE.BufferAttribute(visiblePointSizes, 1);
-  pointColorAttribute.setUsage(THREE.DynamicDrawUsage);
-  pointSizeAttribute.setUsage(THREE.DynamicDrawUsage);
-  pointsGeometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3));
-  pointsGeometry.setAttribute('color', pointColorAttribute);
-  pointsGeometry.setAttribute('size', pointSizeAttribute);
-
-  const pointsMaterial = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    vertexColors: true,
-    uniforms: {
-      pixelRatio: { value: renderer.getPixelRatio() },
-      baseSize: { value: galaxyMode ? POINT_BASE_SIZE_GALAXY : POINT_BASE_SIZE_DEFAULT },
-      minPointSize: { value: POINT_MIN_PIXEL_SIZE * renderer.getPixelRatio() },
-      globalOpacity: { value: 1 },
-      densityScale: { value: resolveDensityScale(dataset.nodes.length) },
-      focusActive: { value: 0 },
-      focusPosition: { value: new THREE.Vector3() },
-      focusInner: { value: FOCUS_DISTANCE_INNER },
-      focusOuter: { value: FOCUS_DISTANCE_OUTER },
-      focusDim: { value: FOCUS_DISTANCE_DIM_FACTOR },
-      uTime: { value: 0 },
-    },
-    vertexShader: `
-      attribute float size;
-      varying vec3 vColor;
-      varying float vSharpness;
-      varying float vFocus;
-      uniform float pixelRatio;
-      uniform float baseSize;
-      uniform float minPointSize;
-      uniform float focusActive;
-      uniform vec3 focusPosition;
-      uniform float focusInner;
-      uniform float focusOuter;
-      void main() {
-        vColor = color;
-        float focusDistance = distance(position, focusPosition);
-        vFocus = mix(1.0, 1.0 - smoothstep(focusInner, focusOuter, focusDistance), focusActive);
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        float attenuation = clamp(300.0 / -mvPosition.z, 0.36, 3.65);
-        vSharpness = smoothstep(0.9, 2.8, attenuation);
-        // Floor the footprint so far points never go sub-pixel (which makes them blink
-        // as the camera moves); the floor is already in device pixels.
-        gl_PointSize = max(minPointSize, size * baseSize * attenuation * pixelRatio);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vColor;
-      varying float vSharpness;
-      varying float vFocus;
-      uniform float globalOpacity;
-      uniform float densityScale;
-      uniform float focusActive;
-      uniform float focusDim;
-      void main() {
-        vec2 uv = gl_PointCoord.xy - vec2(0.5);
-        float dist = length(uv);
-        float edge = mix(0.08, 0.18, vSharpness);
-        float coreWidth = mix(0.16, 0.24, vSharpness);
-        float alpha = smoothstep(0.5, edge, dist);
-        float core = smoothstep(coreWidth, 0.0, dist);
-        float opacity = mix(0.32, 0.52, vSharpness);
-        float focusOpacity = mix(focusDim, 1.0, vFocus);
-        gl_FragColor = vec4(vColor * (1.0 + core * 0.72), alpha * opacity * globalOpacity * densityScale * mix(1.0, focusOpacity, focusActive));
-        #include <colorspace_fragment>
-      }
-    `,
-  });
-  const pointCloud = new THREE.Points(pointsGeometry, pointsMaterial);
+  const pointCloud = new THREE.Points(pointBuffer.geometry, pointsMaterial);
   pointCloud.userData.type = 'node-points';
   world.add(pointCloud);
-
-  let edgeVisualCapacity = 1;
-  let edgeVisualVertexCount = 0;
-  let edgePositions = new Float32Array(edgeVisualCapacity * 3);
-  let edgeNormals = new Float32Array(edgeVisualCapacity * 3);
-  let edgeColors = new Float32Array(edgeVisualCapacity * 3);
-  let edgeBaseOpacities = new Float32Array(edgeVisualCapacity);
-  let edgeStatesAttribute = new Float32Array(edgeVisualCapacity);
-  let edgeFlows = new Float32Array(edgeVisualCapacity);
-
-  const edgeVisualGeometry = new THREE.BufferGeometry();
-  let edgePositionAttribute = new THREE.BufferAttribute(edgePositions, 3);
-  let edgeNormalAttribute = new THREE.BufferAttribute(edgeNormals, 3);
-  let edgeColorAttribute = new THREE.BufferAttribute(edgeColors, 3);
-  let edgeBaseOpacityAttribute = new THREE.BufferAttribute(edgeBaseOpacities, 1);
-  let edgeStateAttribute = new THREE.BufferAttribute(edgeStatesAttribute, 1);
-  let edgeFlowAttribute = new THREE.BufferAttribute(edgeFlows, 1);
-  edgeColorAttribute.setUsage(THREE.DynamicDrawUsage);
-  edgeStateAttribute.setUsage(THREE.DynamicDrawUsage);
-  edgeVisualGeometry.setAttribute('position', edgePositionAttribute);
-  edgeVisualGeometry.setAttribute('normal', edgeNormalAttribute);
-  edgeVisualGeometry.setAttribute('aColor', edgeColorAttribute);
-  edgeVisualGeometry.setAttribute('aBaseOpacity', edgeBaseOpacityAttribute);
-  edgeVisualGeometry.setAttribute('aState', edgeStateAttribute);
-  edgeVisualGeometry.setAttribute('aFlow', edgeFlowAttribute);
-  edgeVisualGeometry.setDrawRange(0, 0);
-
-  const edgeVisualMaterial = new THREE.ShaderMaterial({
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    uniforms: {
-      uTime: { value: 0 },
-      pulseStrength: { value: 0.08 },
-      selectedOpacityCap: { value: EDGE_OPACITY_SELECTED_CAP },
-      selectedOpacityBoost: { value: EDGE_OPACITY_SELECTED_BOOST },
-      hoverOpacityCap: { value: EDGE_OPACITY_HOVER_CAP },
-      hoverOpacityBoost: { value: EDGE_OPACITY_HOVER_BOOST },
-      connectedOpacityCap: { value: EDGE_OPACITY_CONNECTED_CAP },
-      connectedOpacityBoost: { value: EDGE_OPACITY_CONNECTED_BOOST },
-      unrelatedDim: { value: EDGE_OPACITY_UNRELATED_DIM },
-      densityScale: { value: resolveDensityScale(dataset.edges.length) },
-      focusActive: { value: 0 },
-      focusPosition: { value: new THREE.Vector3() },
-      focusInner: { value: FOCUS_DISTANCE_INNER },
-      focusOuter: { value: FOCUS_DISTANCE_OUTER },
-      focusDim: { value: FOCUS_DISTANCE_DIM_FACTOR },
-    },
-    vertexShader: `
-      attribute vec3 aColor;
-      attribute float aBaseOpacity;
-      attribute float aState;
-      attribute float aFlow;
-      varying vec3 vColor;
-      varying float vBaseOpacity;
-      varying float vState;
-      varying float vFlow;
-      varying float vViewZ;
-      varying float vFocus;
-      uniform float focusActive;
-      uniform vec3 focusPosition;
-      uniform float focusInner;
-      uniform float focusOuter;
-      void main() {
-        vColor = aColor;
-        vBaseOpacity = aBaseOpacity;
-        vState = aState;
-        vFlow = aFlow;
-        float focusDistance = distance(position, focusPosition);
-        vFocus = mix(1.0, 1.0 - smoothstep(focusInner, focusOuter, focusDistance), focusActive);
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        vViewZ = -mvPosition.z;
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
-    fragmentShader: `
-      varying vec3 vColor;
-      varying float vBaseOpacity;
-      varying float vState;
-      varying float vFlow;
-      varying float vViewZ;
-      varying float vFocus;
-      uniform float uTime;
-      uniform float pulseStrength;
-      uniform float selectedOpacityCap;
-      uniform float selectedOpacityBoost;
-      uniform float hoverOpacityCap;
-      uniform float hoverOpacityBoost;
-      uniform float connectedOpacityCap;
-      uniform float connectedOpacityBoost;
-      uniform float unrelatedDim;
-      uniform float densityScale;
-      uniform float focusActive;
-      uniform float focusDim;
-      float stateBit(float stateValue, float bitValue) {
-        return mod(floor(stateValue / bitValue), 2.0);
-      }
-      void main() {
-        float selected = stateBit(vState, 1.0);
-        float hovered = stateBit(vState, 2.0);
-        float connected = stateBit(vState, 4.0);
-        float dimmed = stateBit(vState, 8.0);
-        float visible = stateBit(vState, 16.0);
-        if (visible < 0.5) discard;
-
-        float opacity = vBaseOpacity;
-        if (selected > 0.5) {
-          opacity = min(selectedOpacityCap, vBaseOpacity + selectedOpacityBoost);
-        } else if (hovered > 0.5) {
-          opacity = min(hoverOpacityCap, vBaseOpacity + hoverOpacityBoost);
-        } else if (connected > 0.5) {
-          opacity = min(connectedOpacityCap, vBaseOpacity + connectedOpacityBoost);
-        } else if (dimmed > 0.5) {
-          opacity = vBaseOpacity * unrelatedDim;
-        }
-
-        float depthFade = smoothstep(0.0, 80.0, vViewZ);
-        float focusOpacity = mix(focusDim, 1.0, vFocus);
-        float pulse = (0.5 + 0.5 * sin(vFlow * 18.849555 + uTime * 5.0)) * pulseStrength;
-        // Tame the additive haze from bulk edges as density rises, but keep highlighted
-        // edges (selected/hovered/connected) at full strength so they still read.
-        float highlighted = max(selected, max(hovered, connected));
-        float density = mix(densityScale, 1.0, highlighted);
-        opacity = opacity * depthFade * density * mix(1.0, focusOpacity, focusActive) + pulse * selected;
-        if (opacity <= 0.0) discard;
-        gl_FragColor = vec4(vColor, opacity);
-        #include <colorspace_fragment>
-      }
-    `,
-  });
-  const edgeVisualMesh =
-    edgeRenderMode === 'line'
-      ? new THREE.LineSegments(edgeVisualGeometry, edgeVisualMaterial)
-      : new THREE.Mesh(edgeVisualGeometry, edgeVisualMaterial);
-  edgeVisualMesh.userData.type = 'edge-visuals';
-  edgeVisualMesh.frustumCulled = false;
-  world.add(edgeVisualMesh);
 
   const starGeometry = new THREE.BufferGeometry();
   const starPositions = new Float32Array(MAX_STAR_COUNT * 3);
@@ -1068,14 +559,11 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     if (scene.fog instanceof THREE.FogExp2) scene.fog.density = focusFogDensity(hasSelection);
 
     pointsMaterial.uniforms.focusActive.value = focusActive ? 1 : 0;
-    edgeVisualMaterial.uniforms.focusActive.value = focusActive ? 1 : 0;
     if (focusPosition) pointsMaterial.uniforms.focusPosition.value.copy(focusPosition);
-    if (focusPosition) edgeVisualMaterial.uniforms.focusPosition.value.copy(focusPosition);
-    hasActivePulse = hasSelection;
+    hasActivePulse = false;
     if (!hasSelection) {
       pulseTime = 0;
       pointsMaterial.uniforms.uTime.value = 0;
-      edgeVisualMaterial.uniforms.uTime.value = 0;
     }
   }
 
@@ -1211,9 +699,18 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   }
 
   function getNodeSelectionHighlight(nodeId: string): NodeSelectionHighlight {
-    const connectedEdgeIds = new Set(incidentEdgeIdsByNodeId.get(nodeId) ?? []);
-    const firstDegreeNodeIds = new Set(neighborNodeIdsByNodeId.get(nodeId) ?? []);
+    const connectedEdgeIds = new Set(
+      rankedRelationshipEdgeIds(incidentEdgeIdsByNodeId.get(nodeId) ?? [], SELECTED_NODE_EDGE_FOCUS_LIMIT),
+    );
+    const firstDegreeNodeIds = new Set<string>();
     const secondDegreeNodeIds = new Set<string>();
+
+    connectedEdgeIds.forEach((edgeId) => {
+      const endpoints = edgeEndpoints.get(edgeId);
+      if (!endpoints) return;
+      if (endpoints.source.isNode && endpoints.source.id !== nodeId) firstDegreeNodeIds.add(endpoints.source.id);
+      if (endpoints.target.isNode && endpoints.target.id !== nodeId) firstDegreeNodeIds.add(endpoints.target.id);
+    });
 
     firstDegreeNodeIds.forEach((firstDegreeNodeId) => {
       neighborNodeIdsByNodeId.get(firstDegreeNodeId)?.forEach((secondDegreeNodeId) => {
@@ -1224,6 +721,23 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     });
 
     return { connectedEdgeIds, firstDegreeNodeIds, secondDegreeNodeIds };
+  }
+
+  function getEdgeSelectionHighlight(edgeId: string): NodeSelectionHighlight {
+    const endpoints = edgeEndpoints.get(edgeId);
+    const connectedEdgeIds = new Set<string>([edgeId]);
+    const firstDegreeNodeIds = new Set<string>();
+
+    if (endpoints?.source.isNode) firstDegreeNodeIds.add(endpoints.source.id);
+    if (endpoints?.target.isNode) firstDegreeNodeIds.add(endpoints.target.id);
+
+    return { connectedEdgeIds, firstDegreeNodeIds, secondDegreeNodeIds: new Set() };
+  }
+
+  function edgeVisibleInSelectionContext(edgeId: string) {
+    return Boolean(
+      selectedNodeHighlight?.connectedEdgeIds.has(edgeId) || selectedEdgeHighlight?.connectedEdgeIds.has(edgeId),
+    );
   }
 
   function nodeMarkerLabelPosition(endpoint: SceneEdgeEndpoint) {
@@ -1242,6 +756,12 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const node = endpoint?.isNode ? (nodeLookup.get(endpoint.id) ?? null) : null;
     const labelText = node ? nodeDisplayLabel(node, accessors) : null;
     setSceneLabel(label, labelText, labelText && endpoint ? nodeMarkerLabelPosition(endpoint) : null);
+  }
+
+  function endpointNodeColor(endpoint: SceneEdgeEndpoint | null, fallback: string) {
+    if (!endpoint?.isNode) return fallback;
+    const node = nodeLookup.get(endpoint.id);
+    return node ? accessors.nodeColor(node) : fallback;
   }
 
   function rankedHighlightNodeIds(ids: Iterable<string>, limit: number) {
@@ -1268,7 +788,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const endpoint = resolveEndpoint(nodeId, nodeLookup, nodePositions, clusterLookup, accessors, planetRadius);
     const node = nodeLookup.get(nodeId) ?? null;
     const labelText = node ? nodeDisplayLabel(node, accessors) : null;
-    const color = level === 2 ? (theme?.panelAccentColor ?? '#46f4bc') : (theme?.selectedColor ?? '#d8fff3');
+    const color = node ? accessors.nodeColor(node) : (theme?.selectedColor ?? '#d8fff3');
     setMarkerVisible(
       entry.marker,
       endpoint,
@@ -1307,9 +827,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   }
 
   function updateSelectedRelationshipLabels() {
-    const edgeIds = selectedNodeHighlight
-      ? rankedRelationshipEdgeIds(selectedNodeHighlight.connectedEdgeIds, SELECTED_NODE_RELATIONSHIP_LABEL_LIMIT)
-      : [];
+    const edgeIds: string[] = [];
 
     selectedRelationshipLabels.forEach((label, index) => {
       const edgeId = edgeIds[index];
@@ -1367,24 +885,30 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     if (selectedEndpoints?.source.isNode) selectedEndpointNodeIds.add(selectedEndpoints.source.id);
     if (selectedEndpoints?.target.isNode) selectedEndpointNodeIds.add(selectedEndpoints.target.id);
 
-    visiblePointSizes.fill(0);
+    pointBuffer.visibleSizes.fill(0);
     dataset.nodes.forEach((node, index) => {
       const baseColorOffset = index * 3;
       const selected = selectedNodeId === node.id;
       const firstDegree =
-        selectedEndpointNodeIds.has(node.id) || Boolean(selectedNodeHighlight?.firstDegreeNodeIds.has(node.id));
-      const secondDegree = Boolean(selectedNodeHighlight?.secondDegreeNodeIds.has(node.id));
+        selectedEndpointNodeIds.has(node.id) ||
+        Boolean(selectedNodeHighlight?.firstDegreeNodeIds.has(node.id)) ||
+        Boolean(selectedEdgeHighlight?.firstDegreeNodeIds.has(node.id));
+      const secondDegree =
+        Boolean(selectedNodeHighlight?.secondDegreeNodeIds.has(node.id)) ||
+        Boolean(selectedEdgeHighlight?.secondDegreeNodeIds.has(node.id));
       const highlightLevel = selected ? 3 : firstDegree ? 2 : secondDegree ? 1 : 0;
       const visibleByGroup = activeGroup === null || node.group === activeGroup;
 
       if (!visibleByGroup && highlightLevel === 0) {
-        pointColors[baseColorOffset] = basePointColors[baseColorOffset] * DIMMED_POINT_COLOR_FACTOR;
-        pointColors[baseColorOffset + 1] = basePointColors[baseColorOffset + 1] * DIMMED_POINT_COLOR_FACTOR;
-        pointColors[baseColorOffset + 2] = basePointColors[baseColorOffset + 2] * DIMMED_POINT_COLOR_FACTOR;
+        pointBuffer.colors[baseColorOffset] = pointBuffer.baseColors[baseColorOffset] * DIMMED_POINT_COLOR_FACTOR;
+        pointBuffer.colors[baseColorOffset + 1] =
+          pointBuffer.baseColors[baseColorOffset + 1] * DIMMED_POINT_COLOR_FACTOR;
+        pointBuffer.colors[baseColorOffset + 2] =
+          pointBuffer.baseColors[baseColorOffset + 2] * DIMMED_POINT_COLOR_FACTOR;
         return;
       }
 
-      const baseSize = basePointSizes[index];
+      const baseSize = pointBuffer.baseSizes[index];
       const sizeMultiplier =
         highlightLevel === 3
           ? POINT_SIZE_SELECTED
@@ -1393,43 +917,34 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
             : highlightLevel === 1
               ? POINT_SIZE_SECOND_DEGREE
               : 1;
-      visiblePointSizes[index] =
+      pointBuffer.visibleSizes[index] =
         visibleByGroup || highlightLevel > 0 ? Math.max(baseSize * sizeMultiplier, baseSize + highlightLevel) : 0;
 
       tmpPointSelectionColor.setRGB(
-        basePointColors[baseColorOffset],
-        basePointColors[baseColorOffset + 1],
-        basePointColors[baseColorOffset + 2],
+        pointBuffer.baseColors[baseColorOffset],
+        pointBuffer.baseColors[baseColorOffset + 1],
+        pointBuffer.baseColors[baseColorOffset + 2],
       );
 
       if (highlightLevel === 3) tmpPointSelectionColor.set('#ffffff');
-      else if (highlightLevel === 2)
-        tmpPointSelectionColor.lerp(
-          tmpPointSelectionTargetColor.set(theme?.panelAccentColor ?? '#46f4bc'),
-          POINT_FIRST_DEGREE_TINT,
-        );
-      else if (highlightLevel === 1)
-        tmpPointSelectionColor.lerp(
-          tmpPointSelectionTargetColor.set(theme?.selectedColor ?? '#d8fff3'),
-          POINT_SECOND_DEGREE_TINT,
-        );
+      else if (highlightLevel === 2) tmpPointSelectionColor.multiplyScalar(1.36);
+      else if (highlightLevel === 1) tmpPointSelectionColor.multiplyScalar(1.18);
       else if (selectedNodeId || selectedEdgeId) tmpPointSelectionColor.multiplyScalar(POINT_UNRELATED_DIM);
 
-      pointColors[baseColorOffset] = tmpPointSelectionColor.r;
-      pointColors[baseColorOffset + 1] = tmpPointSelectionColor.g;
-      pointColors[baseColorOffset + 2] = tmpPointSelectionColor.b;
+      pointBuffer.colors[baseColorOffset] = tmpPointSelectionColor.r;
+      pointBuffer.colors[baseColorOffset + 1] = tmpPointSelectionColor.g;
+      pointBuffer.colors[baseColorOffset + 2] = tmpPointSelectionColor.b;
     });
-    pointColorAttribute.needsUpdate = true;
-    pointSizeAttribute.needsUpdate = true;
+    pointBuffer.markAppearanceUpdated();
   }
 
   function updatePointAppearance() {
     dataset.nodes.forEach((node, index) => {
       const pointColor = pointCloudColor(accessors.nodeColor(node));
-      basePointColors[index * 3] = pointColor.r;
-      basePointColors[index * 3 + 1] = pointColor.g;
-      basePointColors[index * 3 + 2] = pointColor.b;
-      basePointSizes[index] = accessors.nodeSize(node);
+      pointBuffer.baseColors[index * 3] = pointColor.r;
+      pointBuffer.baseColors[index * 3 + 1] = pointColor.g;
+      pointBuffer.baseColors[index * 3 + 2] = pointColor.b;
+      pointBuffer.baseSizes[index] = accessors.nodeSize(node);
     });
     updatePointVisibility();
   }
@@ -1481,13 +996,9 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
                 ? RING_SCALE_HOVERED
                 : RING_SCALE_IDLE);
       const color = selectionEmphasized
-        ? new THREE.Color(
-            selected
-              ? '#ffffff'
-              : relatedToSelectedEdge || firstDegree
-                ? (theme?.panelAccentColor ?? '#46f4bc')
-                : (theme?.selectedColor ?? '#d8fff3'),
-          )
+        ? selected
+          ? new THREE.Color('#ffffff')
+          : planetColor(nodeColor).multiplyScalar(relatedToSelectedEdge || firstDegree ? 1.2 : 1.1)
         : hovered
           ? planetColor(nodeColor).multiplyScalar(PLANET_HOVER_BRIGHTEN)
           : hasSelection
@@ -1560,112 +1071,29 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     });
   }
 
-  function replaceEdgeVisualAttributes() {
-    edgePositionAttribute = new THREE.BufferAttribute(edgePositions, 3);
-    edgeNormalAttribute = new THREE.BufferAttribute(edgeNormals, 3);
-    edgeColorAttribute = new THREE.BufferAttribute(edgeColors, 3);
-    edgeBaseOpacityAttribute = new THREE.BufferAttribute(edgeBaseOpacities, 1);
-    edgeStateAttribute = new THREE.BufferAttribute(edgeStatesAttribute, 1);
-    edgeFlowAttribute = new THREE.BufferAttribute(edgeFlows, 1);
-    edgeColorAttribute.setUsage(THREE.DynamicDrawUsage);
-    edgeStateAttribute.setUsage(THREE.DynamicDrawUsage);
-    edgeVisualGeometry.setAttribute('position', edgePositionAttribute);
-    edgeVisualGeometry.setAttribute('normal', edgeNormalAttribute);
-    edgeVisualGeometry.setAttribute('aColor', edgeColorAttribute);
-    edgeVisualGeometry.setAttribute('aBaseOpacity', edgeBaseOpacityAttribute);
-    edgeVisualGeometry.setAttribute('aState', edgeStateAttribute);
-    edgeVisualGeometry.setAttribute('aFlow', edgeFlowAttribute);
-  }
-
-  function growEdgeVisualBuffers(requiredVertexCount: number) {
-    if (requiredVertexCount <= edgeVisualCapacity) return;
-
-    const nextCapacity = Math.max(
-      requiredVertexCount,
-      Math.ceil(edgeVisualCapacity * POINT_CAPACITY_GROWTH_FACTOR) + POINT_CAPACITY_GROWTH_PAD,
-    );
-    const grow = (source: Float32Array, stride: number) => {
-      const next = new Float32Array(nextCapacity * stride);
-      next.set(source.subarray(0, edgeVisualVertexCount * stride));
-      return next;
-    };
-
-    edgePositions = grow(edgePositions, 3);
-    edgeNormals = grow(edgeNormals, 3);
-    edgeColors = grow(edgeColors, 3);
-    edgeBaseOpacities = grow(edgeBaseOpacities, 1);
-    edgeStatesAttribute = grow(edgeStatesAttribute, 1);
-    edgeFlows = grow(edgeFlows, 1);
-    edgeVisualCapacity = nextCapacity;
-    replaceEdgeVisualAttributes();
-  }
-
-  function writeEdgeVisualRange(
-    range: EdgeVisualRange,
-    geometry: THREE.BufferGeometry,
-    color: THREE.Color,
-    baseOpacity: number,
-  ) {
-    const sourcePosition = geometry.getAttribute('position');
-    const sourceNormal = geometry.getAttribute('normal');
-    if (!sourcePosition || !sourceNormal) return;
-
-    for (let vertex = 0; vertex < range.count; vertex += 1) {
-      const sourceOffset = vertex * 3;
-      const targetVertex = range.start + vertex;
-      const targetOffset = targetVertex * 3;
-      edgePositions[targetOffset] = sourcePosition.array[sourceOffset];
-      edgePositions[targetOffset + 1] = sourcePosition.array[sourceOffset + 1];
-      edgePositions[targetOffset + 2] = sourcePosition.array[sourceOffset + 2];
-      edgeNormals[targetOffset] = sourceNormal.array[sourceOffset];
-      edgeNormals[targetOffset + 1] = sourceNormal.array[sourceOffset + 1];
-      edgeNormals[targetOffset + 2] = sourceNormal.array[sourceOffset + 2];
-      edgeColors[targetOffset] = color.r;
-      edgeColors[targetOffset + 1] = color.g;
-      edgeColors[targetOffset + 2] = color.b;
-      edgeBaseOpacities[targetVertex] = baseOpacity;
-      edgeFlows[targetVertex] = range.count > 1 ? vertex / (range.count - 1) : 0;
-    }
-  }
-
-  function markEdgeVisualGeometryUpdated() {
-    edgePositionAttribute.needsUpdate = true;
-    edgeNormalAttribute.needsUpdate = true;
-    edgeColorAttribute.needsUpdate = true;
-    edgeBaseOpacityAttribute.needsUpdate = true;
-    edgeStateAttribute.needsUpdate = true;
-    edgeFlowAttribute.needsUpdate = true;
-    edgeVisualGeometry.setDrawRange(0, edgeVisualVertexCount);
-    edgeVisualGeometry.computeBoundingSphere();
-  }
-
-  function allocateEdgeVisualRange(edgeId: string, geometry: THREE.BufferGeometry) {
-    const vertexCount = geometry.getAttribute('position')?.count ?? 0;
-    const range = { start: edgeVisualVertexCount, count: vertexCount };
-    growEdgeVisualBuffers(edgeVisualVertexCount + vertexCount);
-    edgeVisualVertexCount += vertexCount;
-    edgeVisualRanges.set(edgeId, range);
-    return range;
-  }
-
-  function setEdgeRangeState(range: EdgeVisualRange | null, stateValue: number, color: THREE.Color) {
-    if (!range) return;
-    for (let vertex = range.start; vertex < range.start + range.count; vertex += 1) {
-      const colorOffset = vertex * 3;
-      edgeStatesAttribute[vertex] = stateValue;
-      edgeColors[colorOffset] = color.r;
-      edgeColors[colorOffset + 1] = color.g;
-      edgeColors[colorOffset + 2] = color.b;
-    }
-  }
-
-  // Source geometry written into the merged edge buffer: a sampled polyline in scale
-  // (line) mode, a tube in quality mode. Both expose position+normal so the range
-  // writer is identical; only the per-edge vertex count differs (~16 vs ~1000).
-  function edgeVisualSourceGeometry(spec: ReturnType<typeof getEdgeSpec>) {
+  function edgeVisualGeometry(spec: ReturnType<typeof getEdgeSpec>) {
     return edgeRenderMode === 'line'
-      ? createEdgeLineGeometry(spec.curve, EDGE_LINE_SEGMENTS)
-      : createTubeGeometry(spec.curve, spec.visualSegments, spec.radius).toNonIndexed();
+      ? createEdgeLineGeometry(spec.curve, spec.visualSegments)
+      : createTubeGeometry(spec.curve, spec.visualSegments, spec.radius);
+  }
+
+  function edgeVisualMaterial(spec: ReturnType<typeof getEdgeSpec>) {
+    const materialOptions = {
+      color: spec.color,
+      transparent: true,
+      opacity: spec.opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    };
+    return edgeRenderMode === 'line'
+      ? new THREE.LineBasicMaterial(materialOptions)
+      : new THREE.MeshBasicMaterial(materialOptions);
+  }
+
+  function edgeVisualObject(spec: ReturnType<typeof getEdgeSpec>) {
+    return edgeRenderMode === 'line'
+      ? new THREE.LineSegments(edgeVisualGeometry(spec), edgeVisualMaterial(spec))
+      : new THREE.Mesh(edgeVisualGeometry(spec), edgeVisualMaterial(spec));
   }
 
   function refreshEdgeGeometry(state: EdgeVisualState<EMeta>) {
@@ -1688,6 +1116,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     if (!source || !target) {
       state.visible = false;
       if (state.hit) state.hit.userData.pickable = false;
+      state.visual.visible = false;
       edgeEndpoints.delete(state.id);
       return;
     }
@@ -1697,16 +1126,13 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const spec = getEdgeSpec(state.edge, state.endpoints, accessors as ResolvedAccessors<unknown, EMeta>, galaxyMode);
     const appearanceKey = `${spec.color}:${spec.opacity.toFixed(4)}`;
     if (state.geometryKey !== spec.geometryKey || state.appearanceKey !== appearanceKey) {
-      const visualGeometry = edgeVisualSourceGeometry(spec);
-      const vertexCount = visualGeometry.getAttribute('position').count;
-      const canReuseRange = Boolean(state.visualRange && state.visualRange.count === vertexCount);
-      if (state.visualRange && !canReuseRange) {
-        setEdgeRangeState(state.visualRange, 0, tmpEdgeAppearanceColor.set(spec.color));
-      }
-      const range = canReuseRange ? state.visualRange! : allocateEdgeVisualRange(state.id, visualGeometry);
-      writeEdgeVisualRange(range, visualGeometry, tmpEdgeAppearanceColor.set(spec.color), spec.opacity);
-      state.visualRange = range;
-      visualGeometry.dispose();
+      const visual = state.visual as THREE.Mesh | THREE.LineSegments;
+      visual.geometry.dispose();
+      visual.geometry = edgeVisualGeometry(spec);
+      const material = visual.material as THREE.MeshBasicMaterial | THREE.LineBasicMaterial;
+      material.color.set(spec.color);
+      material.opacity = spec.opacity;
+      visual.userData.baseOpacity = spec.opacity;
       if (state.hit) {
         state.hit.geometry.dispose();
         state.hit.geometry = createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius);
@@ -1727,9 +1153,10 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         activeGroup,
       );
       const selected = selectedEdgeId === state.id;
-      const connectedToSelectedNode = Boolean(selectedNodeHighlight?.connectedEdgeIds.has(state.id));
-      const visible = visibleByGroup || selected || connectedToSelectedNode;
+      const visibleInSelectionContext = edgeVisibleInSelectionContext(state.id);
+      const visible = visibleByGroup || selected || visibleInSelectionContext;
       state.visible = visible;
+      state.visual.visible = visible;
       if (state.hit) state.hit.userData.pickable = visible;
     });
   }
@@ -1738,7 +1165,6 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeStates.forEach((state) => refreshEdgeGeometry(state));
     updateEdgeVisibility();
     applyEdgeAppearance();
-    markEdgeVisualGeometryUpdated();
   }
 
   function addEdgeMesh(edge: GraphEdge<EMeta>, index: number) {
@@ -1749,15 +1175,18 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const edgeId = getEdgeId(edge, index);
     const endpoints = { source, target };
     const spec = getEdgeSpec(edge, endpoints, accessors as ResolvedAccessors<unknown, EMeta>, galaxyMode);
-    const visualGeometry = edgeVisualSourceGeometry(spec);
-    const visualRange = allocateEdgeVisualRange(edgeId, visualGeometry);
-    writeEdgeVisualRange(visualRange, visualGeometry, tmpEdgeAppearanceColor.set(spec.color), spec.opacity);
-    visualGeometry.dispose();
+    const visual = edgeVisualObject(spec);
+    visual.userData.edgeId = edgeId;
+    visual.userData.type = 'edge-visual';
+    visual.userData.baseOpacity = spec.opacity;
+    visual.frustumCulled = false;
+    world.add(visual);
 
     // Quality mode keeps a per-edge invisible hit tube for raycast picking. Scale (line)
     // mode skips it: at 100k+ edges that is 100k+ Object3Ds plus an O(N) array spread and
     // raycast on every pointermove. Edge highlighting still works there via node selection
-    // (connectedEdgeIds drives aState); only direct edge-click picking is unavailable.
+    // (connectedEdgeIds updates per-edge material opacity); only direct edge-click picking
+    // is unavailable.
     let hit: THREE.Mesh | null = null;
     if (edgeRenderMode === 'tube') {
       hit = new THREE.Mesh(
@@ -1789,8 +1218,8 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       geometryKey: spec.geometryKey,
       hit,
       id: edgeId,
+      visual,
       visible: true,
-      visualRange,
     };
     edgeStates.set(edgeId, state);
     edgeLookup.set(edgeId, edge);
@@ -1799,50 +1228,6 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   }
 
   dataset.edges.forEach(addEdgeMesh);
-  markEdgeVisualGeometryUpdated();
-
-  // Grow (and lazily reallocate) the point-cloud buffers to cover `nextCount` nodes,
-  // seeding positions for the appended tail. Used by the incremental append path so a
-  // streamed chunk never rebuilds the whole point cloud.
-  function growPointBuffers(prevCount: number, nextCount: number) {
-    if (nextCount > pointCapacity) {
-      const nextCapacity = Math.max(
-        nextCount,
-        Math.ceil(pointCapacity * POINT_CAPACITY_GROWTH_FACTOR) + POINT_CAPACITY_GROWTH_PAD,
-      );
-      const grow = (source: Float32Array, stride: number) => {
-        const next = new Float32Array(nextCapacity * stride);
-        next.set(source.subarray(0, prevCount * stride));
-        return next;
-      };
-      pointPositions = grow(pointPositions, 3);
-      basePointColors = grow(basePointColors, 3);
-      pointColors = grow(pointColors, 3);
-      basePointSizes = grow(basePointSizes, 1);
-      visiblePointSizes = grow(visiblePointSizes, 1);
-      pointCapacity = nextCapacity;
-
-      pointColorAttribute = new THREE.BufferAttribute(pointColors, 3);
-      pointSizeAttribute = new THREE.BufferAttribute(visiblePointSizes, 1);
-      pointColorAttribute.setUsage(THREE.DynamicDrawUsage);
-      pointSizeAttribute.setUsage(THREE.DynamicDrawUsage);
-      pointsGeometry.setAttribute('position', new THREE.BufferAttribute(pointPositions, 3));
-      pointsGeometry.setAttribute('color', pointColorAttribute);
-      pointsGeometry.setAttribute('size', pointSizeAttribute);
-    }
-
-    for (let index = prevCount; index < nextCount; index += 1) {
-      const node = dataset.nodes[index];
-      const position = nodePositions.get(node.id);
-      if (!position) continue;
-      pointPositions[index * 3] = position.x;
-      pointPositions[index * 3 + 1] = position.y;
-      pointPositions[index * 3 + 2] = position.z;
-    }
-    (pointsGeometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    pointsGeometry.setDrawRange(0, nextCount);
-    pointsGeometry.computeBoundingSphere();
-  }
 
   function resolveAppendedNodePositions(nextDataset: GraphDataset<NMeta, EMeta>, newNodes: GraphNode<NMeta>[]) {
     // Feed every already-placed node back in as an authored position so re-running
@@ -1891,7 +1276,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     nodeDegrees = buildNodeDegrees(dataset);
     rankedPlanetNodes.clear();
 
-    if (newNodes.length) growPointBuffers(prevNodeCount, dataset.nodes.length);
+    if (newNodes.length) pointBuffer.grow(prevNodeCount, dataset, nodePositions);
 
     for (let index = prevEdgeCount; index < dataset.edges.length; index += 1) {
       addEdgeMesh(dataset.edges[index], index);
@@ -1900,8 +1285,6 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     // Streamed growth can cross the density threshold, so recompute the adaptive
     // opacity scale from the new totals.
     pointsMaterial.uniforms.densityScale.value = resolveDensityScale(dataset.nodes.length);
-    edgeVisualMaterial.uniforms.densityScale.value = resolveDensityScale(dataset.edges.length);
-
     updatePointAppearance();
     updateEdges();
     updateClusterVisibility();
@@ -1910,120 +1293,95 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     needsRender = true;
   }
 
-  const edgeBloomEmptyGeometry = new THREE.BufferGeometry();
-  const edgeBloomMaterial = new THREE.MeshBasicMaterial({
+  const hoverEdgeEmptyGeometry = new THREE.BufferGeometry();
+  const hoverEdgeMaterial = new THREE.MeshBasicMaterial({
     color: theme?.panelAccentColor ?? '#46f4bc',
-    vertexColors: true,
     transparent: true,
     opacity: HOVER_EDGE_OVERLAY_OPACITY,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     depthTest: false,
   });
-  const edgeBloomBatch = new THREE.Mesh(edgeBloomEmptyGeometry, edgeBloomMaterial);
-  edgeBloomBatch.renderOrder = 19;
-  edgeBloomBatch.visible = false;
-  edgeBloomBatch.layers.set(BLOOM_LAYER);
-  world.add(edgeBloomBatch);
-  let edgeBloomGeometry: THREE.BufferGeometry | null = null;
+  const hoverEdgeOverlay = new THREE.Mesh(hoverEdgeEmptyGeometry, hoverEdgeMaterial);
+  hoverEdgeOverlay.renderOrder = 19;
+  hoverEdgeOverlay.visible = false;
+  world.add(hoverEdgeOverlay);
+  let hoverEdgeOverlayGeometry: THREE.BufferGeometry | null = null;
+  let hoverEdgeOverlayKey: string | null = null;
   refreshBloomActive = () => {
     bloomActive =
-      edgeBloomBatch.visible ||
       hoverNodeMarker.group.visible ||
       endpointMarkers.some((marker) => marker.group.visible) ||
       nodeHighlightMarkers.some(({ marker }) => marker.group.visible);
   };
 
-  function appendEdgeBloomGeometry(
-    positions: number[],
-    colors: number[],
-    state: EdgeVisualState<EMeta>,
-    color: THREE.Color,
-    radiusFactor: number,
-  ) {
-    const spec = getEdgeSpec(state.edge, state.endpoints, accessors as ResolvedAccessors<unknown, EMeta>, galaxyMode);
-    const geometry = createTubeGeometry(spec.curve, spec.visualSegments, spec.radius * radiusFactor).toNonIndexed();
-    const position = geometry.getAttribute('position');
-    for (let index = 0; index < position.count; index += 1) {
-      positions.push(position.getX(index), position.getY(index), position.getZ(index));
-      colors.push(color.r, color.g, color.b);
-    }
-    geometry.dispose();
-  }
+  function updateHoverEdgeOverlay() {
+    const state = hoveredEdgeId ? (edgeStates.get(hoveredEdgeId) ?? null) : null;
+    hoverEdgeMaterial.color.set(theme?.panelAccentColor ?? '#46f4bc');
 
-  function rebuildEdgeBloomBatch() {
-    const positions: number[] = [];
-    const colors: number[] = [];
-
-    edgeStates.forEach((state) => {
-      if (!state.visible) return;
-      const selected = selectedEdgeId === state.id;
-      const hovered = hoveredEdgeId === state.id;
-      const connectedToSelectedNode = Boolean(selectedNodeHighlight?.connectedEdgeIds.has(state.id));
-      if (!selected && !hovered && !connectedToSelectedNode) return;
-
-      const color = tmpEdgeAppearanceColor.set(
-        selected
-          ? '#ffffff'
-          : hovered || connectedToSelectedNode
-            ? (theme?.panelAccentColor ?? '#46f4bc')
-            : accessors.edgeColor(state.edge),
-      );
-      appendEdgeBloomGeometry(positions, colors, state, color, hovered ? HOVER_EDGE_RADIUS_FACTOR : 1.25);
-    });
-
-    edgeBloomGeometry?.dispose();
-    if (!positions.length) {
-      edgeBloomGeometry = null;
-      edgeBloomBatch.geometry = edgeBloomEmptyGeometry;
-      edgeBloomBatch.visible = false;
-      refreshBloomActive?.();
+    if (!state || !state.visual.visible || edgeRenderMode !== 'tube') {
+      hoverEdgeOverlay.visible = false;
       return;
     }
 
-    edgeBloomGeometry = new THREE.BufferGeometry();
-    edgeBloomGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    edgeBloomGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    edgeBloomGeometry.computeBoundingSphere();
-    edgeBloomBatch.geometry = edgeBloomGeometry;
-    edgeBloomBatch.visible = true;
-    refreshBloomActive?.();
+    const spec = getEdgeSpec(state.edge, state.endpoints, accessors as ResolvedAccessors<unknown, EMeta>, galaxyMode);
+    const nextKey = `${state.id}:${spec.geometryKey}`;
+    if (hoverEdgeOverlayKey !== nextKey) {
+      hoverEdgeOverlayGeometry?.dispose();
+      hoverEdgeOverlayGeometry = createTubeGeometry(
+        spec.curve,
+        spec.visualSegments,
+        spec.radius * HOVER_EDGE_RADIUS_FACTOR,
+      );
+      hoverEdgeOverlay.geometry = hoverEdgeOverlayGeometry;
+      hoverEdgeOverlayKey = nextKey;
+    }
+
+    hoverEdgeOverlay.visible = true;
   }
 
   function applyEdgeAppearance() {
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
     edgeStates.forEach((state) => {
+      const visual = state.visual as THREE.Mesh | THREE.LineSegments;
+      const material = visual.material as THREE.MeshBasicMaterial | THREE.LineBasicMaterial;
+      const baseOpacity = Number(visual.userData.baseOpacity ?? state.baseOpacity ?? 0.18);
       const selected = selectedEdgeId === state.id;
-      const connectedToSelectedNode = Boolean(selectedNodeHighlight?.connectedEdgeIds.has(state.id));
-      const hovered = hoveredEdgeId === state.id;
-      let stateValue = state.visible ? EDGE_STATE_VISIBLE : 0;
-      if (selected) stateValue += EDGE_STATE_SELECTED;
-      if (hovered) stateValue += EDGE_STATE_HOVERED;
-      if (connectedToSelectedNode) stateValue += EDGE_STATE_CONNECTED;
-      if (hasSelection && !selected && !hovered && !connectedToSelectedNode) stateValue += EDGE_STATE_DIMMED;
-      tmpEdgeAppearanceColor.set(
-        selected
-          ? '#ffffff'
-          : hovered
-            ? (theme?.panelAccentColor ?? '#46f4bc')
-            : connectedToSelectedNode
-              ? (theme?.panelAccentColor ?? '#46f4bc')
-              : accessors.edgeColor(state.edge),
+      const connectedToSelection = Boolean(
+        selectedNodeHighlight?.connectedEdgeIds.has(state.id) || selectedEdgeHighlight?.connectedEdgeIds.has(state.id),
       );
-      setEdgeRangeState(state.visualRange, stateValue, tmpEdgeAppearanceColor);
+      const hovered = hoveredEdgeId === state.id;
+      material.opacity = selected
+        ? Math.min(0.86, baseOpacity + 0.56)
+        : hovered
+          ? Math.min(0.54, baseOpacity + 0.26)
+          : connectedToSelection
+            ? Math.min(0.82, baseOpacity + 0.52)
+            : hasSelection
+              ? baseOpacity * 0.28
+              : baseOpacity;
+      material.depthTest = !(selected || connectedToSelection || hovered);
+      material.color.set(
+        selected ? '#ffffff' : hovered ? (theme?.panelAccentColor ?? '#46f4bc') : accessors.edgeColor(state.edge),
+      );
+      visual.renderOrder = selected ? 18 : hovered ? 17 : connectedToSelection ? 16 : 0;
+      visual.scale.setScalar(1);
     });
-    edgeColorAttribute.needsUpdate = true;
-    edgeStateAttribute.needsUpdate = true;
-    rebuildEdgeBloomBatch();
+    updateHoverEdgeOverlay();
   }
 
   function updateHoverHighlight() {
     const hoveredEndpoint = hoveredNodeId
       ? resolveEndpoint(hoveredNodeId, nodeLookup, nodePositions, clusterLookup, accessors, planetRadius)
       : null;
-    setHoverNodeMarkerVisible(hoverNodeMarker, hoveredEndpoint, theme?.panelAccentColor ?? '#46f4bc');
+    setHoverNodeMarkerVisible(
+      hoverNodeMarker,
+      hoveredEndpoint,
+      endpointNodeColor(hoveredEndpoint, theme?.panelAccentColor ?? '#46f4bc'),
+    );
     setBloomLayer(hoverNodeMarker.group, Boolean(hoveredEndpoint));
     updateMajorOverlay();
+    updateHoverEdgeOverlay();
     applyEdgeAppearance();
   }
 
@@ -2031,6 +1389,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     selectedNodeId = nextSelectedNodeId;
     selectedEdgeId = nextSelectedEdgeId;
     selectedNodeHighlight = selectedNodeId ? getNodeSelectionHighlight(selectedNodeId) : null;
+    selectedEdgeHighlight = selectedEdgeId ? getEdgeSelectionHighlight(selectedEdgeId) : null;
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
     const selectedEndpoints = selectedEdgeId ? (edgeEndpoints.get(selectedEdgeId) ?? null) : null;
     const selectedEdgeState = selectedEdgeId ? (edgeStates.get(selectedEdgeId) ?? null) : null;
@@ -2067,7 +1426,9 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     setMarkerVisible(
       endpointMarkers[0],
       primaryEndpoint,
-      theme?.selectedColor ?? '#d8fff3',
+      selectedNodeEndpoint
+        ? (theme?.selectedColor ?? '#d8fff3')
+        : endpointNodeColor(primaryEndpoint, theme?.selectedColor ?? '#d8fff3'),
       selectedNodeEndpoint || selectedEndpoints?.source.id === selectedNodeId
         ? ENDPOINT_MARKER_SCALE_PRIMARY
         : ENDPOINT_MARKER_SCALE_SECONDARY,
@@ -2076,7 +1437,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     setMarkerVisible(
       endpointMarkers[1],
       secondaryEndpoint,
-      theme?.panelAccentColor ?? '#46f4bc',
+      endpointNodeColor(secondaryEndpoint, theme?.panelAccentColor ?? '#46f4bc'),
       selectedEndpoints?.target.id === selectedNodeId ? ENDPOINT_MARKER_SCALE_PRIMARY : ENDPOINT_MARKER_SCALE_SECONDARY,
     );
     setBloomLayer(endpointMarkers[1].group, Boolean(secondaryEndpoint));
@@ -2135,7 +1496,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   function updateTheme(nextTheme: GalaxyGraphTheme | undefined) {
     theme = nextTheme;
-    renderer.setClearColor(theme?.background ?? '#07090d', 1);
+    renderer.setClearColor(theme?.background ?? '#000000', 1);
     updateSelection(selectedNodeId, selectedEdgeId);
     updateHoverHighlight();
   }
@@ -2192,7 +1553,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         return entry.instanceId !== undefined && Boolean(planetInstanceNodeIds[entry.instanceId]);
       }
       if (entry.object.userData.type !== 'node-points' || entry.index === undefined) return false;
-      return visiblePointSizes[entry.index] > 0;
+      return pointBuffer.visibleSizes[entry.index] > 0;
     };
     const isEdgeHit = (entry: THREE.Intersection) =>
       Boolean(entry.object.userData.pickable) &&
@@ -2204,7 +1565,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const nodeId =
       hit?.object.userData.type === 'node-instances' && instanceId !== undefined
         ? planetInstanceNodeIds[instanceId] || null
-        : pointIndex !== undefined && visiblePointSizes[pointIndex] > 0
+        : pointIndex !== undefined && pointBuffer.visibleSizes[pointIndex] > 0
           ? (dataset.nodes[pointIndex]?.id ?? null)
           : null;
     const edgeId = (hit?.object.userData.edgeId as string | undefined) ?? null;
@@ -2459,7 +1820,6 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     if (hasActivePulse) {
       pulseTime += Math.min(0.05, (pulseTimestamp - lastPulseTimestamp) / 1000);
       pointsMaterial.uniforms.uTime.value = pulseTime;
-      edgeVisualMaterial.uniforms.uTime.value = pulseTime;
       needsRender = true;
     }
     lastPulseTimestamp = pulseTimestamp;
@@ -2542,7 +1902,6 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         if (Array.isArray(material)) material.forEach((entry) => entry.dispose());
         else material?.dispose();
       });
-      if (edgeBloomBatch.geometry !== edgeBloomEmptyGeometry) edgeBloomEmptyGeometry.dispose();
       glowTexture.dispose();
       planetTexture.dispose();
       nodeImageTextures.forEach((texture) => texture.dispose());
@@ -2560,302 +1919,12 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   };
 }
 
-function getRendererSceneKey<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
-  options: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
-) {
-  return getSceneRebuildKey(options.dataset, getLayoutKey(options.layout));
-}
-
-/**
- * Conservatively detect that the only difference between two option sets is appended
- * nodes/edges on top of the unchanged existing prefix (the shape progressive loading
- * and `mergeGraphDataset` produce). Anything else — a replaced entry, removed entry,
- * cluster change, layout change, or a layout that does not preserve positions — returns
- * false so the caller falls back to a full rebuild.
- */
-function isAppendOnlyDatasetChange<NMeta, EMeta, CMeta>(
-  prev: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
-  next: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
-): boolean {
-  if (getLayoutKey(prev.layout) !== getLayoutKey(next.layout)) return false;
-  const layout = next.layout;
-  const preservesPositions = layout === false ? true : (layout?.preserveExistingPositions ?? true);
-  if (!preservesPositions) return false;
-
-  const prevNodes = prev.dataset.nodes;
-  const nextNodes = next.dataset.nodes;
-  const prevEdges = prev.dataset.edges;
-  const nextEdges = next.dataset.edges;
-  const prevClusters = prev.dataset.clusters ?? [];
-  const nextClusters = next.dataset.clusters ?? [];
-
-  // Clusters are not appended incrementally; any change there forces a rebuild.
-  if (prevClusters.length !== nextClusters.length) return false;
-  for (let index = 0; index < prevClusters.length; index += 1) {
-    if (prevClusters[index] !== nextClusters[index]) return false;
-  }
-
-  // Require pure growth: at least one addition, with every existing node/edge kept by
-  // reference at its original index (a replaced or reordered entry is not an append).
-  if (nextNodes.length < prevNodes.length || nextEdges.length < prevEdges.length) return false;
-  if (nextNodes.length === prevNodes.length && nextEdges.length === prevEdges.length) return false;
-  for (let index = 0; index < prevNodes.length; index += 1) {
-    if (prevNodes[index] !== nextNodes[index]) return false;
-  }
-  for (let index = 0; index < prevEdges.length; index += 1) {
-    if (prevEdges[index] !== nextEdges[index]) return false;
-  }
-  return true;
-}
-
-function reportRendererFailure<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
-  host: HTMLElement,
-  state: CoreState<NMeta, EMeta, CMeta>,
-  reason: GalaxySceneFailureReason,
-  message: string,
-  error?: unknown,
-) {
-  const nextFailure: GalaxySceneFailure = { reason, message, error };
-  try {
-    state.runtime?.dispose();
-  } finally {
-    state.runtime = null;
-    clearSceneDom(host as HTMLDivElement);
-    state.callbacks.onSceneFailure?.(nextFailure);
-  }
-}
-
-function configureMotion<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: CoreState<NMeta, EMeta, CMeta>) {
-  state.motionCleanup?.();
-  state.motionCleanup = null;
-  const motionPreference = state.options.motionPreference ?? 'system';
-  state.resolvedMotion = resolveMotionPreference(motionPreference);
-  state.pausedRef.current = Boolean(state.options.paused) || state.resolvedMotion === 'reduced';
-  state.runtime?.updateMotionPreference(state.resolvedMotion);
-
-  if (motionPreference !== 'system' || !canUseDOM() || typeof window.matchMedia !== 'function') {
-    return;
-  }
-
-  const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const handleChange = (event: MediaQueryListEvent) => {
-    state.resolvedMotion = event.matches ? 'reduced' : 'full';
-    state.pausedRef.current = Boolean(state.options.paused) || state.resolvedMotion === 'reduced';
-    state.runtime?.updateMotionPreference(state.resolvedMotion);
-  };
-  if (typeof mediaQuery.addEventListener === 'function') mediaQuery.addEventListener('change', handleChange);
-  else mediaQuery.addListener?.(handleChange);
-
-  state.motionCleanup = () => {
-    if (typeof mediaQuery.removeEventListener === 'function') mediaQuery.removeEventListener('change', handleChange);
-    else mediaQuery.removeListener?.(handleChange);
-  };
-}
-
-function snapshotAppliedState<NMeta, EMeta, CMeta>(
-  state: CoreState<NMeta, EMeta, CMeta>,
-  overrides?: Partial<AppliedRendererState<NMeta, EMeta>>,
-): AppliedRendererState<NMeta, EMeta> {
-  return {
-    accessors: state.options.accessors,
-    activeGroup: state.options.activeGroup,
-    galaxyMode: state.options.galaxyMode,
-    planetSizing: state.options.planetSizing,
-    resolvedMotion: state.resolvedMotion,
-    selectedEdgeId: state.options.selectedEdgeId,
-    selectedNodeId: state.options.selectedNodeId,
-    showClusters: state.options.showClusters,
-    theme: state.options.theme,
-    ...overrides,
-  };
-}
-
-function patchRuntime<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: CoreState<NMeta, EMeta, CMeta>) {
-  const runtime = state.runtime;
-  if (!runtime) return;
-
-  // Each in-place updater is O(nodes) or O(edges), so only invoke the ones whose
-  // input actually changed since the last patch. Object inputs (accessors,
-  // planetSizing, theme) are compared by reference; consumers memoize them.
-  const applied = state.appliedOptions;
-  const next = state.options;
-
-  if (!applied || applied.activeGroup !== next.activeGroup) runtime.updateActiveGroup(next.activeGroup);
-  if (!applied || applied.showClusters !== next.showClusters) runtime.updateClusterVisibility(next.showClusters);
-  if (!applied || applied.galaxyMode !== next.galaxyMode) runtime.updateGalaxyMode(next.galaxyMode);
-  if (!applied || applied.resolvedMotion !== state.resolvedMotion) runtime.updateMotionPreference(state.resolvedMotion);
-  if (!applied || applied.planetSizing !== next.planetSizing) runtime.updatePlanetSizing(next.planetSizing);
-  if (!applied || applied.accessors !== next.accessors) runtime.updateAccessors(next.accessors);
-  if (!applied || applied.theme !== next.theme) runtime.updateTheme(next.theme);
-  if (!applied || applied.selectedNodeId !== next.selectedNodeId || applied.selectedEdgeId !== next.selectedEdgeId) {
-    runtime.updateSelection(next.selectedNodeId, next.selectedEdgeId);
-  }
-
-  state.appliedOptions = snapshotAppliedState(state);
-
-  const nonce = next.cameraCommand?.nonce ?? null;
-  if (nonce !== null && nonce !== state.lastCameraCommandNonce) {
-    applyCameraCommand(runtime, next.cameraCommand);
-    state.lastCameraCommandNonce = nonce;
-  }
-  if (nonce === null) state.lastCameraCommandNonce = null;
-}
-
-function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
-  host: HTMLElement,
-  state: CoreState<NMeta, EMeta, CMeta>,
-) {
-  if (state.disposed) return;
-
-  state.runtime?.dispose();
-  state.runtime = null;
-  state.appliedOptions = null;
-  clearSceneDom(host as HTMLDivElement);
-
-  if (!canUseDOM()) return;
-
-  const availability = detectWebGLAvailability();
-  if (!availability.available) {
-    reportRendererFailure(
-      host,
-      state,
-      'webgl-unavailable',
-      availability.message ?? 'WebGL is not available in this browser or device.',
-    );
-    return;
-  }
-
-  const contextLimit = state.options.contextLimit;
-  const releaseContext = reserveGalaxyRendererContext(contextLimit);
-  if (!releaseContext) {
-    const budget = getGalaxyRendererContextBudget(contextLimit);
-    state.callbacks.onContextBudgetExceeded?.(budget);
-    reportRendererFailure(
-      host,
-      state,
-      'webgl-unavailable',
-      `Galaxy Nodes already has ${budget.active} active WebGL renderer contexts, which reaches its supported limit of ${budget.limit}. Unmount an inactive graph or reuse a single renderer before mounting another scene.`,
-    );
-    return;
-  }
-
-  try {
-    state.runtime = withContextReservation(
-      createScene(
-        host as HTMLDivElement,
-        state.options.dataset,
-        state.options.activeGroup,
-        state.options.showClusters,
-        state.options.galaxyMode,
-        state.resolvedMotion,
-        resolveEdgeRenderMode(
-          state.options.dataset.nodes.length,
-          state.options.dataset.edges.length,
-          state.options.expectedSize,
-          state.options.renderMode,
-        ),
-        state.options.layout,
-        state.options.accessors,
-        state.options.planetSizing,
-        state.options.theme,
-        state.callbacksRef,
-        state.pausedRef,
-        (nextFailure) => reportRendererFailure(host, state, nextFailure.reason, nextFailure.message, nextFailure.error),
-      ),
-      releaseContext,
-    );
-    // createScene already applied every visual option except selection (built as
-    // null), so seed the diff baseline accordingly: the first patch then only
-    // applies the real selection and any pending camera command.
-    state.appliedOptions = snapshotAppliedState(state, { selectedNodeId: null, selectedEdgeId: null });
-    patchRuntime(state);
-    state.callbacks.onSceneReady?.();
-  } catch (error) {
-    releaseContext();
-    reportRendererFailure(
-      host,
-      state,
-      'scene-error',
-      error instanceof Error ? error.message : 'The graph scene could not be initialized.',
-      error,
-    );
-  }
-}
-
 export function createGalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host: HTMLElement,
   options: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
   callbacks: GalaxyRendererCallbacks<NMeta, EMeta> = {},
 ): GalaxyRenderer<NMeta, EMeta, CMeta> {
-  const state: CoreState<NMeta, EMeta, CMeta> = {
-    appliedOptions: null,
-    callbacks,
-    callbacksRef: { current: resolveRendererCallbacks(callbacks) },
-    disposed: false,
-    lastCameraCommandNonce: null,
-    motionCleanup: null,
-    options,
-    pausedRef: { current: Boolean(options.paused) },
-    runtime: null,
-    sceneKey: getRendererSceneKey(options),
-    resolvedMotion: resolveMotionPreference(options.motionPreference),
-  };
-
-  configureMotion(state);
-  rebuildRenderer(host, state);
-
-  return {
-    focusEdge: (edgeId) => state.runtime?.focusEdge(edgeId),
-    focusNode: (nodeId) => state.runtime?.focusNode(nodeId),
-    moveCamera: (direction, multiplier) => state.runtime?.moveCamera(direction, multiplier),
-    resetCamera: () => state.runtime?.resetCamera(),
-    retry: () => {
-      rebuildRenderer(host, state);
-    },
-    update: (nextOptions, nextCallbacks) => {
-      if (state.disposed) return;
-      const prevOptions = state.options;
-      state.options = nextOptions;
-      if (nextCallbacks) {
-        state.callbacks = nextCallbacks;
-        state.callbacksRef.current = resolveRendererCallbacks(nextCallbacks);
-      }
-      configureMotion(state);
-
-      const nextSceneKey = getRendererSceneKey(nextOptions);
-      if (nextSceneKey !== state.sceneKey) {
-        // Progressive/streamed growth only appends nodes and edges on top of the
-        // existing prefix; apply that in place instead of disposing and rebuilding
-        // every mesh — a cost that otherwise grows with the total graph on each chunk.
-        if (state.runtime && isAppendOnlyDatasetChange(prevOptions, nextOptions)) {
-          try {
-            state.runtime.appendDataset(nextOptions.dataset);
-            state.sceneKey = nextSceneKey;
-            state.pausedRef.current = Boolean(nextOptions.paused) || state.resolvedMotion === 'reduced';
-            patchRuntime(state);
-            return;
-          } catch {
-            // Fall back to a full rebuild if the incremental path cannot apply.
-          }
-        }
-        state.sceneKey = nextSceneKey;
-        rebuildRenderer(host, state);
-        return;
-      }
-
-      state.pausedRef.current = Boolean(nextOptions.paused) || state.resolvedMotion === 'reduced';
-      patchRuntime(state);
-    },
-    dispose: () => {
-      if (state.disposed) return;
-      state.disposed = true;
-      state.motionCleanup?.();
-      state.motionCleanup = null;
-      state.runtime?.dispose();
-      state.runtime = null;
-      clearSceneDom(host as HTMLDivElement);
-    },
-  };
+  return createGalaxyRendererController(host, options, callbacks, createScene);
 }
 
 export {

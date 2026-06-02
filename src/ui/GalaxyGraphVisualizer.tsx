@@ -52,6 +52,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   dataset,
   groups,
   initialGroup = null,
+  keyLegend,
   legend,
   labels,
   layout,
@@ -78,11 +79,12 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [activeGroup, setActiveGroup] = useState<string | null>(initialGroup);
   const [showClusters, setShowClusters] = useState(options?.showClusters ?? true);
   const [galaxyMode, setGalaxyMode] = useState(options?.galaxyMode ?? true);
-  const [playing, setPlaying] = useState(true);
+  const [playing, setPlaying] = useState(false);
   const [search, setSearch] = useState('');
   const [internalSelectedNode, setInternalSelectedNode] = useState<GraphNode<NMeta> | null>(null);
   const [hoverNode, setHoverNode] = useState<GraphNode<NMeta> | null>(null);
   const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge<EMeta> | null>(null);
+  const [internalSelectedEdgeId, setInternalSelectedEdgeId] = useState<string | null>(null);
   const [hoverEdge, setHoverEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [cameraCommand, setCameraCommand] = useState<CameraCommand | null>(null);
   const [augmentedDataset, setAugmentedDataset] = useState<GraphDataset<NMeta, EMeta, CMeta>>(dataset);
@@ -187,12 +189,13 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   const selectedEdge = useMemo(() => {
     if (selectedEdgeId !== undefined) return (selectedEdgeId !== null && edgeByDisplayId.get(selectedEdgeId)) || null;
+    if (internalSelectedEdgeId) return edgeByDisplayId.get(internalSelectedEdgeId) ?? null;
     if (!internalSelectedEdge) return null;
     // Keep the reference when it survives a dataset change; otherwise re-resolve by id so
     // Expand neighbors does not drop an edge selection.
     if (graphDataset.edges.includes(internalSelectedEdge)) return internalSelectedEdge;
     return edgeByDisplayId.get(getEdgeId(internalSelectedEdge)) ?? null;
-  }, [graphDataset.edges, edgeByDisplayId, internalSelectedEdge, selectedEdgeId]);
+  }, [graphDataset.edges, edgeByDisplayId, internalSelectedEdge, internalSelectedEdgeId, selectedEdgeId]);
 
   const stats = useMemo<GraphStats>(() => {
     const groupCount = new Set(groupNodes.map((node) => node.group ?? '')).size;
@@ -246,7 +249,10 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     (node: GraphNode<NMeta> | null) => {
       if (selectedNodeId === undefined) setInternalSelectedNode(node);
       if (node) {
-        if (selectedEdgeId === undefined) setInternalSelectedEdge(null);
+        if (selectedEdgeId === undefined) {
+          setInternalSelectedEdge(null);
+          setInternalSelectedEdgeId(null);
+        }
         if (selectedEdge) onSelectEdge?.(null);
         announceNodeSelection(node);
       }
@@ -265,14 +271,17 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   const selectEdge = useCallback(
     (edge: GraphEdge<EMeta> | null) => {
-      if (selectedEdgeId === undefined) setInternalSelectedEdge(edge);
+      if (selectedEdgeId === undefined) {
+        setInternalSelectedEdge(edge);
+        setInternalSelectedEdgeId(edge ? displayEdgeId(edge) : null);
+      }
       if (edge) {
         if (selectedNodeId === undefined) setInternalSelectedNode(null);
         if (selectedNode) onSelectNode?.(null);
       }
       onSelectEdge?.(edge);
     },
-    [onSelectEdge, onSelectNode, selectedEdgeId, selectedNode, selectedNodeId],
+    [displayEdgeId, onSelectEdge, onSelectNode, selectedEdgeId, selectedNode, selectedNodeId],
   );
 
   const hoverConnection = useCallback(
@@ -288,7 +297,10 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     const shouldNotifyEdge = selectedEdgeId !== undefined ? selectedEdgeId !== null : selectedEdge !== null;
     if (selectedNodeId === undefined) setInternalSelectedNode(null);
     if (shouldNotifyNode) onSelectNode?.(null);
-    if (selectedEdgeId === undefined) setInternalSelectedEdge(null);
+    if (selectedEdgeId === undefined) {
+      setInternalSelectedEdge(null);
+      setInternalSelectedEdgeId(null);
+    }
     if (shouldNotifyEdge) onSelectEdge?.(null);
   }
 
@@ -709,6 +721,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
       />
 
       {(options?.showLegend ?? true) && legend ? <div className="legend">{legend}</div> : null}
+      {(options?.showKeyLegend ?? true) && keyLegend ? keyLegend : null}
 
       <GalaxyDetailPanels<NMeta, EMeta>
         canExpandGraph={canExpandGraph}

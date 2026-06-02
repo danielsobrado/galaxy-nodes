@@ -218,61 +218,61 @@ export default function App() {
   }
 
   return (
-    <>
-      <GalaxyGraphVisualizer
-        dataset={dataset}
-        accessors={accessors}
-        groups={INITIATIVE_CATEGORIES}
-        legend={initiativeLegend}
-        renderNodeDetail={renderInitiativeNodeDetail}
-        renderEdgeDetail={renderInitiativeEdgeDetail}
-        largeGraph={largeGraph}
-        onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
-        options={{
-          datasetSizes: DATASET_SIZES,
-          showDatasetSizeControls: true,
-        }}
-        controlActions={
+    <GalaxyGraphVisualizer
+      dataset={dataset}
+      accessors={accessors}
+      groups={INITIATIVE_CATEGORIES}
+      legend={initiativeLegend}
+      keyLegend={navKeysBadge}
+      renderNodeDetail={renderInitiativeNodeDetail}
+      renderEdgeDetail={renderInitiativeEdgeDetail}
+      largeGraph={largeGraph}
+      onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
+      options={{
+        datasetSizes: DATASET_SIZES,
+        showDatasetSizeControls: true,
+        showKeyLegend: true,
+        showLegend: true,
+      }}
+      controlActions={
+        <button
+          type="button"
+          className={sharpMoney ? 'toggle is-on' : 'toggle'}
+          aria-pressed={sharpMoney}
+          onClick={() => setSharpMoney((value) => !value)}
+        >
+          <Activity size={15} aria-hidden="true" />
+          Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
+        </button>
+      }
+      sideRailActions={
+        <>
           <button
             type="button"
-            className={sharpMoney ? 'toggle is-on' : 'toggle'}
-            aria-pressed={sharpMoney}
-            onClick={() => setSharpMoney((value) => !value)}
+            className={
+              dbStatus === 'loaded' || dbStatus === 'loading' ? 'is-active' : dbStatus === 'error' ? 'is-error' : ''
+            }
+            title={`Load from Memgraph API (${graphApiUrl})`}
+            onClick={() => void loadDatabaseGraph()}
           >
-            <Activity size={15} aria-hidden="true" />
-            Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
+            <Database size={17} aria-hidden="true" />
           </button>
-        }
-        sideRailActions={
-          <>
-            <button
-              type="button"
-              className={
-                dbStatus === 'loaded' || dbStatus === 'loading' ? 'is-active' : dbStatus === 'error' ? 'is-error' : ''
-              }
-              title={`Load from Memgraph API (${graphApiUrl})`}
-              onClick={() => void loadDatabaseGraph()}
-            >
-              <Database size={17} aria-hidden="true" />
-            </button>
-            <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
-              <Import size={17} aria-hidden="true" />
-            </button>
-            <input
-              ref={fileInputRef}
-              className="visually-hidden"
-              type="file"
-              accept="application/json,.json"
-              onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
-                if (file) void importDataset(file);
-                event.currentTarget.value = '';
-              }}
-            />
-          </>
-        }
-      />
-      {navKeysBadge}
-    </>
+          <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
+            <Import size={17} aria-hidden="true" />
+          </button>
+          <input
+            ref={fileInputRef}
+            className="visually-hidden"
+            type="file"
+            accept="application/json,.json"
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) void importDataset(file);
+              event.currentTarget.value = '';
+            }}
+          />
+        </>
+      }
+    />
   );
 }
