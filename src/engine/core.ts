@@ -632,6 +632,11 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const drawingBufferSize = renderer.getDrawingBufferSize(new THREE.Vector2());
   const finalRenderTarget = new THREE.WebGLRenderTarget(drawingBufferSize.width, drawingBufferSize.height, {
     samples: RENDER_MSAA_SAMPLES,
+    // Half-float so the many overlapping additive edges/points accumulate in HDR instead
+    // of an 8-bit buffer. 8-bit quantises each low-opacity layer to ~20 levels, and those
+    // bands crawl frame-to-frame as the camera moves (the grainy shimmer on the tubes);
+    // float accumulation is smooth and lets tone mapping roll off highlights past 1.0.
+    type: THREE.HalfFloatType,
   });
   const finalComposer = new EffectComposer(renderer, finalRenderTarget);
   const finalRenderPass = new RenderPass(scene, camera);
