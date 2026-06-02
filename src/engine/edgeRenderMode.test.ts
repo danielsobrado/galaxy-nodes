@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { resolveEdgeRenderMode } from './core';
-import { SCALE_RENDER_ELEMENT_THRESHOLD } from './sceneConstants';
+import { resolveDensityScale, resolveEdgeRenderMode } from './core';
+import { DENSITY_MIN_SCALE, DENSITY_REFERENCE_COUNT, SCALE_RENDER_ELEMENT_THRESHOLD } from './sceneConstants';
 
 describe('resolveEdgeRenderMode', () => {
   it('honors an explicit render mode regardless of size', () => {
@@ -19,5 +19,22 @@ describe('resolveEdgeRenderMode', () => {
     expect(resolveEdgeRenderMode(50, 10, SCALE_RENDER_ELEMENT_THRESHOLD + 1, 'auto')).toBe('line');
     // A small hint never downgrades a graph that is already large.
     expect(resolveEdgeRenderMode(SCALE_RENDER_ELEMENT_THRESHOLD, 0, 5, 'auto')).toBe('line');
+  });
+});
+
+describe('resolveDensityScale', () => {
+  it('leaves graphs at or below the reference count untouched', () => {
+    expect(resolveDensityScale(0)).toBe(1);
+    expect(resolveDensityScale(DENSITY_REFERENCE_COUNT)).toBe(1);
+  });
+
+  it('tapers smoothly as density grows and never drops below the floor', () => {
+    const at25k = resolveDensityScale(25_000);
+    const at50k = resolveDensityScale(50_000);
+    expect(at25k).toBeLessThan(1);
+    expect(at50k).toBeLessThan(at25k);
+    expect(resolveDensityScale(1_000_000)).toBe(DENSITY_MIN_SCALE);
+    // sqrt(10000/40000) = 0.5
+    expect(resolveDensityScale(40_000)).toBeCloseTo(0.5, 5);
   });
 });

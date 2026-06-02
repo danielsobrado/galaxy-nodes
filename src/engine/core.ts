@@ -182,6 +182,8 @@ import {
   WORLD_ROTATION_SPEED,
   EDGE_LINE_SEGMENTS,
   SCALE_RENDER_ELEMENT_THRESHOLD,
+  DENSITY_REFERENCE_COUNT,
+  DENSITY_MIN_SCALE,
 } from './sceneConstants';
 import { dimColor, makeGlowTexture, makePlanetTexture, planetColor, pointCloudColor } from './materials';
 import { createEdgeLineGeometry, createTubeGeometry, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
@@ -268,6 +270,17 @@ export function resolveEdgeRenderMode(
   if (renderMode === 'scale') return 'line';
   const elements = Math.max(expectedSize ?? 0, nodeCount + edgeCount);
   return elements >= SCALE_RENDER_ELEMENT_THRESHOLD ? 'line' : 'tube';
+}
+
+/**
+ * Adaptive per-element opacity multiplier that keeps additive node/edge blending from
+ * saturating to white as the graph grows. Returns 1 at or below
+ * {@link DENSITY_REFERENCE_COUNT} (the dense-but-readable look is left untouched), then
+ * tapers as sqrt(reference / count), floored at {@link DENSITY_MIN_SCALE}.
+ */
+export function resolveDensityScale(count: number): number {
+  if (count <= DENSITY_REFERENCE_COUNT) return 1;
+  return Math.max(DENSITY_MIN_SCALE, Math.min(1, Math.sqrt(DENSITY_REFERENCE_COUNT / count)));
 }
 
 export interface GalaxyPlanetSizingOptions {
@@ -767,6 +780,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       pixelRatio: { value: renderer.getPixelRatio() },
       baseSize: { value: galaxyMode ? POINT_BASE_SIZE_GALAXY : POINT_BASE_SIZE_DEFAULT },
       globalOpacity: { value: 1 },
+      densityScale: { value: resolveDensityScale(dataset.nodes.length) },
       focusActive: { value: 0 },
       focusPosition: { value: new THREE.Vector3() },
       focusInner: { value: FOCUS_DISTANCE_INNER },
@@ -801,6 +815,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       varying float vSharpness;
       varying float vFocus;
       uniform float globalOpacity;
+      uniform float densityScale;
       uniform float focusActive;
       uniform float focusDim;
       void main() {
@@ -812,7 +827,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         float core = smoothstep(coreWidth, 0.0, dist);
         float opacity = mix(0.32, 0.52, vSharpness);
         float focusOpacity = mix(focusDim, 1.0, vFocus);
-        gl_FragColor = vec4(vColor * (1.0 + core * 0.72), alpha * opacity * globalOpacity * mix(1.0, focusOpacity, focusActive));
+        gl_FragColor = vec4(vColor * (1.0 + core * 0.72), alpha * opacity * globalOpacity * densityScale * mix(1.0, focusOpacity, focusActive));
         #include <colorspace_fragment>
       }
     `,
@@ -861,6 +876,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       connectedOpacityCap: { value: EDGE_OPACITY_CONNECTED_CAP },
       connectedOpacityBoost: { value: EDGE_OPACITY_CONNECTED_BOOST },
       unrelatedDim: { value: EDGE_OPACITY_UNRELATED_DIM },
+      densityScale: { value: resolveDensityScale(dataset.edges.length) },
       focusActive: { value: 0 },
       focusPosition: { value: new THREE.Vector3() },
       focusInner: { value: FOCUS_DISTANCE_INNER },
@@ -910,6 +926,7 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       uniform float connectedOpacityCap;
       uniform float connectedOpacityBoost;
       uniform float unrelatedDim;
+      uniform float densityScale;
       uniform float focusActive;
       uniform float focusDim;
       float stateBit(float stateValue, float bitValue) {
@@ -937,7 +954,11 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         float depthFade = smoothstep(0.0, 80.0, vViewZ);
         float focusOpacity = mix(focusDim, 1.0, vFocus);
         float pulse = (0.5 + 0.5 * sin(vFlow * 18.849555 + uTime * 5.0)) * pulseStrength;
-        opacity = opacity * depthFade * mix(1.0, focusOpacity, focusActive) + pulse * selected;
+        // Tame the additive haze from bulk edges as density rises, but keep highlighted
+        // edges (selected/hovered/connected) at full strength so they still read.
+        float highlighted = max(selected, max(hovered, connected));
+        float density = mix(densityScale, 1.0, highlighted);
+        opacity = opacity * depthFade * density * mix(1.0, focusOpacity, focusActive) + pulse * selected;
         if (opacity <= 0.0) discard;
         gl_FragColor = vec4(vColor, opacity);
         #include <colorspace_fragment>
@@ -1857,6 +1878,11 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     for (let index = prevEdgeCount; index < dataset.edges.length; index += 1) {
       addEdgeMesh(dataset.edges[index], index);
     }
+
+    // Streamed growth can cross the density threshold, so recompute the adaptive
+    // opacity scale from the new totals.
+    pointsMaterial.uniforms.densityScale.value = resolveDensityScale(dataset.nodes.length);
+    edgeVisualMaterial.uniforms.densityScale.value = resolveDensityScale(dataset.edges.length);
 
     updatePointAppearance();
     updateEdges();

@@ -133,10 +133,15 @@ async function readCanvasSignal(page) {
     context.drawImage(image, 0, 0, probe.width, probe.height);
     const pixels = context.getImageData(0, 0, probe.width, probe.height).data;
     let lit = 0;
+    let clipped = 0;
     for (let index = 0; index < pixels.length; index += 4) {
-      if (pixels[index] + pixels[index + 1] + pixels[index + 2] > 44) lit += 1;
+      const sum = pixels[index] + pixels[index + 1] + pixels[index + 2];
+      if (sum > 44) lit += 1;
+      // Near-white pixels (each channel ~>=240): additive over-saturation / blowout.
+      if (sum > 720) clipped += 1;
     }
-    return { nonBackgroundRatio: lit / (probe.width * probe.height) };
+    const total = probe.width * probe.height;
+    return { nonBackgroundRatio: lit / total, clippedRatio: clipped / total };
   }, screenshotBase64);
 }
 
@@ -194,8 +199,8 @@ async function run() {
     return;
   }
 
-  console.log('| Nodes | Edges | FPS | Avg frame | Max frame | JS heap | Canvas lit |');
-  console.log('| ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
+  console.log('| Nodes | Edges | FPS | Avg frame | Max frame | JS heap | Canvas lit | White clip |');
+  console.log('| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |');
   for (const result of results) {
     const heap = result.heapBytes === null ? 'n/a' : `${(result.heapBytes / 1024 / 1024).toFixed(1)} MB`;
     console.log(
@@ -203,7 +208,7 @@ async function run() {
         1,
       )} | ${result.averageFrameMs.toFixed(1)} ms | ${result.maxFrameMs.toFixed(1)} ms | ${heap} | ${(
         result.nonBackgroundRatio * 100
-      ).toFixed(2)}% |`,
+      ).toFixed(2)}% | ${(result.clippedRatio * 100).toFixed(2)}% |`,
     );
   }
 }

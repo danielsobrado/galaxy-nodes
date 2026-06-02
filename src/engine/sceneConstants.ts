@@ -57,6 +57,12 @@ export const DEFAULT_PLANET_SIZE_STRENGTH = 0.82;
 // Base point size before per-node size and distance attenuation; galaxy mode runs larger.
 export const POINT_BASE_SIZE_GALAXY = 2.7;
 export const POINT_BASE_SIZE_DEFAULT = 2.25;
+// Adaptive density compensation. Additive node/edge blending sums to pure white where
+// thousands of elements overlap, so per-element opacity is scaled down as the graph
+// grows. Graphs at/below the reference count are untouched (the dense-but-not-blown-out
+// look), and the scale tapers as sqrt(reference / count) but never below the floor.
+export const DENSITY_REFERENCE_COUNT = 10000;
+export const DENSITY_MIN_SCALE = 0.3;
 // Size multiplier applied to a point by selection tier (selected / 1st-degree / 2nd-degree).
 export const POINT_SIZE_SELECTED = 2.55;
 export const POINT_SIZE_FIRST_DEGREE = 1.85;
