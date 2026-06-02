@@ -26,3 +26,62 @@ body,
   margin: 0;
   overflow: hidden;
 }
+
+/* Relationship-colour swatches appended to the node-status legend. */
+.galaxy-nodes .legend .legend-sep {
+  width: 1px;
+  height: 12px;
+  background: rgba(245, 249, 247, 0.18);
+}
+.galaxy-nodes .legend .rel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: rgba(245, 249, 247, 0.74);
+  font-weight: 500;
+}
+.galaxy-nodes .legend .rel::before {
+  content: '';
+  width: 16px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--rel);
+  box-shadow: 0 0 6px var(--rel);
+}
+
+/* Compact navigation-keys hint, bottom-left, non-interactive. */
+.keys-badge {
+  position: fixed;
+  left: 18px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  max-width: 60vw;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(8, 12, 18, 0.55);
+  border: 1px solid rgba(245, 249, 247, 0.08);
+  backdrop-filter: blur(6px);
+  color: rgba(245, 249, 247, 0.6);
+  font-size: 0.7rem;
+  pointer-events: none;
+  user-select: none;
+}
+.keys-badge span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.keys-badge kbd {
+  font: inherit;
+  font-size: 0.66rem;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: rgba(245, 249, 247, 0.08);
+  border: 1px solid rgba(245, 249, 247, 0.16);
+  color: rgba(245, 249, 247, 0.85);
+}

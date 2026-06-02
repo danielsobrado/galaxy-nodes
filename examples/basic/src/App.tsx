@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Activity, Database, Import } from 'lucide-react';
 import {
   GalaxyGraphVisualizer,
@@ -20,13 +20,53 @@ import {
   type InitiativeNodeMeta,
 } from 'galaxy-nodes/presets/initiatives';
 
+// Mirrors the edge `kind -> color` mapping in createInitiativeAccessors.
+const RELATIONSHIP_LEGEND: ReadonlyArray<{ label: string; color: string }> = [
+  { label: 'supports', color: '#6bd7ff' },
+  { label: 'impacts', color: '#f5cf5b' },
+  { label: 'depends on', color: '#ff9d66' },
+  { label: 'owned by', color: '#a78bfa' },
+  { label: 'blocks', color: '#ff6f86' },
+];
+
 const initiativeLegend = (
   <>
-    <span>Color</span>
+    <span>Nodes</span>
     <b className="yes">ON TRACK</b>
     <b className="no">AT RISK</b>
-    <span>by business status / function</span>
+    <span className="legend-sep" aria-hidden="true" />
+    <span>Links</span>
+    {RELATIONSHIP_LEGEND.map(({ label, color }) => (
+      <b key={label} className="rel" style={{ '--rel': color } as CSSProperties}>
+        {label}
+      </b>
+    ))}
   </>
+);
+
+// Small overlay explaining the keyboard/mouse navigation the engine supports.
+const navKeysBadge = (
+  <div className="keys-badge" aria-label="Navigation controls">
+    <span>
+      <kbd>W</kbd>
+      <kbd>A</kbd>
+      <kbd>S</kbd>
+      <kbd>D</kbd> move
+    </span>
+    <span>
+      <kbd>Q</kbd>
+      <kbd>E</kbd> up · down
+    </span>
+    <span>
+      <kbd>Shift</kbd> faster
+    </span>
+    <span>
+      <kbd>drag</kbd> orbit
+    </span>
+    <span>
+      <kbd>scroll</kbd> zoom
+    </span>
+  </div>
 );
 
 const INITIAL_DATASET_SIZE = DATASET_SIZES[0];
@@ -178,58 +218,61 @@ export default function App() {
   }
 
   return (
-    <GalaxyGraphVisualizer
-      dataset={dataset}
-      accessors={accessors}
-      groups={INITIATIVE_CATEGORIES}
-      legend={initiativeLegend}
-      renderNodeDetail={renderInitiativeNodeDetail}
-      renderEdgeDetail={renderInitiativeEdgeDetail}
-      largeGraph={largeGraph}
-      onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
-      options={{
-        datasetSizes: DATASET_SIZES,
-        showDatasetSizeControls: true,
-      }}
-      controlActions={
-        <button
-          type="button"
-          className={sharpMoney ? 'toggle is-on' : 'toggle'}
-          aria-pressed={sharpMoney}
-          onClick={() => setSharpMoney((value) => !value)}
-        >
-          <Activity size={15} aria-hidden="true" />
-          Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
-        </button>
-      }
-      sideRailActions={
-        <>
+    <>
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        accessors={accessors}
+        groups={INITIATIVE_CATEGORIES}
+        legend={initiativeLegend}
+        renderNodeDetail={renderInitiativeNodeDetail}
+        renderEdgeDetail={renderInitiativeEdgeDetail}
+        largeGraph={largeGraph}
+        onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
+        options={{
+          datasetSizes: DATASET_SIZES,
+          showDatasetSizeControls: true,
+        }}
+        controlActions={
           <button
             type="button"
-            className={
-              dbStatus === 'loaded' || dbStatus === 'loading' ? 'is-active' : dbStatus === 'error' ? 'is-error' : ''
-            }
-            title={`Load from Memgraph API (${graphApiUrl})`}
-            onClick={() => void loadDatabaseGraph()}
+            className={sharpMoney ? 'toggle is-on' : 'toggle'}
+            aria-pressed={sharpMoney}
+            onClick={() => setSharpMoney((value) => !value)}
           >
-            <Database size={17} aria-hidden="true" />
+            <Activity size={15} aria-hidden="true" />
+            Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
           </button>
-          <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
-            <Import size={17} aria-hidden="true" />
-          </button>
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            accept="application/json,.json"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) void importDataset(file);
-              event.currentTarget.value = '';
-            }}
-          />
-        </>
-      }
-    />
+        }
+        sideRailActions={
+          <>
+            <button
+              type="button"
+              className={
+                dbStatus === 'loaded' || dbStatus === 'loading' ? 'is-active' : dbStatus === 'error' ? 'is-error' : ''
+              }
+              title={`Load from Memgraph API (${graphApiUrl})`}
+              onClick={() => void loadDatabaseGraph()}
+            >
+              <Database size={17} aria-hidden="true" />
+            </button>
+            <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
+              <Import size={17} aria-hidden="true" />
+            </button>
+            <input
+              ref={fileInputRef}
+              className="visually-hidden"
+              type="file"
+              accept="application/json,.json"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) void importDataset(file);
+                event.currentTarget.value = '';
+              }}
+            />
+          </>
+        }
+      />
+      {navKeysBadge}
+    </>
   );
 }

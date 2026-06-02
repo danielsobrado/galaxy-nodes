@@ -22,6 +22,11 @@ export const MAX_PIXEL_RATIO = 1.75;
 // ACES tone-mapping exposure; >1 lifts the additive glow without clipping highlights.
 export const TONE_MAPPING_EXPOSURE = 1.1;
 export const BLOOM_LAYER = 1;
+// MSAA sample count for the final composer's render target. Rendering the scene through
+// EffectComposer bypasses the canvas `antialias` flag (that only covers the default
+// framebuffer), so without this the offscreen pass is aliased and thin edges shimmer
+// while the camera moves. 0 disables (e.g. WebGL1, where it is ignored anyway).
+export const RENDER_MSAA_SAMPLES = 4;
 export const BLOOM_STRENGTH = 0.35;
 export const BLOOM_RADIUS = 0.35;
 // Layer-gated bloom only renders selected highlight objects, so no luminance cutoff is needed.
@@ -73,15 +78,18 @@ export const POINT_SECOND_DEGREE_TINT = 0.6;
 // Dimming applied to unrelated points while any node/edge is selected.
 export const POINT_UNRELATED_DIM = 0.48;
 // Whole point-cloud opacity while a selection is active, so the selection stands out.
-export const SELECTION_POINT_OPACITY = 0.28;
-// Focus-mode dimming applied once when selection changes.
-export const FOCUS_STAR_DIM_FACTOR = 0.36;
-export const FOCUS_CLUSTER_DIM_FACTOR = 0.42;
-export const FOCUS_FOG_DENSITY_MULTIPLIER = 1.18;
+// Kept fairly high so selecting does not visibly darken the whole backdrop.
+export const SELECTION_POINT_OPACITY = 0.55;
+// Focus-mode dimming applied once when selection changes. These are intentionally
+// gentle: the ambient starfield/dust is the backdrop, so dimming it hard makes the
+// background appear to jump to black when a node is selected.
+export const FOCUS_STAR_DIM_FACTOR = 0.85;
+export const FOCUS_CLUSTER_DIM_FACTOR = 0.7;
+export const FOCUS_FOG_DENSITY_MULTIPLIER = 1.0;
 // Distance focus around the selected node/edge, in graph-space units.
 export const FOCUS_DISTANCE_INNER = 190;
 export const FOCUS_DISTANCE_OUTER = 760;
-export const FOCUS_DISTANCE_DIM_FACTOR = 0.38;
+export const FOCUS_DISTANCE_DIM_FACTOR = 0.62;
 // Point base color treatment: lerp toward the off-white tint, then a slight brighten.
 export const POINT_COLOR_LERP = 0.12;
 export const POINT_COLOR_BRIGHTEN = 1.02;

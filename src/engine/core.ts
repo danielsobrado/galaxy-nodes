@@ -184,6 +184,7 @@ import {
   SCALE_RENDER_ELEMENT_THRESHOLD,
   DENSITY_REFERENCE_COUNT,
   DENSITY_MIN_SCALE,
+  RENDER_MSAA_SAMPLES,
 } from './sceneConstants';
 import { dimColor, makeGlowTexture, makePlanetTexture, planetColor, pointCloudColor } from './materials';
 import { createEdgeLineGeometry, createTubeGeometry, getEdgeSpec, selectedEdgeLabelPosition } from './edges';
@@ -625,7 +626,14 @@ function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   bloomComposer.addPass(bloomRenderPass);
   bloomComposer.addPass(bloomPass);
 
-  const finalComposer = new EffectComposer(renderer);
+  // The base scene renders into this offscreen target before bloom is composited and
+  // tone-mapped. EffectComposer ignores the canvas `antialias` flag, so give the target
+  // an explicit MSAA sample count or thin edges/geometry alias and shimmer on movement.
+  const drawingBufferSize = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const finalRenderTarget = new THREE.WebGLRenderTarget(drawingBufferSize.width, drawingBufferSize.height, {
+    samples: RENDER_MSAA_SAMPLES,
+  });
+  const finalComposer = new EffectComposer(renderer, finalRenderTarget);
   const finalRenderPass = new RenderPass(scene, camera);
   const finalBloomPass = new ShaderPass(
     new THREE.ShaderMaterial({
