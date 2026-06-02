@@ -22,7 +22,7 @@ export const MAX_PIXEL_RATIO = 1.75;
 // ACES tone-mapping exposure; >1 lifts the additive glow without clipping highlights.
 export const TONE_MAPPING_EXPOSURE = 1.1;
 export const BLOOM_LAYER = 1;
-export const BLOOM_STRENGTH = 0.7;
+export const BLOOM_STRENGTH = 0.35;
 export const BLOOM_RADIUS = 0.35;
 // Layer-gated bloom only renders selected highlight objects, so no luminance cutoff is needed.
 export const BLOOM_THRESHOLD = 0.0;
