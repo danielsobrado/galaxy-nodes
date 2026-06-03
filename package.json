@@ -1,7 +1,7 @@
 {
   "name": "galaxy-nodes",
   "description": "Reusable React + Three.js library for interactive galaxy-like graph visualizations.",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "packageManager": "npm@11.16.0",
   "private": false,
   "license": "MIT",
