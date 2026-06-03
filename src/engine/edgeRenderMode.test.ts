@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { resolveDensityScale, resolveEdgeRenderMode } from './core';
-import { DENSITY_MIN_SCALE, DENSITY_REFERENCE_COUNT, SCALE_RENDER_ELEMENT_THRESHOLD } from './sceneConstants';
+import { resolveNodeSizeScale } from './rendererConfig';
+import {
+  DEFAULT_NODE_SIZE_SCALE,
+  DENSITY_MIN_SCALE,
+  DENSITY_REFERENCE_COUNT,
+  SCALE_RENDER_ELEMENT_THRESHOLD,
+} from './sceneConstants';
 
 describe('resolveEdgeRenderMode', () => {
   it('honors an explicit render mode regardless of size', () => {
@@ -36,5 +42,19 @@ describe('resolveDensityScale', () => {
     expect(resolveDensityScale(1_000_000)).toBe(DENSITY_MIN_SCALE);
     // sqrt(10000/40000) = 0.5
     expect(resolveDensityScale(40_000)).toBeCloseTo(0.5, 5);
+  });
+});
+
+describe('resolveNodeSizeScale', () => {
+  it('uses the larger default and honors positive finite caller values', () => {
+    expect(resolveNodeSizeScale(undefined)).toBe(DEFAULT_NODE_SIZE_SCALE);
+    expect(resolveNodeSizeScale(1)).toBe(1);
+    expect(resolveNodeSizeScale(1.6)).toBe(1.6);
+  });
+
+  it('falls back to the default for invalid values', () => {
+    expect(resolveNodeSizeScale(0)).toBe(DEFAULT_NODE_SIZE_SCALE);
+    expect(resolveNodeSizeScale(-1)).toBe(DEFAULT_NODE_SIZE_SCALE);
+    expect(resolveNodeSizeScale(Number.NaN)).toBe(DEFAULT_NODE_SIZE_SCALE);
   });
 });

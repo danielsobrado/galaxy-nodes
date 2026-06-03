@@ -19,6 +19,15 @@ export interface CameraCommand {
   nonce: number;
 }
 
+export interface GalaxyNodeHoverAnchor {
+  nodeId: string;
+  viewportHeight: number;
+  viewportWidth: number;
+  visible: boolean;
+  x: number;
+  y: number;
+}
+
 export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   dataset: GraphDataset<NMeta, EMeta, CMeta>;
   /** Active group filter, or `null` to show everything. */
@@ -34,6 +43,8 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
   contextLimit?: number;
   motionPreference?: GalaxyMotionPreference;
   paused?: boolean;
+  /** Global multiplier for rendered node point sprites. Defaults to a slightly larger 1.22. */
+  nodeSizeScale?: number;
   planetSizing?: GalaxyPlanetSizingOptions;
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
@@ -59,6 +70,7 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
   onSceneReady?: () => void;
   onSelectNode?: (node: GraphNode<NMeta> | null) => void;
   onHoverNode?: (node: GraphNode<NMeta> | null) => void;
+  onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
   onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
 }
@@ -70,7 +82,7 @@ export interface MutableRef<T> {
 export type SceneCallbacks<NMeta = unknown, EMeta = unknown> = Required<
   Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onHoverEdge' | 'onHoverNode' | 'onSelectEdge' | 'onSelectNode'>
 > &
-  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange'>;
+  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange' | 'onHoverNodeAnchor'>;
 
 export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   focusEdge: (edgeId: string) => void;
@@ -95,6 +107,7 @@ export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   updateClusterVisibility: (showClusters: boolean) => void;
   updateGalaxyMode: (galaxyMode: boolean) => void;
   updateMotionPreference: (motion: ResolvedGalaxyMotion) => void;
+  updateNodeSizeScale: (nodeSizeScale: number | undefined) => void;
   updatePlanetSizing: (planetSizing: GalaxyPlanetSizingOptions | undefined) => void;
   updateSelection: (selectedNodeId: string | null, selectedEdgeId: string | null) => void;
   updateTheme: (theme: GalaxyGraphTheme | undefined) => void;
@@ -106,6 +119,7 @@ export interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
   accessors: GraphAccessors<NMeta, EMeta> | undefined;
   activeGroup: string | null;
   galaxyMode: boolean;
+  nodeSizeScale: number | undefined;
   planetSizing: GalaxyPlanetSizingOptions | undefined;
   resolvedMotion: ResolvedGalaxyMotion;
   selectedEdgeId: string | null;

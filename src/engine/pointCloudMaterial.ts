@@ -11,11 +11,17 @@ import { resolveDensityScale } from './rendererConfig';
 
 interface PointCloudMaterialOptions {
   galaxyMode: boolean;
+  nodeSizeScale: number;
   nodeCount: number;
   pixelRatio: number;
 }
 
-export function createPointCloudMaterial({ galaxyMode, nodeCount, pixelRatio }: PointCloudMaterialOptions) {
+export function createPointCloudMaterial({
+  galaxyMode,
+  nodeSizeScale,
+  nodeCount,
+  pixelRatio,
+}: PointCloudMaterialOptions) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -24,6 +30,7 @@ export function createPointCloudMaterial({ galaxyMode, nodeCount, pixelRatio }: 
     uniforms: {
       pixelRatio: { value: pixelRatio },
       baseSize: { value: galaxyMode ? POINT_BASE_SIZE_GALAXY : POINT_BASE_SIZE_DEFAULT },
+      nodeSizeScale: { value: nodeSizeScale },
       minPointSize: { value: POINT_MIN_PIXEL_SIZE * pixelRatio },
       globalOpacity: { value: 1 },
       densityScale: { value: resolveDensityScale(nodeCount) },
@@ -41,6 +48,7 @@ export function createPointCloudMaterial({ galaxyMode, nodeCount, pixelRatio }: 
       varying float vFocus;
       uniform float pixelRatio;
       uniform float baseSize;
+      uniform float nodeSizeScale;
       uniform float minPointSize;
       uniform float focusActive;
       uniform vec3 focusPosition;
@@ -55,7 +63,7 @@ export function createPointCloudMaterial({ galaxyMode, nodeCount, pixelRatio }: 
         vSharpness = smoothstep(0.9, 2.8, attenuation);
         // Floor the footprint so far points never go sub-pixel (which makes them blink
         // as the camera moves); the floor is already in device pixels.
-        gl_PointSize = max(minPointSize, size * baseSize * attenuation * pixelRatio);
+        gl_PointSize = max(minPointSize, size * baseSize * nodeSizeScale * attenuation * pixelRatio);
         gl_Position = projectionMatrix * mvPosition;
       }
     `,

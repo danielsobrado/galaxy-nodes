@@ -47,6 +47,7 @@ const dataset: GraphDataset = {
 afterEach(() => {
   latestSceneProps = null;
   sceneRenderCount = 0;
+  vi.useRealTimers();
   cleanup();
 });
 
@@ -94,6 +95,44 @@ describe('GalaxyGraphVisualizer', () => {
     expect(screen.getByRole('heading', { name: /Alpha to Beta/ })).toBeTruthy();
     expect(screen.getByText('Relationship id')).toBeTruthy();
     expect(screen.getByTestId('galaxy-scene').dataset.selectedEdge).toBe('depends:alpha->beta:0');
+  });
+
+  it('shows a node-adjacent hover detail panel after the configured delay', () => {
+    vi.useFakeTimers();
+    const { container } = render(<GalaxyGraphVisualizer dataset={dataset} options={{ hoverDetailDelayMs: 50 }} />);
+
+    act(() => {
+      latestSceneProps?.onHoverNode(nodeA);
+      latestSceneProps?.onHoverNodeAnchor?.({
+        nodeId: 'alpha',
+        viewportHeight: 480,
+        viewportWidth: 720,
+        visible: true,
+        x: 260,
+        y: 220,
+      });
+    });
+
+    expect(container.querySelector('.hover-detail-panel')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(49);
+    });
+    expect(container.querySelector('.hover-detail-panel')).toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    const panel = container.querySelector('.hover-detail-panel');
+    expect(panel?.textContent).toContain('Alpha');
+    expect(panel?.textContent).toContain('Node id');
+
+    act(() => {
+      latestSceneProps?.onHoverNode(null);
+      latestSceneProps?.onHoverNodeAnchor?.(null);
+    });
+    expect(container.querySelector('.hover-detail-panel')).toBeNull();
   });
 
   it('does not focus the camera when an edge is selected from the scene', () => {
@@ -199,7 +238,10 @@ describe('GalaxyGraphVisualizer', () => {
           alphaBadge: 'BETA',
           allGroups: 'Todos',
           groupsNav: 'Equipos',
+          motionOff: 'Movimiento pausado',
           motionOn: 'Movimiento activo',
+          pauseMotion: 'Pausar movimiento',
+          playMotion: 'Activar movimiento',
           searchInput: 'Buscar nodos',
           searchPlaceholder: 'Buscar',
         }}
@@ -210,7 +252,12 @@ describe('GalaxyGraphVisualizer', () => {
     expect(screen.getByRole('navigation', { name: 'Equipos' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Todos' })).toBeTruthy();
     expect(screen.getByLabelText('Buscar nodos')).toBeTruthy();
+    expect(screen.getByText('Movimiento pausado')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activar movimiento' }));
+
     expect(screen.getByText('Movimiento activo')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pausar movimiento' })).toBeTruthy();
   });
 
   it('server-renders without touching browser-only scene APIs', () => {

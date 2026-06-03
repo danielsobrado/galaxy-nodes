@@ -24,6 +24,7 @@ export type {
   CameraCommand,
   GalaxyGraphTheme,
   GalaxyMotionPreference,
+  GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
   GalaxyRenderer,
   GalaxyRendererCallbacks,

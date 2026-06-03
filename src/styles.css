@@ -533,6 +533,21 @@
   background: rgba(3, 5, 7, 0.78);
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
 }
+.galaxy-nodes .hover-detail-panel {
+  right: auto;
+  bottom: auto;
+  z-index: 6;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(360px, calc(100vh - 32px));
+  overflow: auto;
+  border-color: rgba(70, 244, 188, 0.24);
+  background: rgba(3, 5, 7, 0.66);
+  opacity: 0.9;
+  pointer-events: none;
+  box-shadow:
+    0 22px 70px rgba(0, 0, 0, 0.36),
+    0 0 28px rgba(70, 244, 188, 0.16);
+}
 .galaxy-nodes .detail-heading {
   display: grid;
   grid-template-columns: 22px 1fr;

@@ -35,7 +35,11 @@ export interface GalaxyGraphVisualizerOptions {
   /** Expected final element count (nodes + edges); picks the render tier up front for streamed data. */
   expectedSize?: number;
   galaxyMode?: boolean;
+  /** Delay before showing the node detail panel next to a hovered node. Defaults to 2000ms. */
+  hoverDetailDelayMs?: number;
   motionPreference?: GalaxyMotionPreference;
+  /** Global multiplier for rendered node point sprites. Defaults to a slightly larger 1.22. */
+  nodeSizeScale?: number;
   planetSizing?: GalaxyPlanetSizingOptions;
   /** Edge render tier: 'auto' (default), 'quality' (tube edges), or 'scale' (lightweight line edges). */
   renderMode?: GalaxyRenderMode;

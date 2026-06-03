@@ -2,6 +2,7 @@ import {
   DEFAULT_PLANET_SIZE_MAX,
   DEFAULT_PLANET_SIZE_MIN,
   DEFAULT_PLANET_SIZE_STRENGTH,
+  DEFAULT_NODE_SIZE_SCALE,
   DENSITY_MIN_SCALE,
   DENSITY_REFERENCE_COUNT,
   SCALE_RENDER_ELEMENT_THRESHOLD,
@@ -57,12 +58,18 @@ export function resolveEdgeRenderMode(
 
 /**
  * Adaptive per-element opacity multiplier that keeps dense scenes from saturating
- * to white. Returns 1 at or below {@link DENSITY_REFERENCE_COUNT}, then tapers as
- * sqrt(reference / count), floored at {@link DENSITY_MIN_SCALE}.
+ * to white. Returns 1 at or below `DENSITY_REFERENCE_COUNT`, then tapers as
+ * sqrt(reference / count), floored at `DENSITY_MIN_SCALE`.
  */
 export function resolveDensityScale(count: number): number {
   if (count <= DENSITY_REFERENCE_COUNT) return 1;
   return Math.max(DENSITY_MIN_SCALE, Math.min(1, Math.sqrt(DENSITY_REFERENCE_COUNT / count)));
+}
+
+export function resolveNodeSizeScale(nodeSizeScale: number | undefined): number {
+  return typeof nodeSizeScale === 'number' && Number.isFinite(nodeSizeScale) && nodeSizeScale > 0
+    ? nodeSizeScale
+    : DEFAULT_NODE_SIZE_SCALE;
 }
 
 export function resolvePlanetSizing(planetSizing?: GalaxyPlanetSizingOptions): ResolvedPlanetSizing {

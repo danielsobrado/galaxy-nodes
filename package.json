@@ -113,12 +113,12 @@
     {
       "name": "core renderer chunk",
       "path": "dist/core-*.js",
-      "limit": "16 KB"
+      "limit": "21 KB"
     },
     {
       "name": "React visualizer chunk",
       "path": "dist/GalaxyGraphVisualizer-*.js",
-      "limit": "9 KB"
+      "limit": "10 KB"
     }
   ],
   "dependencies": {

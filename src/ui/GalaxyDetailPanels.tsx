@@ -3,6 +3,7 @@ import { GitBranch, Navigation, Radar, Upload } from 'lucide-react';
 import type { EdgeEndpoint, GraphEdge, GraphNode, ResolvedAccessors } from '../domain/types';
 import type { GalaxyGraphLabels, LargeGraphDetailContext } from './galaxyGraphVisualizerTypes';
 import { edgeDisplayText, nodeDisplayText } from './galaxyGraphVisualizerUtils';
+import type { GalaxyNodeHoverAnchor } from './GalaxyScene';
 
 export interface GalaxyDetailPanelsProps<NMeta, EMeta> {
   canExpandGraph: boolean;
@@ -16,6 +17,8 @@ export interface GalaxyDetailPanelsProps<NMeta, EMeta> {
   focusNode: (node: GraphNode<NMeta> | null) => void;
   inspectedEdge: GraphEdge<EMeta> | null;
   inspectedNode: GraphNode<NMeta> | null;
+  hoverDetailAnchor: GalaxyNodeHoverAnchor | null;
+  hoverDetailNode: GraphNode<NMeta> | null;
   largeGraphEnabled: boolean;
   nodeDetailContext: LargeGraphDetailContext | undefined;
   renderEdgeDetail?: (
@@ -43,6 +46,8 @@ export function GalaxyDetailPanels<NMeta, EMeta>({
   focusNode,
   inspectedEdge,
   inspectedNode,
+  hoverDetailAnchor,
+  hoverDetailNode,
   largeGraphEnabled,
   nodeDetailContext,
   renderEdgeDetail,
@@ -53,6 +58,18 @@ export function GalaxyDetailPanels<NMeta, EMeta>({
   sourceEndpoint,
   targetEndpoint,
 }: GalaxyDetailPanelsProps<NMeta, EMeta>) {
+  const hoverPanelStyle =
+    hoverDetailAnchor && hoverDetailAnchor.visible
+      ? ({
+          left: `${hoverDetailAnchor.x}px`,
+          top: `${hoverDetailAnchor.y}px`,
+          transform:
+            hoverDetailAnchor.x > hoverDetailAnchor.viewportWidth - 380
+              ? 'translate(calc(-100% - 18px), -50%)'
+              : 'translate(18px, -50%)',
+        } as const)
+      : undefined;
+
   return (
     <>
       {showDetailPanel && inspectedNode ? (
@@ -60,33 +77,7 @@ export function GalaxyDetailPanels<NMeta, EMeta>({
           {renderNodeDetail ? (
             renderNodeDetail(inspectedNode, nodeDetailContext)
           ) : (
-            <>
-              <div className="detail-heading">
-                <Radar size={18} aria-hidden="true" />
-                <div>
-                  {inspectedNode.group ? <span>{inspectedNode.group}</span> : null}
-                  <h2>{nodeDisplayText(inspectedNode, resolvedAccessors)}</h2>
-                </div>
-              </div>
-              <dl>
-                <div>
-                  <dt>{chromeLabels.nodeId}</dt>
-                  <dd>{inspectedNode.id}</dd>
-                </div>
-                {inspectedNode.group ? (
-                  <div>
-                    <dt>{chromeLabels.group}</dt>
-                    <dd>{inspectedNode.group}</dd>
-                  </div>
-                ) : null}
-                {inspectedNode.size !== undefined ? (
-                  <div>
-                    <dt>{chromeLabels.size}</dt>
-                    <dd>{inspectedNode.size.toFixed(1)}</dd>
-                  </div>
-                ) : null}
-              </dl>
-            </>
+            <NodeDetailBody chromeLabels={chromeLabels} node={inspectedNode} resolvedAccessors={resolvedAccessors} />
           )}
           <button type="button" disabled={sceneControlDisabled} onClick={() => focusNode(inspectedNode)}>
             <Upload size={15} aria-hidden="true" />
@@ -103,6 +94,16 @@ export function GalaxyDetailPanels<NMeta, EMeta>({
             </button>
           ) : null}
           {largeGraphEnabled && expandError ? <span role="status">{chromeLabels.expansionFailed}</span> : null}
+        </aside>
+      ) : null}
+
+      {showDetailPanel && hoverDetailNode && hoverPanelStyle ? (
+        <aside className="detail-panel hover-detail-panel" style={hoverPanelStyle} aria-hidden="true" inert>
+          {renderNodeDetail ? (
+            renderNodeDetail(hoverDetailNode)
+          ) : (
+            <NodeDetailBody chromeLabels={chromeLabels} node={hoverDetailNode} resolvedAccessors={resolvedAccessors} />
+          )}
         </aside>
       ) : null}
 
@@ -163,6 +164,44 @@ export function GalaxyDetailPanels<NMeta, EMeta>({
           </div>
         </aside>
       ) : null}
+    </>
+  );
+}
+
+interface NodeDetailBodyProps<NMeta, EMeta> {
+  chromeLabels: GalaxyGraphLabels;
+  node: GraphNode<NMeta>;
+  resolvedAccessors: ResolvedAccessors<NMeta, EMeta>;
+}
+
+function NodeDetailBody<NMeta, EMeta>({ chromeLabels, node, resolvedAccessors }: NodeDetailBodyProps<NMeta, EMeta>) {
+  return (
+    <>
+      <div className="detail-heading">
+        <Radar size={18} aria-hidden="true" />
+        <div>
+          {node.group ? <span>{node.group}</span> : null}
+          <h2>{nodeDisplayText(node, resolvedAccessors)}</h2>
+        </div>
+      </div>
+      <dl>
+        <div>
+          <dt>{chromeLabels.nodeId}</dt>
+          <dd>{node.id}</dd>
+        </div>
+        {node.group ? (
+          <div>
+            <dt>{chromeLabels.group}</dt>
+            <dd>{node.group}</dd>
+          </div>
+        ) : null}
+        {node.size !== undefined ? (
+          <div>
+            <dt>{chromeLabels.size}</dt>
+            <dd>{node.size.toFixed(1)}</dd>
+          </div>
+        ) : null}
+      </dl>
     </>
   );
 }

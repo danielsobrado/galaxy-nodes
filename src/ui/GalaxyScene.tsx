@@ -3,6 +3,7 @@ import {
   createGalaxyRenderer,
   type GalaxyRenderer,
   type GalaxyRendererCallbacks,
+  type GalaxyNodeHoverAnchor,
   type GalaxyRendererOptions,
 } from '../engine/core';
 import { createSceneFallbackViewModel, type GalaxySceneFailure } from '../engine/sceneFallback';
@@ -19,6 +20,7 @@ export type {
   CameraCommand,
   GalaxyGraphTheme,
   GalaxyMotionPreference,
+  GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
   GalaxyRenderMode,
   PlanetSizingMode,
@@ -39,6 +41,7 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
   onSceneReady?: () => void;
   onCameraViewChange?: (view: GalaxyCameraView) => void;
   onContextBudgetExceeded?: GalaxyRendererCallbacks<NMeta, EMeta>['onContextBudgetExceeded'];
+  onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
   onSelectNode: (node: GraphNode<NMeta> | null) => void;
   onHoverNode: (node: GraphNode<NMeta> | null) => void;
   onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
@@ -60,7 +63,9 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   onSceneReady,
   onCameraViewChange,
   onContextBudgetExceeded,
+  onHoverNodeAnchor,
   paused = false,
+  nodeSizeScale,
   planetSizing,
   expectedSize,
   renderMode,
@@ -85,6 +90,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       galaxyMode,
       layout,
       motionPreference,
+      nodeSizeScale,
       paused,
       planetSizing,
       renderMode,
@@ -102,6 +108,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       galaxyMode,
       layout,
       motionPreference,
+      nodeSizeScale,
       paused,
       planetSizing,
       renderMode,
@@ -116,6 +123,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
     () => ({
       onHoverEdge,
       onHoverNode,
+      onHoverNodeAnchor,
       onCameraViewChange,
       onContextBudgetExceeded,
       onSceneFailure: (nextFailure) => {
@@ -134,6 +142,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       onContextBudgetExceeded,
       onHoverEdge,
       onHoverNode,
+      onHoverNodeAnchor,
       onSceneFailure,
       onSceneReady,
       onSelectEdge,

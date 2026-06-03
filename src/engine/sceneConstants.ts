@@ -60,6 +60,10 @@ export const DEFAULT_PLANET_SIZE_MAX = 2.15;
 export const DEFAULT_PLANET_SIZE_STRENGTH = 0.82;
 
 // ── Point cloud (every node drawn as an additive sprite) ─────────────────────
+// Global multiplier for rendered node point sprites. Per-node `size`/`nodeSize`
+// still controls relative differences; this makes the default node field read
+// closer to the edge thickness without changing caller data.
+export const DEFAULT_NODE_SIZE_SCALE = 1.22;
 // Base point size before per-node size and distance attenuation; galaxy mode runs larger.
 export const POINT_BASE_SIZE_GALAXY = 2.7;
 export const POINT_BASE_SIZE_DEFAULT = 2.25;

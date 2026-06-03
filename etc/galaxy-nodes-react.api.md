@@ -189,8 +189,10 @@ export interface GalaxyGraphVisualizerOptions {
     expectedSize?: number;
     // (undocumented)
     galaxyMode?: boolean;
+    hoverDetailDelayMs?: number;
     // (undocumented)
     motionPreference?: GalaxyMotionPreference;
+    nodeSizeScale?: number;
     // (undocumented)
     planetSizing?: GalaxyPlanetSizingOptions;
     renderMode?: GalaxyRenderMode;
@@ -283,6 +285,22 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
 export type GalaxyMotionPreference = 'system' | 'full' | 'reduced';
 
 // @public (undocumented)
+export interface GalaxyNodeHoverAnchor {
+    // (undocumented)
+    nodeId: string;
+    // (undocumented)
+    viewportHeight: number;
+    // (undocumented)
+    viewportWidth: number;
+    // (undocumented)
+    visible: boolean;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public (undocumented)
 export interface GalaxyPlanetSizingOptions {
     max?: number;
     min?: number;
@@ -323,6 +341,8 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
     onHoverEdge: (edge: GraphEdge<EMeta> | null) => void;
     // (undocumented)
     onHoverNode: (node: GraphNode<NMeta> | null) => void;
+    // (undocumented)
+    onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
     // (undocumented)
     onSceneFailure?: (failure: GalaxySceneFailure) => void;
     // (undocumented)

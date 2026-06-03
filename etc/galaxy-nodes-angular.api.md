@@ -55,6 +55,22 @@ export interface GalaxyGraphTheme {
 export type GalaxyMotionPreference = 'system' | 'full' | 'reduced';
 
 // @public (undocumented)
+export interface GalaxyNodeHoverAnchor {
+    // (undocumented)
+    nodeId: string;
+    // (undocumented)
+    viewportHeight: number;
+    // (undocumented)
+    viewportWidth: number;
+    // (undocumented)
+    visible: boolean;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public (undocumented)
 export interface GalaxyPlanetSizingOptions {
     max?: number;
     min?: number;
@@ -92,6 +108,8 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
     // (undocumented)
     onHoverNode?: (node: GraphNode<NMeta> | null) => void;
     // (undocumented)
+    onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
+    // (undocumented)
     onSceneFailure?: (failure: GalaxySceneFailure) => void;
     // (undocumented)
     onSceneReady?: () => void;
@@ -127,6 +145,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     layout?: GraphLayoutInput;
     // (undocumented)
     motionPreference?: GalaxyMotionPreference;
+    nodeSizeScale?: number;
     // (undocumented)
     paused?: boolean;
     // (undocumented)

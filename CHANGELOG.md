@@ -4,7 +4,7 @@ All notable changes to Galaxy Nodes will be documented in this file.
 
 This project follows semantic versioning once the public API reaches `1.0.0`. Until then, minor versions may include breaking changes and each breaking change should be called out in this changelog.
 
-## 0.2.0 - 2026-06-02
+## 0.2.0
 
 ### Breaking changes
 
@@ -15,6 +15,8 @@ This project follows semantic versioning once the public API reaches `1.0.0`. Un
 
 - Added Vue and Angular package entry points alongside the existing core and React exports.
 - Added `expectedSize` and `renderMode` options so large or streamed graphs can choose the edge render tier up front.
+- Added `nodeSizeScale` to globally tune rendered node point size, with a larger default so nodes read better against relationships.
+- Added delayed node hover detail panels next to hovered nodes, configurable with `hoverDetailDelayMs` and defaulting to 2 seconds.
 - Added scale-mode relationship rendering for very large graphs, using lightweight line edges and avoiding per-edge hit proxies.
 - Added API report coverage for the core, React, Vue, and Angular entry points.
 - Added browser coverage for renderer behavior, edge render mode selection, marker rendering, streaming append behavior, and visual baseline checks.
@@ -23,8 +25,8 @@ This project follows semantic versioning once the public API reaches `1.0.0`. Un
 ### Changed
 
 - Split the renderer into focused engine modules for configuration, lifecycle, scene types, postprocessing, point cloud buffers/materials, markers, labels, materials, and edge helpers.
+- Raised the enforced bundle budgets to 21 KB for the core renderer chunk and 10 KB for the React visualizer chunk after the large-graph render tiers, node scaling, and hover-detail features.
 - Improved dense graph readability with adaptive point opacity, selective bloom, quieter highlight glow, MSAA rendering, and half-float scene accumulation.
-- Restored relationship rendering to the stable `0.1`-style BasicMaterial edge path while keeping relationship colors intact during focus and selection.
 - Kept node rendering improvements in place, including bloom markers, point-size floor, and current node focus sizing.
 - Made selection resolve by node and edge id so selection survives streamed dataset merges such as Expand neighbors.
 - Reduced backdrop jumps during focus by keeping ambient stars, clusters, fog, and global point opacity stable.

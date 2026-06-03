@@ -96,6 +96,22 @@ export interface GalaxyGraphTheme {
 export type GalaxyMotionPreference = 'system' | 'full' | 'reduced';
 
 // @public (undocumented)
+export interface GalaxyNodeHoverAnchor {
+    // (undocumented)
+    nodeId: string;
+    // (undocumented)
+    viewportHeight: number;
+    // (undocumented)
+    viewportWidth: number;
+    // (undocumented)
+    visible: boolean;
+    // (undocumented)
+    x: number;
+    // (undocumented)
+    y: number;
+}
+
+// @public (undocumented)
 export interface GalaxyPlanetSizingOptions {
     max?: number;
     min?: number;
@@ -133,6 +149,8 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
     // (undocumented)
     onHoverNode?: (node: GraphNode<NMeta> | null) => void;
     // (undocumented)
+    onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
+    // (undocumented)
     onSceneFailure?: (failure: GalaxySceneFailure) => void;
     // (undocumented)
     onSceneReady?: () => void;
@@ -168,6 +186,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     layout?: GraphLayoutInput;
     // (undocumented)
     motionPreference?: GalaxyMotionPreference;
+    nodeSizeScale?: number;
     // (undocumented)
     paused?: boolean;
     // (undocumented)
@@ -338,9 +357,6 @@ export function resolveAccessors<NMeta = unknown, EMeta = unknown>(accessors?: G
 // @public
 export type ResolvedAccessors<NMeta = unknown, EMeta = unknown> = Required<GraphAccessors<NMeta, EMeta>>;
 
-// Warning: (ae-unresolved-link) The @link reference could not be resolved: The package "galaxy-nodes" does not have an export "DENSITY_REFERENCE_COUNT"
-// Warning: (ae-unresolved-link) The @link reference could not be resolved: The package "galaxy-nodes" does not have an export "DENSITY_MIN_SCALE"
-//
 // @public
 export function resolveDensityScale(count: number): number;
 

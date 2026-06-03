@@ -350,6 +350,7 @@ export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
     <GalaxyGraphVisualizer
       dataset={dataset}
       accessors={accessors}
+      options={{ nodeSizeScale: 1.35 }}
       theme={{
         background: '#07090d',
         panelAccentColor: '#67e8c9',
@@ -359,6 +360,10 @@ export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
   );
 }
 ```
+
+`options.nodeSizeScale` applies a global multiplier to rendered node point sprites. The default is `1.22`, so nodes read slightly larger against edges; pass `1` to restore the previous point size or a higher value for denser node emphasis. Per-node relative size still comes from `node.size` or `accessors.nodeSize`.
+
+When a node stays hovered, Galaxy Nodes shows a transparent node detail panel next to the node after `options.hoverDetailDelayMs` milliseconds. The default is `2000`; pass a lower value for faster inspection.
 
 `theme.background` controls the WebGL clear color and app background. `theme.panelAccentColor` controls HUD accents and secondary selection markers. `theme.selectedColor` controls selected/highlighted scene elements. There is no separate `palette` prop; keep palette logic in `nodeColor` or domain-specific accessor helpers.
 

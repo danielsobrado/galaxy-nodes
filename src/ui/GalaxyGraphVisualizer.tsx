@@ -10,7 +10,7 @@ import {
   mergeGraphDataset,
   resolveAccessors,
 } from '../domain/data';
-import type { CameraCommand } from './GalaxyScene';
+import type { CameraCommand, GalaxyNodeHoverAnchor } from './GalaxyScene';
 import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
 import {
   DEFAULT_GALAXY_GRAPH_LABELS,
@@ -32,6 +32,14 @@ import type {
   LargeGraphDetailContext,
   LargeGraphExpandRequest,
 } from './galaxyGraphVisualizerTypes';
+
+const DEFAULT_HOVER_DETAIL_DELAY_MS = 2000;
+
+function resolveHoverDetailDelayMs(delayMs: number | undefined) {
+  return typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs >= 0
+    ? delayMs
+    : DEFAULT_HOVER_DETAIL_DELAY_MS;
+}
 
 export type {
   GalaxyAccessibleSummaryContext,
@@ -83,6 +91,8 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [search, setSearch] = useState('');
   const [internalSelectedNode, setInternalSelectedNode] = useState<GraphNode<NMeta> | null>(null);
   const [hoverNode, setHoverNode] = useState<GraphNode<NMeta> | null>(null);
+  const [hoverNodeAnchor, setHoverNodeAnchor] = useState<GalaxyNodeHoverAnchor | null>(null);
+  const [hoverDetailNodeId, setHoverDetailNodeId] = useState<string | null>(null);
   const [internalSelectedEdge, setInternalSelectedEdge] = useState<GraphEdge<EMeta> | null>(null);
   const [internalSelectedEdgeId, setInternalSelectedEdgeId] = useState<string | null>(null);
   const [hoverEdge, setHoverEdge] = useState<GraphEdge<EMeta> | null>(null);
@@ -104,6 +114,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const showStats = options?.showStats ?? true;
   const showNavigationControls = options?.showNavigationControls ?? true;
   const showDetailPanel = options?.showDetailPanel ?? true;
+  const hoverDetailDelayMs = resolveHoverDetailDelayMs(options?.hoverDetailDelayMs);
   const showDatasetSizeControls = options?.showDatasetSizeControls ?? Boolean(options?.datasetSizes?.length);
   const largeGraphEnabled = Boolean(largeGraph?.enabled);
   const graphDataset = largeGraphEnabled ? augmentedDataset : dataset;
@@ -382,6 +393,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   const inspectedNode = selectedNode ?? (selectedEdge ? null : hoverNode);
   const inspectedEdge = selectedNode ? null : (selectedEdge ?? (!inspectedNode ? hoverEdge : null));
+  const hoverDetailNode = hoverNode && hoverNode.id === hoverDetailNodeId ? hoverNode : null;
   const currentSelectedNodeId = selectedNode?.id ?? null;
   const currentSelectedEdgeId = currentSelectedNodeId || !selectedEdge ? null : displayEdgeId(selectedEdge);
   const sourceEndpoint = useMemo(
@@ -393,6 +405,16 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     [graphDataset, inspectedEdge, resolvedAccessors],
   );
   const sceneControlDisabled = !sceneReady;
+
+  useEffect(() => {
+    setHoverDetailNodeId(null);
+    if (!showDetailPanel || !hoverNode || hoverNodeAnchor?.nodeId !== hoverNode.id || !hoverNodeAnchor.visible) {
+      return undefined;
+    }
+
+    const timeout = window.setTimeout(() => setHoverDetailNodeId(hoverNode.id), hoverDetailDelayMs);
+    return () => window.clearTimeout(timeout);
+  }, [hoverDetailDelayMs, hoverNode, hoverNodeAnchor, showDetailPanel]);
 
   const runExpansion = useCallback(
     async (request: Omit<LargeGraphExpandRequest, 'activeGroup' | 'loadedEdgeIds' | 'loadedNodeIds'>) => {
@@ -558,6 +580,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         accessors={accessors}
         paused={!playing}
         motionPreference={options?.motionPreference}
+        nodeSizeScale={options?.nodeSizeScale}
         planetSizing={options?.planetSizing}
         expectedSize={options?.expectedSize}
         renderMode={options?.renderMode}
@@ -574,6 +597,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         onContextBudgetExceeded={onContextBudgetExceeded}
         onSelectNode={selectNode}
         onHoverNode={hover}
+        onHoverNodeAnchor={setHoverNodeAnchor}
         onSelectEdge={selectEdge}
         onHoverEdge={hoverConnection}
       />
@@ -733,6 +757,8 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         expanding={expanding}
         focusEdge={focusEdge}
         focusNode={focusNode}
+        hoverDetailAnchor={hoverNodeAnchor}
+        hoverDetailNode={hoverDetailNode}
         inspectedEdge={inspectedEdge}
         inspectedNode={inspectedNode}
         largeGraphEnabled={largeGraphEnabled}

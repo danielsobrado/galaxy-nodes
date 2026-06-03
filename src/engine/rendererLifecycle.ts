@@ -10,6 +10,7 @@ import {
 } from './environment';
 import {
   resolveEdgeRenderMode,
+  resolveNodeSizeScale,
   type EdgeRenderMode,
   type GalaxyGraphTheme,
   type GalaxyPlanetSizingOptions,
@@ -38,6 +39,7 @@ export type SceneFactory = <NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   edgeRenderMode: EdgeRenderMode,
   layoutInput: GraphLayoutInput | undefined,
   accessorsInput: GraphAccessors<NMeta, EMeta> | undefined,
+  nodeSizeScale: number,
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
   initialTheme: GalaxyGraphTheme | undefined,
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
@@ -72,6 +74,7 @@ function resolveRendererCallbacks<NMeta, EMeta>(
     onCameraViewChange: callbacks?.onCameraViewChange,
     onHoverEdge: callbacks?.onHoverEdge ?? noop,
     onHoverNode: callbacks?.onHoverNode ?? noop,
+    onHoverNodeAnchor: callbacks?.onHoverNodeAnchor,
     onSelectEdge: callbacks?.onSelectEdge ?? noop,
     onSelectNode: callbacks?.onSelectNode ?? noop,
   };
@@ -197,6 +200,7 @@ function snapshotAppliedState<NMeta, EMeta, CMeta>(
     accessors: state.options.accessors,
     activeGroup: state.options.activeGroup,
     galaxyMode: state.options.galaxyMode,
+    nodeSizeScale: state.options.nodeSizeScale,
     planetSizing: state.options.planetSizing,
     resolvedMotion: state.resolvedMotion,
     selectedEdgeId: state.options.selectedEdgeId,
@@ -218,6 +222,7 @@ function patchRuntime<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: 
   if (!applied || applied.showClusters !== next.showClusters) runtime.updateClusterVisibility(next.showClusters);
   if (!applied || applied.galaxyMode !== next.galaxyMode) runtime.updateGalaxyMode(next.galaxyMode);
   if (!applied || applied.resolvedMotion !== state.resolvedMotion) runtime.updateMotionPreference(state.resolvedMotion);
+  if (!applied || applied.nodeSizeScale !== next.nodeSizeScale) runtime.updateNodeSizeScale(next.nodeSizeScale);
   if (!applied || applied.planetSizing !== next.planetSizing) runtime.updatePlanetSizing(next.planetSizing);
   if (!applied || applied.accessors !== next.accessors) runtime.updateAccessors(next.accessors);
   if (!applied || applied.theme !== next.theme) runtime.updateTheme(next.theme);
@@ -291,6 +296,7 @@ function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         ),
         state.options.layout,
         state.options.accessors,
+        resolveNodeSizeScale(state.options.nodeSizeScale),
         state.options.planetSizing,
         state.options.theme,
         state.callbacksRef,
