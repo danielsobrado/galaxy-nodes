@@ -4,7 +4,7 @@
 
 ```ts
 
-import { JSX } from 'react/jsx-runtime';
+import { JSX } from 'react';
 import type { ReactNode } from 'react';
 
 // @public (undocumented)

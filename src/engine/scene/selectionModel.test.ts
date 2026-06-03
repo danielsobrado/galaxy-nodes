@@ -6,6 +6,8 @@ import type { GraphEdge, GraphNode, Vec3 } from '../../domain/types';
 import type { NodeDegree } from '../sceneData';
 import type { EdgeEndpoints, EdgeVisualState, SceneEdgeEndpoint } from '../sceneTypes';
 
+type TestGraphEdge = GraphEdge & { id: string };
+
 function nodeEndpoint(id: string): SceneEdgeEndpoint {
   return { id, isNode: true, label: id, position: new THREE.Vector3(), radius: 1 };
 }
@@ -16,7 +18,7 @@ function nodeEndpoint(id: string): SceneEdgeEndpoint {
  */
 function buildModel() {
   const nodeIds = ['a', 'b', 'c', 'd', 'e'];
-  const edges: GraphEdge[] = [
+  const edges: TestGraphEdge[] = [
     { id: 'a-b', source: 'a', target: 'b' },
     { id: 'b-c', source: 'b', target: 'c' },
     { id: 'c-d', source: 'c', target: 'd' },
@@ -75,7 +77,7 @@ describe('selectionModel', () => {
       ['x', { id: 'x', label: 'x' }],
       ['y', { id: 'y', label: 'y' }],
     ]);
-    const edges: GraphEdge[] = [
+    const edges: TestGraphEdge[] = [
       { id: 'light', source: 'hub', target: 'x', weight: 0.2 },
       { id: 'heavy', source: 'hub', target: 'y', weight: 0.9 },
     ];
