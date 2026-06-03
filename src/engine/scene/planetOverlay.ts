@@ -48,7 +48,8 @@ export interface PlanetOverlayDeps<NMeta = unknown, EMeta = unknown> {
   theme: () => GalaxyGraphTheme | undefined;
   activeGroup: () => string | null;
   planetSizing: () => ResolvedPlanetSizing;
-  selection: () => SelectionState;
+  /** Live selection record, read by reference (mutated in place by the orchestrator). */
+  selection: SelectionState;
   nodeSizing: NodeSizing<NMeta>;
 }
 
@@ -183,7 +184,7 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
     const resolved = accessors();
     const currentTheme = theme();
     const group = activeGroup();
-    const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, hoveredNodeId } = selection();
+    const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, hoveredNodeId } = selection;
     const majorNodes = nodeSizing.selectPlanetOverlayNodes();
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
     const selectedEndpoints = selectedEdgeId ? (edgeEndpoints.get(selectedEdgeId) ?? null) : null;

@@ -24,7 +24,8 @@ export interface EdgeLayerDeps<NMeta = unknown, EMeta = unknown> {
   galaxyMode: () => boolean;
   theme: () => GalaxyGraphTheme | undefined;
   planetRadius: (node: GraphNode<NMeta>) => number;
-  selection: () => SelectionState;
+  /** Live selection record, read by reference (mutated in place by the orchestrator). */
+  selection: SelectionState;
   indexSelectableEdge: (edgeId: string, edge: GraphEdge<EMeta>) => void;
 }
 
@@ -140,14 +141,14 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
   }
 
   function edgeVisibleInSelectionContext(edgeId: string) {
-    const { selectedNodeHighlight, selectedEdgeHighlight } = selection();
+    const { selectedNodeHighlight, selectedEdgeHighlight } = selection;
     return Boolean(
       selectedNodeHighlight?.connectedEdgeIds.has(edgeId) || selectedEdgeHighlight?.connectedEdgeIds.has(edgeId),
     );
   }
 
   function updateVisibility() {
-    const selected = selection().selectedEdgeId;
+    const selected = selection.selectedEdgeId;
     edgeStates.forEach((state) => {
       const visibleByGroup = edgeMatchesActiveGroup(
         state.endpoints.source.group,
@@ -162,7 +163,7 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
   }
 
   function updateHoverEdgeOverlay() {
-    const { hoveredEdgeId } = selection();
+    const { hoveredEdgeId } = selection;
     const state = hoveredEdgeId ? (edgeStates.get(hoveredEdgeId) ?? null) : null;
     hoverEdgeMaterial.color.set(theme()?.panelAccentColor ?? '#46f4bc');
 
@@ -188,7 +189,7 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
   }
 
   function applyAppearance() {
-    const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, selectedEdgeHighlight, hoveredEdgeId } = selection();
+    const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, selectedEdgeHighlight, hoveredEdgeId } = selection;
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
     edgeStates.forEach((state) => {
       const visual = state.visual as THREE.Mesh | THREE.LineSegments;
@@ -239,6 +240,11 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
     visual.frustumCulled = false;
     world.add(visual);
 
+    // Quality mode keeps a per-edge invisible hit tube for raycast picking. Scale (line)
+    // mode skips it: at 100k+ edges that is 100k+ Object3Ds plus an O(N) array spread and
+    // raycast on every pointermove. Edge highlighting still works there via node selection
+    // (connectedEdgeIds updates per-edge material opacity); only direct edge-click picking
+    // is unavailable.
     let hit: THREE.Mesh | null = null;
     if (edgeRenderMode === 'tube') {
       hit = new THREE.Mesh(
@@ -253,6 +259,10 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
       hit.userData.edgeId = edgeId;
       hit.userData.type = 'edge';
       hit.userData.pickable = true;
+      // The hit tube never renders: its additive material is fully transparent so it
+      // contributes nothing to the image, and three.js raycasting ignores `visible`.
+      // Keeping it invisible removes one draw call per edge while it stays pickable;
+      // eligibility is gated by userData.pickable instead.
       hit.visible = false;
       pickTargets.push(hit);
       world.add(hit);

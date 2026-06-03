@@ -27,7 +27,8 @@ export interface PointLayerDeps<NMeta = unknown, EMeta = unknown> {
   nodePositions: Map<string, Vec3>;
   accessors: () => ResolvedAccessors<NMeta, EMeta>;
   activeGroup: () => string | null;
-  selection: () => SelectionState;
+  /** Live selection record, read by reference (mutated in place by the orchestrator). */
+  selection: SelectionState;
   edgeEndpoints: Map<string, EdgeEndpoints>;
   galaxyMode: boolean;
   nodeSizeScale: number;
@@ -76,7 +77,7 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
   world.add(pointCloud);
 
   function updateVisibility() {
-    const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, selectedEdgeHighlight } = selection();
+    const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, selectedEdgeHighlight } = selection;
     const group = activeGroup();
     const selectedEndpointNodeIds = new Set<string>();
     const selectedEndpoints = selectedEdgeId ? (edgeEndpoints.get(selectedEdgeId) ?? null) : null;

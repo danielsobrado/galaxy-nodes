@@ -68,7 +68,7 @@ import { createPointLayer } from './pointLayer';
 import { createSelectionModel } from './selectionModel';
 import { createMarkerLayer } from './markerLayer';
 import { createPlanetOverlay } from './planetOverlay';
-import type { NodeSelectionHighlight } from './sceneContext';
+import type { SelectionState } from './sceneContext';
 import { createEdgeLayer } from './edgeLayer';
 import { createPicking } from './picking';
 import { createCameraController } from './cameraController';
@@ -98,12 +98,16 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   let showClusters = initialShowClusters;
   let galaxyMode = initialGalaxyMode;
   let motion = initialMotion;
-  let selectedNodeId: string | null = null;
-  let selectedEdgeId: string | null = null;
-  let selectedNodeHighlight: NodeSelectionHighlight | null = null;
-  let selectedEdgeHighlight: NodeSelectionHighlight | null = null;
-  let hoveredNodeId: string | null = null;
-  let hoveredEdgeId: string | null = null;
+  // Single mutable source of truth for selection/hover, shared by reference with the
+  // point/planet/edge layers so they read current state without per-call snapshots.
+  const selection: SelectionState = {
+    selectedNodeId: null,
+    selectedEdgeId: null,
+    selectedNodeHighlight: null,
+    selectedEdgeHighlight: null,
+    hoveredNodeId: null,
+    hoveredEdgeId: null,
+  };
   let theme = initialTheme;
   let accessors = resolveAccessors(accessorsInput);
   let nodeSizeScale = initialNodeSizeScale;
@@ -210,7 +214,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeStates,
     nodeDegrees: () => nodeDegrees,
     accessors: () => accessors,
-    selectedEdgeId: () => selectedEdgeId,
+    selectedEdgeId: () => selection.selectedEdgeId,
   });
   const { indexSelectableEdge, getNodeSelectionHighlight, getEdgeSelectionHighlight, rankedHighlightNodeIds } =
     selectionModel;
@@ -221,14 +225,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     nodePositions,
     accessors: () => accessors,
     activeGroup: () => activeGroup,
-    selection: () => ({
-      selectedNodeId,
-      selectedEdgeId,
-      selectedNodeHighlight,
-      selectedEdgeHighlight,
-      hoveredNodeId,
-      hoveredEdgeId,
-    }),
+    selection,
     edgeEndpoints,
     galaxyMode,
     nodeSizeScale,
@@ -333,14 +330,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     theme: () => theme,
     activeGroup: () => activeGroup,
     planetSizing: () => planetSizing,
-    selection: () => ({
-      selectedNodeId,
-      selectedEdgeId,
-      selectedNodeHighlight,
-      selectedEdgeHighlight,
-      hoveredNodeId,
-      hoveredEdgeId,
-    }),
+    selection,
     nodeSizing,
   });
   const updateMajorOverlay = planetOverlay.update;
@@ -360,14 +350,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     galaxyMode: () => galaxyMode,
     theme: () => theme,
     planetRadius,
-    selection: () => ({
-      selectedNodeId,
-      selectedEdgeId,
-      selectedNodeHighlight,
-      selectedEdgeHighlight,
-      hoveredNodeId,
-      hoveredEdgeId,
-    }),
+    selection,
     indexSelectableEdge,
   });
 
@@ -450,7 +433,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updatePointAppearance();
     edgeLayer.update();
     updateClusterVisibility();
-    updateSelection(selectedNodeId, selectedEdgeId);
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     updateHoverHighlight();
     needsRender = true;
   }
@@ -460,21 +443,21 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   };
 
   function updateHoverHighlight() {
-    const hoveredEndpoint = hoveredNodeId ? resolveNodeEndpoint(hoveredNodeId) : null;
+    const hoveredEndpoint = selection.hoveredNodeId ? resolveNodeEndpoint(selection.hoveredNodeId) : null;
     markerLayer.updateHoverMarker(hoveredEndpoint);
     updateMajorOverlay();
     edgeLayer.applyAppearance();
   }
 
   function updateSelection(nextSelectedNodeId: string | null, nextSelectedEdgeId: string | null) {
-    selectedNodeId = nextSelectedNodeId;
-    selectedEdgeId = nextSelectedEdgeId;
-    selectedNodeHighlight = selectedNodeId ? getNodeSelectionHighlight(selectedNodeId) : null;
-    selectedEdgeHighlight = selectedEdgeId ? getEdgeSelectionHighlight(selectedEdgeId) : null;
-    const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
-    const selectedEndpoints = selectedEdgeId ? (edgeEndpoints.get(selectedEdgeId) ?? null) : null;
-    const selectedEdgeState = selectedEdgeId ? (edgeStates.get(selectedEdgeId) ?? null) : null;
-    const selectedNodeEndpoint = selectedNodeId ? resolveNodeEndpoint(selectedNodeId) : null;
+    selection.selectedNodeId = nextSelectedNodeId;
+    selection.selectedEdgeId = nextSelectedEdgeId;
+    selection.selectedNodeHighlight = nextSelectedNodeId ? getNodeSelectionHighlight(nextSelectedNodeId) : null;
+    selection.selectedEdgeHighlight = nextSelectedEdgeId ? getEdgeSelectionHighlight(nextSelectedEdgeId) : null;
+    const hasSelection = Boolean(nextSelectedNodeId || nextSelectedEdgeId);
+    const selectedEndpoints = nextSelectedEdgeId ? (edgeEndpoints.get(nextSelectedEdgeId) ?? null) : null;
+    const selectedEdgeState = nextSelectedEdgeId ? (edgeStates.get(nextSelectedEdgeId) ?? null) : null;
+    const selectedNodeEndpoint = nextSelectedNodeId ? resolveNodeEndpoint(nextSelectedNodeId) : null;
     const primaryEndpoint = selectedEndpoints?.source ?? selectedNodeEndpoint;
     const secondaryEndpoint = selectedEndpoints?.target ?? null;
     pointLayer.setGlobalOpacity(hasSelection);
@@ -506,9 +489,9 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       primaryEndpoint,
       secondaryEndpoint,
       selectedNodeEndpoint,
-      selectedNodeId,
+      selectedNodeId: nextSelectedNodeId,
       selectedEndpoints,
-      selectedNodeHighlight,
+      selectedNodeHighlight: selection.selectedNodeHighlight,
     });
     updateSelectedRelationshipLabels();
     edgeLayer.applyAppearance();
@@ -517,8 +500,8 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   function clearHover() {
     setSceneLabel(hoverLabel, null, null);
     renderer.domElement.style.cursor = 'grab';
-    hoveredNodeId = null;
-    hoveredEdgeId = null;
+    selection.hoveredNodeId = null;
+    selection.hoveredEdgeId = null;
     updateHoverHighlight();
     callbacksRef.current.onHoverNode(null);
     callbacksRef.current.onHoverNodeAnchor?.(null);
@@ -529,7 +512,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     activeGroup = nextActiveGroup;
     updateClusterVisibility();
     edgeLayer.updateVisibility();
-    updateSelection(selectedNodeId, selectedEdgeId);
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     clearHover();
   }
 
@@ -545,7 +528,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     starfield.setGalaxyMode(galaxyMode);
     updateClusterVisibility();
     edgeLayer.update();
-    updateSelection(selectedNodeId, selectedEdgeId);
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     updateHoverHighlight();
   }
 
@@ -562,14 +545,14 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     planetSizing = resolvePlanetSizing(nextPlanetSizing);
     updatePointAppearance();
     edgeLayer.update();
-    updateSelection(selectedNodeId, selectedEdgeId);
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     updateHoverHighlight();
   }
 
   function updateTheme(nextTheme: GalaxyGraphTheme | undefined) {
     theme = nextTheme;
     renderer.setClearColor(theme?.background ?? '#000000', 1);
-    updateSelection(selectedNodeId, selectedEdgeId);
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     updateHoverHighlight();
   }
 
@@ -577,7 +560,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     accessors = resolveAccessors(nextAccessors);
     updatePointAppearance();
     edgeLayer.update();
-    updateSelection(selectedNodeId, selectedEdgeId);
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     updateHoverHighlight();
   }
 
@@ -624,7 +607,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeId: string | null,
   ) {
     if (node && nodeId) {
-      const endpoint = resolveEndpoint(nodeId, nodeLookup, nodePositions, clusterLookup, accessors, planetRadius);
+      const endpoint = resolveNodeEndpoint(nodeId);
       const position = endpoint
         ? endpoint.position
             .clone()
@@ -665,20 +648,16 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const { node, edge, nodeId, edgeId } = picking.intersectAt(pendingHoverX, pendingHoverY);
     renderer.domElement.style.cursor = node || edge ? 'pointer' : 'grab';
     updateHoverLabel(node, edge, nodeId, edgeId);
-    const nodeChanged = nodeId !== hoveredNodeId;
-    const edgeChanged = edgeId !== hoveredEdgeId;
+    const nodeChanged = nodeId !== selection.hoveredNodeId;
+    const edgeChanged = edgeId !== selection.hoveredEdgeId;
     if (nodeChanged || edgeChanged) {
-      hoveredNodeId = nodeId;
-      hoveredEdgeId = edgeId;
+      selection.hoveredNodeId = nodeId;
+      selection.hoveredEdgeId = edgeId;
       updateHoverHighlight();
     }
     if (nodeChanged) {
       callbacksRef.current.onHoverNode(node);
-      callbacksRef.current.onHoverNodeAnchor?.(
-        nodeId
-          ? nodeHoverAnchor(resolveEndpoint(nodeId, nodeLookup, nodePositions, clusterLookup, accessors, planetRadius))
-          : null,
-      );
+      callbacksRef.current.onHoverNodeAnchor?.(nodeId ? nodeHoverAnchor(resolveNodeEndpoint(nodeId)) : null);
     }
     if (edgeChanged) {
       callbacksRef.current.onHoverEdge(edge);
