@@ -18,6 +18,7 @@ This project follows semantic versioning once the public API reaches `1.0.0`. Un
 - Added `nodeSizeScale` to globally tune rendered node point size, with a larger default so nodes read better against relationships.
 - Added delayed node hover detail panels next to hovered nodes, configurable with `hoverDetailDelayMs` and defaulting to 2 seconds.
 - Added scale-mode relationship rendering for very large graphs, using lightweight line edges and avoiding per-edge hit proxies.
+- Added built-in theme presets, `galaxy-dark` and `network-light`, plus theme resolution helpers and an opt-in React theme selector.
 - Added API report coverage for the core, React, Vue, and Angular entry points.
 - Added browser coverage for renderer behavior, edge render mode selection, marker rendering, streaming append behavior, and visual baseline checks.
 - Added demo controls for legends, keyboard legends, cluster visibility, status focus, motion, graph size, and galaxy mode.
@@ -31,6 +32,7 @@ This project follows semantic versioning once the public API reaches `1.0.0`. Un
 - Made selection resolve by node and edge id so selection survives streamed dataset merges such as Expand neighbors.
 - Reduced backdrop jumps during focus by keeping ambient stars, clusters, fog, and global point opacity stable.
 - Dimmed non-connected relationships during selection while preserving their original relationship colors.
+- Extended `theme` to accept preset ids or custom objects; legacy color-only objects still merge over `galaxy-dark`, while `network-light` uses theme-owned graph colors for readability.
 - Improved the example app layout, controls, styling, and generated documentation/demo assets.
 
 ### Fixed

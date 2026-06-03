@@ -84,6 +84,9 @@ export const POINT_SIZE_SECOND_DEGREE = 1.5;
 // How strongly a highlighted point is tinted toward the accent/selected color (0..1 lerp).
 export const POINT_FIRST_DEGREE_TINT = 0.74;
 export const POINT_SECOND_DEGREE_TINT = 0.6;
+// Color brightening applied to selected-node neighborhood points.
+export const POINT_FIRST_DEGREE_BRIGHTEN = 1.36;
+export const POINT_SECOND_DEGREE_BRIGHTEN = 1.18;
 // Dimming applied to unrelated points while any node/edge is selected.
 export const POINT_UNRELATED_DIM = 0.48;
 // Selection focus is done by brightening the selected node + its edges (and dimming the
@@ -241,6 +244,20 @@ export const EDGE_FILAMENT_OPACITY_GALAXY = 0.078;
 export const EDGE_FILAMENT_OPACITY_DEFAULT = 0.052;
 export const EDGE_OPACITY_BASE = 0.075;
 export const EDGE_OPACITY_PER_WEIGHT = 0.1;
+// Selection-state opacity tiers for edges: cap = max final opacity, boost = base + boost.
+export const EDGE_SELECTED_OPACITY_CAP = 0.86;
+export const EDGE_SELECTED_OPACITY_BOOST = 0.56;
+export const EDGE_HOVERED_OPACITY_CAP = 0.54;
+export const EDGE_HOVERED_OPACITY_BOOST = 0.26;
+export const EDGE_CONNECTED_OPACITY_CAP = 0.82;
+export const EDGE_CONNECTED_OPACITY_BOOST = 0.52;
+export const EDGE_UNRELATED_DIM = 0.28;
+// Edge render-order tiers keep selected/hovered/connected edges above the ambient field.
+export const EDGE_RENDER_ORDER_BASE = 0;
+export const EDGE_RENDER_ORDER_CONNECTED = 16;
+export const EDGE_RENDER_ORDER_HOVERED = 17;
+export const EDGE_RENDER_ORDER_SELECTED = 18;
+export const HOVER_EDGE_OVERLAY_RENDER_ORDER = 19;
 export const EDGE_FILAMENT_VISUAL_SEGMENTS = 36;
 export const EDGE_VISUAL_SEGMENTS = 28;
 // Polyline segments per edge in scale (line) render mode. A sampled curve keeps the

@@ -28,6 +28,15 @@ export function createGalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = u
 export const DEFAULT_GRAPH_EDGE_BUDGET = 12000;
 
 // @public (undocumented)
+export const GALAXY_GRAPH_THEME_CHOICES: readonly GalaxyGraphThemeChoice[];
+
+// @public (undocumented)
+export const GALAXY_GRAPH_THEMES: {
+    readonly 'galaxy-dark': ResolvedGalaxyGraphTheme;
+    readonly 'network-light': ResolvedGalaxyGraphTheme;
+};
+
+// @public (undocumented)
 export interface GalaxyCameraView {
     // (undocumented)
     direction: Vec3;
@@ -42,14 +51,153 @@ export interface GalaxyCameraView {
 }
 
 // @public (undocumented)
+export type GalaxyGraphBlendMode = 'additive' | 'normal';
+
+// @public (undocumented)
+export type GalaxyGraphDataColorStrategy = 'data' | 'theme';
+
+// @public (undocumented)
+export type GalaxyGraphPointStyle = 'glow' | 'disc';
+
+// @public (undocumented)
 export interface GalaxyGraphTheme {
     // (undocumented)
     background?: string;
     // (undocumented)
+    chrome?: Partial<GalaxyGraphThemeChrome>;
+    // (undocumented)
+    dataColorStrategy?: GalaxyGraphDataColorStrategy;
+    // (undocumented)
+    id?: string;
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    mode?: GalaxyGraphThemeMode;
+    // (undocumented)
     panelAccentColor?: string;
+    // (undocumented)
+    scene?: Partial<GalaxyGraphThemeScene>;
     // (undocumented)
     selectedColor?: string;
 }
+
+// @public (undocumented)
+export interface GalaxyGraphThemeChoice {
+    // (undocumented)
+    id: GalaxyGraphThemeId | string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    theme?: GalaxyGraphThemeInput;
+}
+
+// @public (undocumented)
+export interface GalaxyGraphThemeChrome {
+    // (undocumented)
+    controlActiveBackground: string;
+    // (undocumented)
+    controlBackground: string;
+    // (undocumented)
+    controlBorder: string;
+    // (undocumented)
+    controlHoverBackground: string;
+    // (undocumented)
+    mutedTextColor: string;
+    // (undocumented)
+    panelBackground: string;
+    // (undocumented)
+    panelBorder: string;
+    // (undocumented)
+    panelShadow: string;
+    // (undocumented)
+    ribbonBackground: string;
+    // (undocumented)
+    sceneVignette: string;
+    // (undocumented)
+    textColor: string;
+    // (undocumented)
+    toolbarBackground: string;
+}
+
+// @public (undocumented)
+export type GalaxyGraphThemeId = 'galaxy-dark' | 'network-light';
+
+// @public (undocumented)
+export type GalaxyGraphThemeInput = GalaxyGraphThemeId | GalaxyGraphTheme;
+
+// @public (undocumented)
+export type GalaxyGraphThemeMode = 'dark' | 'light';
+
+// @public (undocumented)
+export interface GalaxyGraphThemeScene {
+    // (undocumented)
+    clusterFocusOpacityMultiplier: number;
+    // (undocumented)
+    clusterOpacity: number;
+    // (undocumented)
+    edgeBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    edgeColor: string;
+    // (undocumented)
+    edgeConnectedColor: string;
+    // (undocumented)
+    edgeHoverColor: string;
+    // (undocumented)
+    edgeOpacityMultiplier: number;
+    // (undocumented)
+    edgeSelectedColor: string;
+    // (undocumented)
+    filamentColor: string;
+    // (undocumented)
+    fogColor: string;
+    // (undocumented)
+    fogDensityScale: number;
+    // (undocumented)
+    hoverEdgeOpacity: number;
+    // (undocumented)
+    markerBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    markerOpacityScale: number;
+    // (undocumented)
+    planetBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    planetOpacity: number;
+    // (undocumented)
+    pointBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    pointColor: string;
+    // (undocumented)
+    pointCoreBoost: number;
+    // (undocumented)
+    pointDimMultiplier: number;
+    // (undocumented)
+    pointFirstDegreeColor: string;
+    // (undocumented)
+    pointOpacity: number;
+    // (undocumented)
+    pointSecondDegreeColor: string;
+    // (undocumented)
+    pointSelectedColor: string;
+    // (undocumented)
+    pointStrokeColor: string;
+    // (undocumented)
+    pointStrokeOpacity: number;
+    // (undocumented)
+    pointStyle: GalaxyGraphPointStyle;
+    // (undocumented)
+    ringOpacity: number;
+    // (undocumented)
+    starColor: string;
+    // (undocumented)
+    starFocusOpacityMultiplier: number;
+    // (undocumented)
+    starOpacity: number;
+    // (undocumented)
+    toneMapping: GalaxyGraphToneMapping;
+}
+
+// @public (undocumented)
+export type GalaxyGraphToneMapping = 'aces' | 'none';
 
 // @public (undocumented)
 export type GalaxyMotionPreference = 'system' | 'full' | 'reduced';
@@ -158,7 +306,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     // (undocumented)
     showClusters: boolean;
     // (undocumented)
-    theme?: GalaxyGraphTheme;
+    theme?: GalaxyGraphThemeInput;
 }
 
 // @public (undocumented)
@@ -271,6 +419,31 @@ export function mergeGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unkn
 
 // @public (undocumented)
 export type PlanetSizingMode = 'accessor' | 'degree' | 'incoming' | 'outgoing';
+
+// @public (undocumented)
+export interface ResolvedGalaxyGraphTheme {
+    // (undocumented)
+    background: string;
+    // (undocumented)
+    chrome: GalaxyGraphThemeChrome;
+    // (undocumented)
+    dataColorStrategy: GalaxyGraphDataColorStrategy;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    mode: GalaxyGraphThemeMode;
+    // (undocumented)
+    panelAccentColor: string;
+    // (undocumented)
+    scene: GalaxyGraphThemeScene;
+    // (undocumented)
+    selectedColor: string;
+}
+
+// @public (undocumented)
+export function resolveGalaxyGraphTheme(theme?: GalaxyGraphThemeInput): ResolvedGalaxyGraphTheme;
 
 // @public (undocumented)
 export type SpaceDirection = 'forward' | 'back' | 'left' | 'right' | 'up' | 'down';

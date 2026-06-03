@@ -166,7 +166,9 @@ export function TypedGraph() {
 
 ## Custom Colors And Theme
 
-`layout` controls coordinates only. Put palette rules, data-driven node and edge colors, labels, and sizes in `accessors`; put scene background and selection colors in `theme`.
+`layout` controls coordinates only. Put palette rules, data-driven node and edge colors, labels, and sizes in `accessors`; put scene background, chrome, blending, and selection colors in `theme`.
+
+`theme` accepts `galaxy-dark`, `network-light`, or a custom theme object. Legacy objects such as `{ background, panelAccentColor, selectedColor }` still merge over `galaxy-dark`. `network-light` sets `dataColorStrategy: 'theme'`, so its blue/white network colors override accessor colors for readability; `galaxy-dark` keeps `dataColorStrategy: 'data'`.
 
 ```tsx
 import { GalaxyGraphVisualizer, defaultNodeColor, type GraphAccessors, type GraphDataset } from 'galaxy-nodes';
@@ -192,6 +194,26 @@ export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
         panelAccentColor: '#67e8c9',
         selectedColor: '#f8fafc',
       }}
+    />
+  );
+}
+```
+
+Enable the built-in selector when you want users to switch presets, or control the theme yourself from API state:
+
+```tsx
+import { useState } from 'react';
+import { GalaxyGraphVisualizer, type GalaxyGraphThemeInput, type GraphDataset } from 'galaxy-nodes';
+
+export function ThemeSwitchingGraph({ dataset }: { dataset: GraphDataset }) {
+  const [theme, setTheme] = useState<GalaxyGraphThemeInput>('galaxy-dark');
+
+  return (
+    <GalaxyGraphVisualizer
+      dataset={dataset}
+      theme={theme}
+      onThemeChange={setTheme}
+      options={{ showThemeControl: true }}
     />
   );
 }

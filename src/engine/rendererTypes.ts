@@ -8,7 +8,7 @@ import type {
   SpaceDirection,
 } from '../domain/types';
 import type { GalaxyMotionPreference, GalaxyRendererContextBudget, ResolvedGalaxyMotion } from './environment';
-import type { GalaxyGraphTheme, GalaxyPlanetSizingOptions, GalaxyRenderMode } from './rendererConfig';
+import type { GalaxyGraphThemeInput, GalaxyPlanetSizingOptions, GalaxyRenderMode } from './rendererConfig';
 import type { GalaxySceneFailure } from './sceneFallback';
 
 export interface CameraCommand {
@@ -37,7 +37,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
   layout?: GraphLayoutInput;
   /** Visual accessors. They are now applied in place rather than rebuilding the scene. */
   accessors?: GraphAccessors<NMeta, EMeta>;
-  theme?: GalaxyGraphTheme;
+  theme?: GalaxyGraphThemeInput;
   cameraCommand: CameraCommand | null;
   /** Maximum active Galaxy renderer WebGL contexts allowed in this browser tab. Defaults to 12. */
   contextLimit?: number;
@@ -110,7 +110,7 @@ export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   updateNodeSizeScale: (nodeSizeScale: number | undefined) => void;
   updatePlanetSizing: (planetSizing: GalaxyPlanetSizingOptions | undefined) => void;
   updateSelection: (selectedNodeId: string | null, selectedEdgeId: string | null) => void;
-  updateTheme: (theme: GalaxyGraphTheme | undefined) => void;
+  updateTheme: (theme: GalaxyGraphThemeInput | undefined) => void;
   appendDataset: (dataset: GraphDataset<NMeta, EMeta>) => void;
   dispose: () => void;
 }
@@ -125,7 +125,7 @@ export interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
   selectedEdgeId: string | null;
   selectedNodeId: string | null;
   showClusters: boolean;
-  theme: GalaxyGraphTheme | undefined;
+  theme: GalaxyGraphThemeInput | undefined;
 }
 
 export interface CoreState<NMeta = unknown, EMeta = unknown, CMeta = unknown> {

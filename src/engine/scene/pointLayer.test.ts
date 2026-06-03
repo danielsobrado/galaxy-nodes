@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createPointLayer } from './pointLayer';
 import { resolveAccessors } from '../../domain/data';
+import { resolveGalaxyGraphTheme } from '../rendererConfig';
 import type { GraphNode, Vec3 } from '../../domain/types';
 import type { EdgeEndpoints } from '../sceneTypes';
 import type { SelectionState } from './sceneContext';
@@ -32,6 +33,7 @@ function build(selection: SelectionState, activeGroup: string | null = null) {
     nodes: () => nodes,
     nodePositions,
     accessors: () => resolveAccessors(undefined),
+    theme: () => resolveGalaxyGraphTheme(),
     activeGroup: () => activeGroup,
     selection,
     edgeEndpoints: new Map<string, EdgeEndpoints>(),

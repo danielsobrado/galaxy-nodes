@@ -4,8 +4,11 @@ import type { GalaxyRendererCallbacks, GalaxyRendererOptions } from '../engine/c
 export {
   createGalaxyRenderer,
   DEFAULT_GRAPH_EDGE_BUDGET,
+  GALAXY_GRAPH_THEME_CHOICES,
+  GALAXY_GRAPH_THEMES,
   getGalaxyRendererContextBudget,
   mergeGraphDataset,
+  resolveGalaxyGraphTheme,
 } from '../engine/core';
 
 /**
@@ -22,7 +25,17 @@ export function createGalaxyAngularRenderer<NMeta = unknown, EMeta = unknown, CM
 
 export type {
   CameraCommand,
+  GalaxyGraphBlendMode,
+  GalaxyGraphDataColorStrategy,
+  GalaxyGraphPointStyle,
   GalaxyGraphTheme,
+  GalaxyGraphThemeChrome,
+  GalaxyGraphThemeChoice,
+  GalaxyGraphThemeId,
+  GalaxyGraphThemeInput,
+  GalaxyGraphThemeMode,
+  GalaxyGraphThemeScene,
+  GalaxyGraphToneMapping,
   GalaxyMotionPreference,
   GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
@@ -40,6 +53,7 @@ export type {
   GraphEdge,
   GraphNode,
   PlanetSizingMode,
+  ResolvedGalaxyGraphTheme,
   SpaceDirection,
   Vec3,
 } from '../engine/core';

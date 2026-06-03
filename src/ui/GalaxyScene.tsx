@@ -18,12 +18,23 @@ import type {
 
 export type {
   CameraCommand,
+  GalaxyGraphBlendMode,
+  GalaxyGraphDataColorStrategy,
+  GalaxyGraphPointStyle,
   GalaxyGraphTheme,
+  GalaxyGraphThemeChrome,
+  GalaxyGraphThemeChoice,
+  GalaxyGraphThemeId,
+  GalaxyGraphThemeInput,
+  GalaxyGraphThemeMode,
+  GalaxyGraphThemeScene,
+  GalaxyGraphToneMapping,
   GalaxyMotionPreference,
   GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
   GalaxyRenderMode,
   PlanetSizingMode,
+  ResolvedGalaxyGraphTheme,
 } from '../engine/core';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from '../engine/sceneFallback';
 

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { GraphNode, ResolvedAccessors, Vec3 } from '../../domain/types';
-import type { GalaxyGraphTheme } from '../rendererConfig';
+import type { ResolvedGalaxyGraphTheme } from '../rendererConfig';
 import { MAJOR_PLANET_LIMIT_ALL, type ResolvedPlanetSizing } from '../sceneData';
 import {
   DIM_COLOR_MULTIPLIER,
@@ -11,14 +11,12 @@ import {
   NODE_IMAGE_SCALE_FACTOR,
   NODE_IMAGE_SPRITE_OPACITY,
   PLANET_HOVER_BRIGHTEN,
-  PLANET_MATERIAL_OPACITY,
   PLANET_SCALE_HOVERED,
   PLANET_SCALE_RELATED,
   PLANET_SCALE_SECOND_DEGREE,
   PLANET_SCALE_SELECTED,
   PLANET_YAW_CYCLE,
   PLANET_YAW_STEP,
-  RING_MATERIAL_OPACITY,
   RING_SCALE_BASE,
   RING_SCALE_HOVERED,
   RING_SCALE_IDLE,
@@ -33,6 +31,7 @@ import { makeSceneLabel, setSceneLabel, shouldShowMajorLabel } from '../labels';
 import type { EdgeEndpoints, SceneLabel } from '../sceneTypes';
 import type { NodeSizing } from './nodeSizing';
 import type { SelectionState } from './sceneContext';
+import { setMaterialBlending, themeBlending } from './themeRuntime';
 
 const instanceDummy = new THREE.Object3D();
 
@@ -45,7 +44,7 @@ export interface PlanetOverlayDeps<NMeta = unknown, EMeta = unknown> {
   nodePositions: Map<string, Vec3>;
   edgeEndpoints: Map<string, EdgeEndpoints>;
   accessors: () => ResolvedAccessors<NMeta, EMeta>;
-  theme: () => GalaxyGraphTheme | undefined;
+  theme: () => ResolvedGalaxyGraphTheme;
   activeGroup: () => string | null;
   planetSizing: () => ResolvedPlanetSizing;
   /** Live selection record, read by reference (mutated in place by the orchestrator). */
@@ -60,6 +59,7 @@ export interface PlanetOverlay {
   nodeIdAt(instanceId: number): string;
   /** Rebuild the major-node planet/ring instances, node images, and labels. */
   update(): void;
+  setTheme(): void;
   dispose(): void;
 }
 
@@ -92,8 +92,8 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
     color: 0xffffff,
     map: planetTexture,
     transparent: true,
-    opacity: PLANET_MATERIAL_OPACITY,
-    blending: THREE.AdditiveBlending,
+    opacity: theme().scene.planetOpacity,
+    blending: themeBlending(theme().scene.planetBlending),
     depthWrite: false,
     depthTest: false,
     vertexColors: true,
@@ -109,9 +109,9 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
   const ringMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff,
     transparent: true,
-    opacity: RING_MATERIAL_OPACITY,
+    opacity: theme().scene.ringOpacity,
     side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+    blending: themeBlending(theme().scene.planetBlending),
     depthWrite: false,
     depthTest: false,
     vertexColors: true,
@@ -196,7 +196,8 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
     majorNodes.forEach((node, index) => {
       const position = nodePositions.get(node.id)!;
       const nodeSize = resolved.nodeSize(node);
-      const nodeColor = resolved.nodeColor(node);
+      const nodeColor =
+        currentTheme.dataColorStrategy === 'theme' ? currentTheme.scene.pointColor : resolved.nodeColor(node);
       const radius = nodeSizing.planetRadius(node, maxDegree);
       const selected = selectedNodeId === node.id;
       const relatedToSelectedEdge = Boolean(
@@ -232,7 +233,7 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
                 : RING_SCALE_IDLE);
       const color = selectionEmphasized
         ? selected
-          ? new THREE.Color('#ffffff')
+          ? new THREE.Color(currentTheme.scene.pointSelectedColor)
           : planetColor(nodeColor).multiplyScalar(relatedToSelectedEdge || firstDegree ? 1.2 : 1.1)
         : hovered
           ? planetColor(nodeColor).multiplyScalar(PLANET_HOVER_BRIGHTEN)
@@ -254,7 +255,7 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
         instanceDummy.scale.setScalar(ringScale);
         instanceDummy.updateMatrix();
         ringMesh.setMatrixAt(ringIndex, instanceDummy.matrix);
-        ringMesh.setColorAt(ringIndex, emphasized ? new THREE.Color(currentTheme?.selectedColor ?? '#d8fff3') : color);
+        ringMesh.setColorAt(ringIndex, emphasized ? new THREE.Color(currentTheme.scene.pointSelectedColor) : color);
         ringIndex += 1;
       }
 
@@ -295,10 +296,20 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
     nodeImageTextures.clear();
   }
 
+  function setTheme() {
+    const currentTheme = theme();
+    planetMaterial.opacity = currentTheme.scene.planetOpacity;
+    ringMaterial.opacity = currentTheme.scene.ringOpacity;
+    setMaterialBlending(planetMaterial, currentTheme.scene.planetBlending);
+    setMaterialBlending(ringMaterial, currentTheme.scene.planetBlending);
+    update();
+  }
+
   return {
     mesh: planetMesh,
     nodeIdAt: (instanceId: number) => planetInstanceNodeIds[instanceId],
     update,
+    setTheme,
     dispose,
   };
 }

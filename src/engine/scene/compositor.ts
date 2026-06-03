@@ -22,6 +22,7 @@ export interface Compositor {
   /** Composite one frame. When `bloomActive`, the bloom-only pass is rendered and added on top. */
   render(bloomActive: boolean): void;
   setSize(width: number, height: number): void;
+  setToneMapping(toneMapping: THREE.ToneMapping): void;
   dispose(): void;
 }
 
@@ -121,6 +122,10 @@ export function createCompositor({
     finalComposer.setSize(nextWidth, nextHeight);
   }
 
+  function setToneMapping(toneMapping: THREE.ToneMapping) {
+    outputPass.toneMapping = toneMapping;
+  }
+
   function dispose() {
     bloomPass.dispose();
     finalBloomPass.dispose();
@@ -130,5 +135,5 @@ export function createCompositor({
     emptyBloomTexture.dispose();
   }
 
-  return { setBloomLayer, render, setSize, dispose };
+  return { setBloomLayer, render, setSize, setToneMapping, dispose };
 }

@@ -12,7 +12,7 @@ import {
   resolveEdgeRenderMode,
   resolveNodeSizeScale,
   type EdgeRenderMode,
-  type GalaxyGraphTheme,
+  type GalaxyGraphThemeInput,
   type GalaxyPlanetSizingOptions,
 } from './rendererConfig';
 import type {
@@ -41,7 +41,7 @@ export type SceneFactory = <NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   accessorsInput: GraphAccessors<NMeta, EMeta> | undefined,
   nodeSizeScale: number,
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
-  initialTheme: GalaxyGraphTheme | undefined,
+  initialTheme: GalaxyGraphThemeInput | undefined,
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,

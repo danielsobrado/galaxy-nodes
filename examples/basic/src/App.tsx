@@ -4,6 +4,7 @@ import {
   GalaxyGraphVisualizer,
   getEdgeId,
   parseGraphDataset,
+  type GalaxyGraphThemeInput,
   type GraphDataset,
   type GraphDatasetPatch,
   type LargeGraphExpandRequest,
@@ -121,6 +122,7 @@ export default function App() {
   const [dataset, setDataset] = useState<GraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>>(() =>
     generateGalaxyDataset(INITIAL_DATASET_SIZE),
   );
+  const [theme, setTheme] = useState<GalaxyGraphThemeInput>('galaxy-dark');
   const [sharpMoney, setSharpMoney] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -228,11 +230,14 @@ export default function App() {
       renderEdgeDetail={renderInitiativeEdgeDetail}
       largeGraph={largeGraph}
       onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
+      theme={theme}
+      onThemeChange={setTheme}
       options={{
         datasetSizes: DATASET_SIZES,
         showDatasetSizeControls: true,
         showKeyLegend: true,
         showLegend: true,
+        showThemeControl: true,
       }}
       controlActions={
         <button

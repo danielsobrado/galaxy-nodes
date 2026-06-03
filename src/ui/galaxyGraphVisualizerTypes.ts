@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import type {
   CameraCommand,
   GalaxyGraphTheme,
+  GalaxyGraphThemeChoice,
+  GalaxyGraphThemeInput,
   GalaxyMotionPreference,
   GalaxyPlanetSizingOptions,
   GalaxyRenderMode,
@@ -54,6 +56,8 @@ export interface GalaxyGraphVisualizerOptions {
   showSearch?: boolean;
   showStats?: boolean;
   showTimeline?: boolean;
+  showThemeControl?: boolean;
+  themeChoices?: readonly GalaxyGraphThemeChoice[];
   webglContextLimit?: number;
 }
 
@@ -117,6 +121,7 @@ export interface GalaxyGraphLabels {
   source: string;
   strength: string;
   target: string;
+  theme: string;
   to: string;
   traceLink: string;
   traversalHelp: string;
@@ -177,6 +182,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   /** Group filter buttons. Defaults to the distinct `node.group` values. */
   groups?: readonly string[];
   initialGroup?: string | null;
+  initialTheme?: GalaxyGraphThemeInput;
   /** Replaces the legend strip; nothing renders without it. */
   legend?: ReactNode;
   /** Optional keyboard/mouse shortcut legend overlay. */
@@ -196,6 +202,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   onSceneFailure?: (failure: GalaxySceneFailure) => void;
   onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onSelectNode?: (node: GraphNode<NMeta> | null) => void;
+  onThemeChange?: (theme: GalaxyGraphThemeInput) => void;
   options?: GalaxyGraphVisualizerOptions;
   renderEdgeDetail?: (
     edge: GraphEdge<EMeta>,
@@ -208,8 +215,10 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   selectedEdgeId?: string | null;
   selectedNodeId?: string | null;
   sideRailActions?: ReactNode;
-  theme?: GalaxyGraphTheme;
+  theme?: GalaxyGraphThemeInput;
 }
+
+export type { GalaxyGraphTheme, GalaxyGraphThemeChoice, GalaxyGraphThemeInput };
 
 export interface AsyncDetailState {
   detail: unknown;

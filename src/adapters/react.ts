@@ -1,4 +1,5 @@
 export { default as GalaxyGraphVisualizer } from '../ui/GalaxyGraphVisualizer';
+export { GALAXY_GRAPH_THEME_CHOICES, GALAXY_GRAPH_THEMES, resolveGalaxyGraphTheme } from '../engine/core';
 export type {
   GalaxyGraphVisualizerOptions,
   GalaxyGraphVisualizerProps,
@@ -12,7 +13,17 @@ export type {
 export { default as GalaxyScene } from '../ui/GalaxyScene';
 export type {
   CameraCommand,
+  GalaxyGraphBlendMode,
+  GalaxyGraphDataColorStrategy,
+  GalaxyGraphPointStyle,
   GalaxyGraphTheme,
+  GalaxyGraphThemeChrome,
+  GalaxyGraphThemeChoice,
+  GalaxyGraphThemeId,
+  GalaxyGraphThemeInput,
+  GalaxyGraphThemeMode,
+  GalaxyGraphThemeScene,
+  GalaxyGraphToneMapping,
   GalaxyMotionPreference,
   GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
@@ -20,4 +31,5 @@ export type {
   GalaxySceneFailureReason,
   GalaxySceneProps,
   PlanetSizingMode,
+  ResolvedGalaxyGraphTheme,
 } from '../ui/GalaxyScene';

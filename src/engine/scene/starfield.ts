@@ -1,20 +1,20 @@
 import * as THREE from 'three';
 import {
-  FOCUS_STAR_DIM_FACTOR,
   MAX_STAR_COUNT,
   QUIET_STAR_COUNT,
   STAR_DISTANCE_MIN,
   STAR_DISTANCE_SPAN,
-  STAR_OPACITY,
   STAR_SIZE,
   STAR_VERTICAL_SPREAD,
 } from '../sceneConstants';
+import type { ResolvedGalaxyGraphTheme } from '../rendererConfig';
 
 export interface Starfield {
   /** Show the full star count in galaxy mode, or the quieter subset otherwise. */
   setGalaxyMode(galaxyMode: boolean): void;
   /** Dim the stars while a node/edge is focused so the selection reads. */
   setFocusDim(hasSelection: boolean): void;
+  setTheme(): void;
 }
 
 /**
@@ -22,7 +22,15 @@ export interface Starfield {
  * adds the Points into `world`. The geometry is generated eagerly so its random sequence
  * is consumed at the same construction point as before extraction.
  */
-export function createStarfield({ world, galaxyMode }: { world: THREE.Object3D; galaxyMode: boolean }): Starfield {
+export function createStarfield({
+  world,
+  galaxyMode,
+  theme,
+}: {
+  world: THREE.Object3D;
+  galaxyMode: boolean;
+  theme: () => ResolvedGalaxyGraphTheme;
+}): Starfield {
   const starGeometry = new THREE.BufferGeometry();
   const starPositions = new Float32Array(MAX_STAR_COUNT * 3);
   for (let index = 0; index < MAX_STAR_COUNT; index += 1) {
@@ -35,10 +43,10 @@ export function createStarfield({ world, galaxyMode }: { world: THREE.Object3D; 
   starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
   starGeometry.setDrawRange(0, galaxyMode ? MAX_STAR_COUNT : QUIET_STAR_COUNT);
   const starMaterial = new THREE.PointsMaterial({
-    color: 0xb8c9d9,
+    color: theme().scene.starColor,
     size: STAR_SIZE,
     transparent: true,
-    opacity: STAR_OPACITY,
+    opacity: theme().scene.starOpacity,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
@@ -49,7 +57,14 @@ export function createStarfield({ world, galaxyMode }: { world: THREE.Object3D; 
       starGeometry.setDrawRange(0, nextGalaxyMode ? MAX_STAR_COUNT : QUIET_STAR_COUNT);
     },
     setFocusDim(hasSelection: boolean) {
-      starMaterial.opacity = STAR_OPACITY * (hasSelection ? FOCUS_STAR_DIM_FACTOR : 1);
+      const currentTheme = theme();
+      starMaterial.opacity =
+        currentTheme.scene.starOpacity * (hasSelection ? currentTheme.scene.starFocusOpacityMultiplier : 1);
+    },
+    setTheme() {
+      const currentTheme = theme();
+      starMaterial.color.set(currentTheme.scene.starColor);
+      starMaterial.opacity = currentTheme.scene.starOpacity;
     },
   };
 }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { GraphNode, ResolvedAccessors } from '../../domain/types';
-import type { GalaxyGraphTheme } from '../rendererConfig';
+import type { ResolvedGalaxyGraphTheme } from '../rendererConfig';
 import {
   ENDPOINT_INNER_RING_SPIN,
   ENDPOINT_MARKER_SCALE_PRIMARY,
@@ -23,7 +23,14 @@ import {
   NODE_MARKER_LABEL_OFFSET_X,
   NODE_MARKER_LABEL_OFFSET_Y,
 } from '../sceneConstants';
-import { createEndpointMarker, createHoverNodeMarker, setHoverNodeMarkerVisible, setMarkerVisible } from '../markers';
+import {
+  createEndpointMarker,
+  createHoverNodeMarker,
+  setHoverNodeMarkerBlending,
+  setHoverNodeMarkerVisible,
+  setMarkerBlending,
+  setMarkerVisible,
+} from '../markers';
 import { makeSceneLabel, nodeDisplayLabel, setSceneLabel } from '../labels';
 import type { EdgeEndpoints, EndpointMarker, SceneEdgeEndpoint, SceneLabel } from '../sceneTypes';
 import type { NodeSelectionHighlight } from './sceneContext';
@@ -47,7 +54,7 @@ export interface MarkerLayerDeps<NMeta = unknown, EMeta = unknown> {
   labelsRoot: HTMLDivElement;
   /** Shared label pool projected by the animation loop; marker labels are appended to it. */
   labels: SceneLabel[];
-  theme: () => GalaxyGraphTheme | undefined;
+  theme: () => ResolvedGalaxyGraphTheme;
   accessors: () => ResolvedAccessors<NMeta, EMeta>;
   nodeLookup: Map<string, GraphNode<NMeta>>;
   resolveEndpoint: (id: string) => SceneEdgeEndpoint | null;
@@ -64,6 +71,7 @@ export interface MarkerLayer {
   spin(): void;
   /** Whether any marker is visible (drives whether the bloom pass needs to run). */
   anyVisible(): boolean;
+  setTheme(): void;
 }
 
 /**
@@ -85,11 +93,11 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
   } = deps;
 
   const endpointMarkers: [EndpointMarker, EndpointMarker] = [
-    createEndpointMarker(theme()?.selectedColor ?? '#ffffff'),
-    createEndpointMarker(theme()?.panelAccentColor ?? '#46f4bc'),
+    createEndpointMarker(theme().selectedColor, theme().scene.markerBlending),
+    createEndpointMarker(theme().panelAccentColor, theme().scene.markerBlending),
   ];
   endpointMarkers.forEach((marker) => world.add(marker.group));
-  const hoverNodeMarker = createHoverNodeMarker(theme()?.selectedColor ?? '#ffffff');
+  const hoverNodeMarker = createHoverNodeMarker(theme().selectedColor, theme().scene.markerBlending);
   world.add(hoverNodeMarker.group);
   const endpointMarkerLabels: [SceneLabel, SceneLabel] = [
     makeSceneLabel(labelsRoot, 'node-highlight-label'),
@@ -97,7 +105,7 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
   ];
   endpointMarkerLabels.forEach((label) => labels.push(label));
   const nodeHighlightMarkers: NodeHighlightMarker[] = Array.from({ length: NODE_HIGHLIGHT_MARKER_LIMIT }, () => {
-    const marker = createEndpointMarker(theme()?.panelAccentColor ?? '#46f4bc');
+    const marker = createEndpointMarker(theme().panelAccentColor, theme().scene.markerBlending);
     const label = makeSceneLabel(labelsRoot, 'node-highlight-label subtle');
     labels.push(label);
     world.add(marker.group);
@@ -124,6 +132,7 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
 
   function endpointNodeColor(endpoint: SceneEdgeEndpoint | null, fallback: string) {
     if (!endpoint?.isNode) return fallback;
+    if (theme().dataColorStrategy === 'theme') return fallback;
     const node = nodeLookup.get(endpoint.id);
     return node ? accessors().nodeColor(node) : fallback;
   }
@@ -132,13 +141,20 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
     const endpoint = resolveEndpoint(nodeId);
     const node = nodeLookup.get(nodeId) ?? null;
     const labelText = node ? nodeDisplayLabel(node, accessors()) : null;
-    const color = node ? accessors().nodeColor(node) : (theme()?.selectedColor ?? '#d8fff3');
+    const currentTheme = theme();
+    const color =
+      node && currentTheme.dataColorStrategy === 'data'
+        ? accessors().nodeColor(node)
+        : level === 2
+          ? currentTheme.scene.pointFirstDegreeColor
+          : currentTheme.scene.pointSecondDegreeColor;
     setMarkerVisible(
       entry.marker,
       endpoint,
       color,
       level === 2 ? HIGHLIGHT_MARKER_SCALE_NEAR : HIGHLIGHT_MARKER_SCALE_FAR,
       level === 2 ? HIGHLIGHT_MARKER_STRENGTH_NEAR : HIGHLIGHT_MARKER_STRENGTH_FAR,
+      currentTheme.scene.markerOpacityScale,
     );
     setBloomLayer(entry.marker.group, Boolean(endpoint));
     setSceneLabel(entry.label, labelText, labelText && endpoint ? nodeMarkerLabelPosition(endpoint) : null);
@@ -160,7 +176,7 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
     nodeHighlightMarkers.forEach((entry, index) => {
       const highlightedNode = highlightedNodeIds[index];
       if (!highlightedNode) {
-        setMarkerVisible(entry.marker, null, theme()?.panelAccentColor ?? '#46f4bc', 1);
+        setMarkerVisible(entry.marker, null, theme().panelAccentColor, 1);
         setBloomLayer(entry.marker.group, false);
         setSceneLabel(entry.label, null, null);
         return;
@@ -176,18 +192,22 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
       endpointMarkers[0],
       primaryEndpoint,
       selectedNodeEndpoint
-        ? (theme()?.selectedColor ?? '#d8fff3')
-        : endpointNodeColor(primaryEndpoint, theme()?.selectedColor ?? '#d8fff3'),
+        ? theme().scene.pointSelectedColor
+        : endpointNodeColor(primaryEndpoint, theme().scene.pointSelectedColor),
       selectedNodeEndpoint || selectedEndpoints?.source.id === selectedNodeId
         ? ENDPOINT_MARKER_SCALE_PRIMARY
         : ENDPOINT_MARKER_SCALE_SECONDARY,
+      1,
+      theme().scene.markerOpacityScale,
     );
     setBloomLayer(endpointMarkers[0].group, Boolean(primaryEndpoint));
     setMarkerVisible(
       endpointMarkers[1],
       secondaryEndpoint,
-      endpointNodeColor(secondaryEndpoint, theme()?.panelAccentColor ?? '#46f4bc'),
+      endpointNodeColor(secondaryEndpoint, theme().panelAccentColor),
       selectedEndpoints?.target.id === selectedNodeId ? ENDPOINT_MARKER_SCALE_PRIMARY : ENDPOINT_MARKER_SCALE_SECONDARY,
+      1,
+      theme().scene.markerOpacityScale,
     );
     setBloomLayer(endpointMarkers[1].group, Boolean(secondaryEndpoint));
     setEndpointMarkerLabel(endpointMarkerLabels[0], primaryEndpoint);
@@ -199,7 +219,7 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
     setHoverNodeMarkerVisible(
       hoverNodeMarker,
       hoveredEndpoint,
-      endpointNodeColor(hoveredEndpoint, theme()?.panelAccentColor ?? '#46f4bc'),
+      endpointNodeColor(hoveredEndpoint, theme().panelAccentColor),
     );
     setBloomLayer(hoverNodeMarker.group, Boolean(hoveredEndpoint));
   }
@@ -228,5 +248,12 @@ export function createMarkerLayer<NMeta = unknown, EMeta = unknown>(deps: Marker
     );
   }
 
-  return { updateSelectionMarkers, updateHoverMarker, spin, anyVisible };
+  function setTheme() {
+    const currentTheme = theme();
+    endpointMarkers.forEach((marker) => setMarkerBlending(marker, currentTheme.scene.markerBlending));
+    nodeHighlightMarkers.forEach(({ marker }) => setMarkerBlending(marker, currentTheme.scene.markerBlending));
+    setHoverNodeMarkerBlending(hoverNodeMarker, currentTheme.scene.markerBlending);
+  }
+
+  return { updateSelectionMarkers, updateHoverMarker, spin, anyVisible, setTheme };
 }

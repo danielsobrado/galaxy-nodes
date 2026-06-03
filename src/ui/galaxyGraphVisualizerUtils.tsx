@@ -1,6 +1,11 @@
 import { type CSSProperties } from 'react';
 import { formatCompactNumber, getEdgeId } from '../domain/data';
-import type { GalaxyCameraView, GalaxyGraphTheme } from './GalaxyScene';
+import type { GalaxyCameraView } from './GalaxyScene';
+import {
+  galaxyGraphThemeCssVariables,
+  resolveGalaxyGraphTheme,
+  type GalaxyGraphThemeInput,
+} from '../engine/rendererConfig';
 import type {
   EdgeEndpoint,
   GraphDataset,
@@ -73,6 +78,7 @@ export const DEFAULT_GALAXY_GRAPH_LABELS: GalaxyGraphLabels = {
   source: 'Source',
   strength: 'STRENGTH',
   target: 'Target',
+  theme: 'Theme',
   to: 'to',
   traceLink: 'Trace link',
   traversalHelp:
@@ -144,12 +150,9 @@ export function findEndpoint<NMeta, EMeta, CMeta>(
   return { id, label: id, isNode: false, node: null };
 }
 
-export function themeStyle(theme: GalaxyGraphTheme | undefined) {
-  return {
-    '--gn-bg': theme?.background,
-    '--gn-panel-accent': theme?.panelAccentColor,
-    '--gn-selected': theme?.selectedColor,
-  } as CSSProperties;
+export function themeStyle(theme: GalaxyGraphThemeInput | undefined) {
+  const resolved = resolveGalaxyGraphTheme(theme);
+  return galaxyGraphThemeCssVariables(resolved) as CSSProperties;
 }
 
 export function isInteractiveTarget(target: EventTarget | null) {

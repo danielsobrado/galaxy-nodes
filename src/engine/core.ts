@@ -4,8 +4,30 @@ import { createScene } from './scene/createScene';
 
 export { getGalaxyRendererContextBudget } from './environment';
 export type { GalaxyMotionPreference, GalaxyRendererContextBudget } from './environment';
-export { resolveDensityScale, resolveEdgeRenderMode } from './rendererConfig';
-export type { EdgeRenderMode, GalaxyGraphTheme, GalaxyPlanetSizingOptions, GalaxyRenderMode } from './rendererConfig';
+export {
+  GALAXY_GRAPH_THEME_CHOICES,
+  GALAXY_GRAPH_THEMES,
+  resolveDensityScale,
+  resolveEdgeRenderMode,
+  resolveGalaxyGraphTheme,
+} from './rendererConfig';
+export type {
+  EdgeRenderMode,
+  GalaxyGraphBlendMode,
+  GalaxyGraphDataColorStrategy,
+  GalaxyGraphPointStyle,
+  GalaxyGraphTheme,
+  GalaxyGraphThemeChrome,
+  GalaxyGraphThemeChoice,
+  GalaxyGraphThemeId,
+  GalaxyGraphThemeInput,
+  GalaxyGraphThemeMode,
+  GalaxyGraphThemeScene,
+  GalaxyGraphToneMapping,
+  GalaxyPlanetSizingOptions,
+  GalaxyRenderMode,
+  ResolvedGalaxyGraphTheme,
+} from './rendererConfig';
 export type {
   CameraCommand,
   GalaxyNodeHoverAnchor,

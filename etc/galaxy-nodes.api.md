@@ -66,6 +66,15 @@ export interface EdgeEndpoint<NMeta = unknown> {
 export function formatCompactNumber(value: number): string;
 
 // @public (undocumented)
+export const GALAXY_GRAPH_THEME_CHOICES: readonly GalaxyGraphThemeChoice[];
+
+// @public (undocumented)
+export const GALAXY_GRAPH_THEMES: {
+    readonly 'galaxy-dark': ResolvedGalaxyGraphTheme;
+    readonly 'network-light': ResolvedGalaxyGraphTheme;
+};
+
+// @public (undocumented)
 export interface GalaxyAccessibleSummaryContext<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
     // (undocumented)
     accessors: ResolvedAccessors<NMeta, EMeta>;
@@ -96,6 +105,12 @@ export interface GalaxyCameraView {
     // (undocumented)
     up: Vec3;
 }
+
+// @public (undocumented)
+export type GalaxyGraphBlendMode = 'additive' | 'normal';
+
+// @public (undocumented)
+export type GalaxyGraphDataColorStrategy = 'data' | 'theme';
 
 // @public (undocumented)
 export interface GalaxyGraphLabels {
@@ -218,6 +233,8 @@ export interface GalaxyGraphLabels {
     // (undocumented)
     target: string;
     // (undocumented)
+    theme: string;
+    // (undocumented)
     to: string;
     // (undocumented)
     traceLink: string;
@@ -226,14 +243,147 @@ export interface GalaxyGraphLabels {
 }
 
 // @public (undocumented)
+export type GalaxyGraphPointStyle = 'glow' | 'disc';
+
+// @public (undocumented)
 export interface GalaxyGraphTheme {
     // (undocumented)
     background?: string;
     // (undocumented)
+    chrome?: Partial<GalaxyGraphThemeChrome>;
+    // (undocumented)
+    dataColorStrategy?: GalaxyGraphDataColorStrategy;
+    // (undocumented)
+    id?: string;
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    mode?: GalaxyGraphThemeMode;
+    // (undocumented)
     panelAccentColor?: string;
+    // (undocumented)
+    scene?: Partial<GalaxyGraphThemeScene>;
     // (undocumented)
     selectedColor?: string;
 }
+
+// @public (undocumented)
+export interface GalaxyGraphThemeChoice {
+    // (undocumented)
+    id: GalaxyGraphThemeId | string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    theme?: GalaxyGraphThemeInput;
+}
+
+// @public (undocumented)
+export interface GalaxyGraphThemeChrome {
+    // (undocumented)
+    controlActiveBackground: string;
+    // (undocumented)
+    controlBackground: string;
+    // (undocumented)
+    controlBorder: string;
+    // (undocumented)
+    controlHoverBackground: string;
+    // (undocumented)
+    mutedTextColor: string;
+    // (undocumented)
+    panelBackground: string;
+    // (undocumented)
+    panelBorder: string;
+    // (undocumented)
+    panelShadow: string;
+    // (undocumented)
+    ribbonBackground: string;
+    // (undocumented)
+    sceneVignette: string;
+    // (undocumented)
+    textColor: string;
+    // (undocumented)
+    toolbarBackground: string;
+}
+
+// @public (undocumented)
+export type GalaxyGraphThemeId = 'galaxy-dark' | 'network-light';
+
+// @public (undocumented)
+export type GalaxyGraphThemeInput = GalaxyGraphThemeId | GalaxyGraphTheme;
+
+// @public (undocumented)
+export type GalaxyGraphThemeMode = 'dark' | 'light';
+
+// @public (undocumented)
+export interface GalaxyGraphThemeScene {
+    // (undocumented)
+    clusterFocusOpacityMultiplier: number;
+    // (undocumented)
+    clusterOpacity: number;
+    // (undocumented)
+    edgeBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    edgeColor: string;
+    // (undocumented)
+    edgeConnectedColor: string;
+    // (undocumented)
+    edgeHoverColor: string;
+    // (undocumented)
+    edgeOpacityMultiplier: number;
+    // (undocumented)
+    edgeSelectedColor: string;
+    // (undocumented)
+    filamentColor: string;
+    // (undocumented)
+    fogColor: string;
+    // (undocumented)
+    fogDensityScale: number;
+    // (undocumented)
+    hoverEdgeOpacity: number;
+    // (undocumented)
+    markerBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    markerOpacityScale: number;
+    // (undocumented)
+    planetBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    planetOpacity: number;
+    // (undocumented)
+    pointBlending: GalaxyGraphBlendMode;
+    // (undocumented)
+    pointColor: string;
+    // (undocumented)
+    pointCoreBoost: number;
+    // (undocumented)
+    pointDimMultiplier: number;
+    // (undocumented)
+    pointFirstDegreeColor: string;
+    // (undocumented)
+    pointOpacity: number;
+    // (undocumented)
+    pointSecondDegreeColor: string;
+    // (undocumented)
+    pointSelectedColor: string;
+    // (undocumented)
+    pointStrokeColor: string;
+    // (undocumented)
+    pointStrokeOpacity: number;
+    // (undocumented)
+    pointStyle: GalaxyGraphPointStyle;
+    // (undocumented)
+    ringOpacity: number;
+    // (undocumented)
+    starColor: string;
+    // (undocumented)
+    starFocusOpacityMultiplier: number;
+    // (undocumented)
+    starOpacity: number;
+    // (undocumented)
+    toneMapping: GalaxyGraphToneMapping;
+}
+
+// @public (undocumented)
+export type GalaxyGraphToneMapping = 'aces' | 'none';
 
 // @public (undocumented)
 export function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(input: GalaxyGraphVisualizerProps<NMeta, EMeta, CMeta>): JSX.Element;
@@ -275,7 +425,11 @@ export interface GalaxyGraphVisualizerOptions {
     // (undocumented)
     showStats?: boolean;
     // (undocumented)
+    showThemeControl?: boolean;
+    // (undocumented)
     showTimeline?: boolean;
+    // (undocumented)
+    themeChoices?: readonly GalaxyGraphThemeChoice[];
     // (undocumented)
     webglContextLimit?: number;
 }
@@ -293,6 +447,8 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
     groups?: readonly string[];
     // (undocumented)
     initialGroup?: string | null;
+    // (undocumented)
+    initialTheme?: GalaxyGraphThemeInput;
     keyLegend?: ReactNode;
     labels?: Partial<GalaxyGraphLabels>;
     // (undocumented)
@@ -317,6 +473,8 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
     // (undocumented)
     onSelectNode?: (node: GraphNode<NMeta> | null) => void;
     // (undocumented)
+    onThemeChange?: (theme: GalaxyGraphThemeInput) => void;
+    // (undocumented)
     options?: GalaxyGraphVisualizerOptions;
     // (undocumented)
     renderAccessibleSummary?: (context: GalaxyAccessibleSummaryContext<NMeta, EMeta, CMeta>) => ReactNode;
@@ -336,7 +494,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
     // (undocumented)
     sideRailActions?: ReactNode;
     // (undocumented)
-    theme?: GalaxyGraphTheme;
+    theme?: GalaxyGraphThemeInput;
 }
 
 // @public (undocumented)
@@ -624,6 +782,28 @@ export function resolveAccessors<NMeta = unknown, EMeta = unknown>(accessors?: G
 export type ResolvedAccessors<NMeta = unknown, EMeta = unknown> = Required<GraphAccessors<NMeta, EMeta>>;
 
 // @public (undocumented)
+export interface ResolvedGalaxyGraphTheme {
+    // (undocumented)
+    background: string;
+    // (undocumented)
+    chrome: GalaxyGraphThemeChrome;
+    // (undocumented)
+    dataColorStrategy: GalaxyGraphDataColorStrategy;
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    mode: GalaxyGraphThemeMode;
+    // (undocumented)
+    panelAccentColor: string;
+    // (undocumented)
+    scene: GalaxyGraphThemeScene;
+    // (undocumented)
+    selectedColor: string;
+}
+
+// @public (undocumented)
 export interface ResolvedGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
     // (undocumented)
     clusterLookup: Map<string, ResolvedLayoutCluster<CMeta>>;
@@ -654,6 +834,9 @@ export interface ResolvedLayoutCluster<TMeta = unknown> extends GraphCluster<TMe
     // (undocumented)
     radius: number;
 }
+
+// @public (undocumented)
+export function resolveGalaxyGraphTheme(theme?: GalaxyGraphThemeInput): ResolvedGalaxyGraphTheme;
 
 // @public (undocumented)
 export function resolveGraphLayout<NMeta = unknown, EMeta = unknown, CMeta = unknown>(dataset: GraphDataset<NMeta, EMeta, CMeta>, options?: GraphLayoutInput): ResolvedGraphLayout<NMeta, EMeta, CMeta>;

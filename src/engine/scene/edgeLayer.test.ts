@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createEdgeLayer } from './edgeLayer';
 import { resolveAccessors } from '../../domain/data';
+import { resolveGalaxyGraphTheme } from '../rendererConfig';
 import type { GraphEdge, GraphNode, Vec3 } from '../../domain/types';
+import { EDGE_UNRELATED_DIM } from '../sceneConstants';
 import type { EdgeEndpoints, EdgeVisualState } from '../sceneTypes';
 import type { SelectionState } from './sceneContext';
 
@@ -44,7 +46,7 @@ function build(selection: SelectionState) {
     accessors: () => resolveAccessors(undefined),
     activeGroup: () => null,
     galaxyMode: () => true,
-    theme: () => undefined,
+    theme: () => resolveGalaxyGraphTheme(),
     planetRadius: () => 1,
     selection,
     indexSelectableEdge: () => {},
@@ -69,7 +71,6 @@ describe('edgeLayer.applyAppearance', () => {
     layer.applyAppearance();
     expect(opacity('e0')).toBeGreaterThan(baseOpacity('e0'));
     expect(opacity('e0')).toBeGreaterThan(opacity('e1'));
-    // Unrelated edge is dimmed to 28% of its base opacity.
-    expect(opacity('e1')).toBeCloseTo(baseOpacity('e1') * 0.28, 6);
+    expect(opacity('e1')).toBeCloseTo(baseOpacity('e1') * EDGE_UNRELATED_DIM, 6);
   });
 });

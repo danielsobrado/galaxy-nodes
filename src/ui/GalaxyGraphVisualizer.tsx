@@ -3,6 +3,7 @@ import { CircleDot, Layers3, Pause, Play, Search, Sparkles } from 'lucide-react'
 import GalaxyScene from './GalaxyScene';
 import { GalaxyDetailPanels } from './GalaxyDetailPanels';
 import { GalaxySideRail } from './GalaxySideRail';
+import { GALAXY_GRAPH_THEME_CHOICES, resolveGalaxyGraphTheme, type GalaxyGraphThemeInput } from '../engine/core';
 import {
   DEFAULT_GRAPH_EDGE_BUDGET,
   formatCompactNumber,
@@ -43,6 +44,9 @@ function resolveHoverDetailDelayMs(delayMs: number | undefined) {
 
 export type {
   GalaxyAccessibleSummaryContext,
+  GalaxyGraphTheme,
+  GalaxyGraphThemeChoice,
+  GalaxyGraphThemeInput,
   GalaxyGraphLabels,
   GalaxyGraphVisualizerOptions,
   GalaxyGraphVisualizerProps,
@@ -60,6 +64,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   dataset,
   groups,
   initialGroup = null,
+  initialTheme,
   keyLegend,
   legend,
   labels,
@@ -74,6 +79,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   onSceneFailure,
   onSelectEdge,
   onSelectNode,
+  onThemeChange,
   options,
   renderEdgeDetail,
   renderAccessibleSummary,
@@ -87,6 +93,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const [activeGroup, setActiveGroup] = useState<string | null>(initialGroup);
   const [showClusters, setShowClusters] = useState(options?.showClusters ?? true);
   const [galaxyMode, setGalaxyMode] = useState(options?.galaxyMode ?? true);
+  const [internalTheme, setInternalTheme] = useState<GalaxyGraphThemeInput>(initialTheme ?? 'galaxy-dark');
   const [playing, setPlaying] = useState(false);
   const [search, setSearch] = useState('');
   const [internalSelectedNode, setInternalSelectedNode] = useState<GraphNode<NMeta> | null>(null);
@@ -116,6 +123,17 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const showDetailPanel = options?.showDetailPanel ?? true;
   const hoverDetailDelayMs = resolveHoverDetailDelayMs(options?.hoverDetailDelayMs);
   const showDatasetSizeControls = options?.showDatasetSizeControls ?? Boolean(options?.datasetSizes?.length);
+  const showThemeControl = options?.showThemeControl ?? false;
+  const themeChoices = options?.themeChoices ?? GALAXY_GRAPH_THEME_CHOICES;
+  const activeTheme = theme ?? internalTheme;
+  const resolvedTheme = useMemo(() => resolveGalaxyGraphTheme(activeTheme), [activeTheme]);
+  const selectedThemeChoiceId = useMemo(
+    () =>
+      themeChoices.find((choice) =>
+        choice.theme ? resolveGalaxyGraphTheme(choice.theme).id === resolvedTheme.id : choice.id === resolvedTheme.id,
+      )?.id ?? resolvedTheme.id,
+    [resolvedTheme.id, themeChoices],
+  );
   const largeGraphEnabled = Boolean(largeGraph?.enabled);
   const graphDataset = largeGraphEnabled ? augmentedDataset : dataset;
   const edgeBudget = largeGraph?.edgeBudget ?? DEFAULT_GRAPH_EDGE_BUDGET;
@@ -326,6 +344,14 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     clearSelection();
     setHoverNode(null);
     setHoverEdge(null);
+  }
+
+  function chooseTheme(themeId: string) {
+    const choice = themeChoices.find((entry) => entry.id === themeId);
+    if (!choice) return;
+    const nextTheme = (choice.theme ?? choice.id) as GalaxyGraphThemeInput;
+    if (theme === undefined) setInternalTheme(nextTheme);
+    onThemeChange?.(nextTheme);
   }
 
   function focusNode(node: GraphNode<NMeta> | null) {
@@ -562,7 +588,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   return (
     <main
       className={['galaxy-nodes', className].filter(Boolean).join(' ')}
-      style={themeStyle(theme)}
+      style={themeStyle(activeTheme)}
       onKeyDownCapture={handleKeyboardTraversal}
     >
       <GalaxyScene<NMeta, EMeta, CMeta>
@@ -584,7 +610,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         planetSizing={options?.planetSizing}
         expectedSize={options?.expectedSize}
         renderMode={options?.renderMode}
-        theme={theme}
+        theme={activeTheme}
         cameraCommand={cameraCommand}
         selectedNodeId={currentSelectedNodeId}
         selectedEdgeId={currentSelectedEdgeId}
@@ -670,6 +696,19 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
             </button>
             {controlActions}
           </div>
+
+          {showThemeControl ? (
+            <label className="theme-select">
+              <span>{chromeLabels.theme}</span>
+              <select value={selectedThemeChoiceId} onChange={(event) => chooseTheme(event.currentTarget.value)}>
+                {themeChoices.map((choice) => (
+                  <option key={choice.id} value={choice.id}>
+                    {choice.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           {(options?.showTimeline ?? true) ? (
             <div className="playback">

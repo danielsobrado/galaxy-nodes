@@ -4,12 +4,12 @@ import {
   CLUSTER_LABEL_HEIGHT_FACTOR,
   CLUSTER_SPRITE_SCALE_DEFAULT,
   CLUSTER_SPRITE_SCALE_GALAXY,
-  FOCUS_CLUSTER_DIM_FACTOR,
-  GLOW_SPRITE_OPACITY,
 } from '../sceneConstants';
 import { makeGlowTexture } from '../materials';
 import { makeSceneLabel, shouldShowClusterLabel } from '../labels';
 import type { SceneLabel } from '../sceneTypes';
+import type { ResolvedGalaxyGraphTheme } from '../rendererConfig';
+import { setMaterialBlending, themeBlending } from './themeRuntime';
 
 interface ClusterVisual {
   group?: string;
@@ -26,6 +26,7 @@ export interface ClusterLayerDeps {
   /** Shared label pool projected by the animation loop; cluster labels are appended to it. */
   labels: SceneLabel[];
   clusters: readonly ResolvedLayoutCluster[];
+  theme: () => ResolvedGalaxyGraphTheme;
   galaxyMode: () => boolean;
   activeGroup: () => string | null;
   showClusters: () => boolean;
@@ -35,6 +36,7 @@ export interface ClusterLayer {
   updateVisibility(): void;
   /** Dim the cluster glow sprites while a node/edge is focused. */
   setFocusDim(hasSelection: boolean): void;
+  setTheme(): void;
   dispose(): void;
 }
 
@@ -47,6 +49,7 @@ export function createClusterLayer({
   labelsRoot,
   labels,
   clusters,
+  theme,
   galaxyMode,
   activeGroup,
   showClusters,
@@ -55,9 +58,9 @@ export function createClusterLayer({
   const glowMaterial = new THREE.SpriteMaterial({
     map: glowTexture,
     transparent: true,
-    opacity: GLOW_SPRITE_OPACITY,
+    opacity: theme().scene.clusterOpacity,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    blending: themeBlending(theme().scene.markerBlending),
   });
 
   const clusterVisuals: ClusterVisual[] = clusters.map((cluster, index) => {
@@ -104,9 +107,19 @@ export function createClusterLayer({
   }
 
   function setFocusDim(hasSelection: boolean) {
+    const currentTheme = theme();
     clusterVisuals.forEach(({ sprite }) => {
       (sprite.material as THREE.SpriteMaterial).opacity =
-        GLOW_SPRITE_OPACITY * (hasSelection ? FOCUS_CLUSTER_DIM_FACTOR : 1);
+        currentTheme.scene.clusterOpacity * (hasSelection ? currentTheme.scene.clusterFocusOpacityMultiplier : 1);
+    });
+  }
+
+  function setTheme() {
+    const currentTheme = theme();
+    clusterVisuals.forEach(({ sprite }) => {
+      const material = sprite.material as THREE.SpriteMaterial;
+      material.opacity = currentTheme.scene.clusterOpacity;
+      setMaterialBlending(material, currentTheme.scene.markerBlending);
     });
   }
 
@@ -115,5 +128,5 @@ export function createClusterLayer({
     glowMaterial.dispose();
   }
 
-  return { updateVisibility, setFocusDim, dispose };
+  return { updateVisibility, setFocusDim, setTheme, dispose };
 }

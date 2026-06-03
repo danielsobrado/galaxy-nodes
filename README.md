@@ -322,6 +322,26 @@ const adaPosition = resolved.nodePositions.get('ada');
 
 Layout is spatial only. Use `layout` for coordinates, spacing, cluster radius, and deterministic seeds; use `accessors` and `theme` for colors, sizes, labels, and scene chrome. Accessor and theme changes update the existing renderer in place when the dataset topology and layout are unchanged.
 
+`theme` accepts either a preset id or a custom object. Built-in presets are `galaxy-dark` (the default) and `network-light` (white background, pale blue links, outlined blue/white nodes, no starfield/vignette). Import `GALAXY_GRAPH_THEMES`, `GALAXY_GRAPH_THEME_CHOICES`, or `resolveGalaxyGraphTheme` when you need to build API-driven theme menus outside the default React control.
+
+```tsx
+import { useState } from 'react';
+import { GalaxyGraphVisualizer, type GalaxyGraphThemeInput, type GraphDataset } from 'galaxy-nodes';
+
+export function ThemedGraph({ dataset }: { dataset: GraphDataset }) {
+  const [theme, setTheme] = useState<GalaxyGraphThemeInput>('galaxy-dark');
+
+  return (
+    <GalaxyGraphVisualizer
+      dataset={dataset}
+      theme={theme}
+      onThemeChange={setTheme}
+      options={{ showThemeControl: true }}
+    />
+  );
+}
+```
+
 Nodes and edges can carry direct `color` fields. Without custom accessors, node colors prefer `node.color`, then hash `node.group` into the built-in palette, then fall back to a neutral gray. Edge colors prefer `edge.color`, with separate defaults for normal relationships and filament edges.
 
 Display text can be supplied directly on both nodes and relationships with `label`, `name`, or `type`. For relationships, `kind` remains the styling/category key and is also used as a label fallback. If your data uses another field, map it through `accessors.nodeLabel` or `accessors.edgeLabel`.
@@ -365,7 +385,7 @@ export function StyledGraph({ dataset }: { dataset: GraphDataset }) {
 
 When a node stays hovered, Galaxy Nodes shows a transparent node detail panel next to the node after `options.hoverDetailDelayMs` milliseconds. The default is `2000`; pass a lower value for faster inspection.
 
-`theme.background` controls the WebGL clear color and app background. `theme.panelAccentColor` controls HUD accents and secondary selection markers. `theme.selectedColor` controls selected/highlighted scene elements. There is no separate `palette` prop; keep palette logic in `nodeColor` or domain-specific accessor helpers.
+`theme.background` controls the WebGL clear color and app background. `theme.panelAccentColor` controls HUD accents and secondary selection markers. `theme.selectedColor` controls selected/highlighted scene elements. Existing custom objects with only those fields still work and merge over `galaxy-dark`. Full custom themes can also set semantic `chrome` and `scene` tokens. `galaxy-dark` uses `dataColorStrategy: 'data'`, so accessor colors remain authoritative; `network-light` uses `dataColorStrategy: 'theme'`, so its readable blue network colors override `nodeColor` and `edgeColor`. There is no separate `palette` prop; keep dark/data-driven palette logic in `nodeColor` or domain-specific accessor helpers.
 
 ## Node Image Trust Model
 

@@ -42,10 +42,12 @@ import {
   WORLD_ROTATION_SPEED,
 } from '../sceneConstants';
 import {
+  galaxyGraphThemeCssVariables,
+  resolveGalaxyGraphTheme,
   resolveNodeSizeScale,
   resolvePlanetSizing,
   type EdgeRenderMode,
-  type GalaxyGraphTheme,
+  type GalaxyGraphThemeInput,
   type GalaxyPlanetSizingOptions,
 } from '../rendererConfig';
 import type { GalaxyNodeHoverAnchor, MutableRef, SceneCallbacks, SceneRuntime } from '../rendererTypes';
@@ -89,7 +91,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   accessorsInput: GraphAccessors<NMeta, EMeta> | undefined,
   initialNodeSizeScale: number,
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
-  initialTheme: GalaxyGraphTheme | undefined,
+  initialTheme: GalaxyGraphThemeInput | undefined,
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,
@@ -108,7 +110,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     hoveredNodeId: null,
     hoveredEdgeId: null,
   };
-  let theme = initialTheme;
+  let theme = resolveGalaxyGraphTheme(initialTheme);
   let accessors = resolveAccessors(accessorsInput);
   let nodeSizeScale = initialNodeSizeScale;
   let planetSizing = resolvePlanetSizing(planetSizingInput);
@@ -126,6 +128,29 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   // when streamed nodes/edges arrive.
   let nodeIndex: SceneNodeIndex<NMeta> = buildSceneNodeIndex(dataset.nodes);
   let nodeDegrees = buildNodeDegrees(dataset);
+  const hostThemePreviousVariables = new Map<string, { priority: string; value: string } | null>();
+
+  function setHostThemeVariable(name: string, value: string) {
+    if (!hostThemePreviousVariables.has(name)) {
+      const previousValue = host.style.getPropertyValue(name);
+      hostThemePreviousVariables.set(
+        name,
+        previousValue ? { priority: host.style.getPropertyPriority(name), value: previousValue } : null,
+      );
+    }
+    host.style.setProperty(name, value);
+  }
+
+  function applyHostThemeStyle() {
+    const variables = galaxyGraphThemeCssVariables(theme);
+    Object.entries(variables).forEach(([name, value]) => setHostThemeVariable(name, value));
+  }
+
+  applyHostThemeStyle();
+
+  function outputToneMapping() {
+    return theme.scene.toneMapping === 'none' ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+  }
 
   const labelsRoot = document.createElement('div');
   labelsRoot.className = 'scene-labels';
@@ -136,14 +161,14 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   renderer.setSize(width, height);
-  renderer.setClearColor(theme?.background ?? '#000000', 1);
+  renderer.setClearColor(theme.background, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
   renderer.toneMappingExposure = TONE_MAPPING_EXPOSURE;
   host.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x090b11, galaxyMode ? FOG_DENSITY_GALAXY : FOG_DENSITY_DEFAULT);
+  scene.fog = new THREE.FogExp2(theme.scene.fogColor, focusFogDensity(false));
 
   const camera = new THREE.PerspectiveCamera(CAMERA_FOV, width / height, CAMERA_NEAR, CAMERA_FAR);
   camera.position.copy(CAMERA_HOME);
@@ -157,6 +182,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     height,
     onBloomLayerChange: () => refreshBloomActive?.(),
   });
+  compositor.setToneMapping(outputToneMapping());
   const setBloomLayer = compositor.setBloomLayer;
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -224,6 +250,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     nodes: () => dataset.nodes,
     nodePositions,
     accessors: () => accessors,
+    theme: () => theme,
     activeGroup: () => activeGroup,
     selection,
     edgeEndpoints,
@@ -234,7 +261,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const updatePointVisibility = pointLayer.updateVisibility;
   const updatePointAppearance = pointLayer.updateAppearance;
 
-  const starfield = createStarfield({ world, galaxyMode });
+  const starfield = createStarfield({ world, galaxyMode, theme: () => theme });
 
   const labels: SceneLabel[] = [];
   const selectedEdgeLabel = makeSceneLabel(labelsRoot, 'edge-label');
@@ -251,6 +278,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     labelsRoot,
     labels,
     clusters: graphLayout.clusters,
+    theme: () => theme,
     galaxyMode: () => galaxyMode,
     activeGroup: () => activeGroup,
     showClusters: () => showClusters,
@@ -258,7 +286,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const updateClusterVisibility = clusterLayer.updateVisibility;
 
   function focusFogDensity(hasSelection: boolean) {
-    const baseDensity = galaxyMode ? FOG_DENSITY_GALAXY : FOG_DENSITY_DEFAULT;
+    const baseDensity = (galaxyMode ? FOG_DENSITY_GALAXY : FOG_DENSITY_DEFAULT) * theme.scene.fogDensityScale;
     return hasSelection ? baseDensity * FOCUS_FOG_DENSITY_MULTIPLIER : baseDensity;
   }
 
@@ -524,7 +552,8 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   function updateGalaxyMode(nextGalaxyMode: boolean) {
     galaxyMode = nextGalaxyMode;
     pointLayer.setGalaxyMode(galaxyMode);
-    if (scene.fog instanceof THREE.FogExp2) scene.fog.density = galaxyMode ? FOG_DENSITY_GALAXY : FOG_DENSITY_DEFAULT;
+    if (scene.fog instanceof THREE.FogExp2)
+      scene.fog.density = focusFogDensity(Boolean(selection.selectedNodeId || selection.selectedEdgeId));
     starfield.setGalaxyMode(galaxyMode);
     updateClusterVisibility();
     edgeLayer.update();
@@ -549,9 +578,21 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updateHoverHighlight();
   }
 
-  function updateTheme(nextTheme: GalaxyGraphTheme | undefined) {
-    theme = nextTheme;
-    renderer.setClearColor(theme?.background ?? '#000000', 1);
+  function updateTheme(nextTheme: GalaxyGraphThemeInput | undefined) {
+    theme = resolveGalaxyGraphTheme(nextTheme);
+    applyHostThemeStyle();
+    renderer.setClearColor(theme.background, 1);
+    if (scene.fog instanceof THREE.FogExp2) {
+      scene.fog.color.set(theme.scene.fogColor);
+      scene.fog.density = focusFogDensity(Boolean(selection.selectedNodeId || selection.selectedEdgeId));
+    }
+    compositor.setToneMapping(outputToneMapping());
+    starfield.setTheme();
+    clusterLayer.setTheme();
+    pointLayer.setTheme();
+    markerLayer.setTheme();
+    planetOverlay.setTheme();
+    edgeLayer.setTheme();
     updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
     updateHoverHighlight();
   }
@@ -841,6 +882,11 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       renderer.dispose();
       renderer.domElement.remove();
       labelsRoot.remove();
+      hostThemePreviousVariables.forEach((previous, name) => {
+        if (previous) host.style.setProperty(name, previous.value, previous.priority);
+        else host.style.removeProperty(name);
+      });
+      hostThemePreviousVariables.clear();
     },
   };
 }

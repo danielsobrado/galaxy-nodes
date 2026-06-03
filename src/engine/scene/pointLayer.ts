@@ -4,7 +4,9 @@ import {
   DIMMED_POINT_COLOR_FACTOR,
   POINT_BASE_SIZE_DEFAULT,
   POINT_BASE_SIZE_GALAXY,
+  POINT_FIRST_DEGREE_BRIGHTEN,
   POINT_MIN_PIXEL_SIZE,
+  POINT_SECOND_DEGREE_BRIGHTEN,
   POINT_SIZE_FIRST_DEGREE,
   POINT_SIZE_SECOND_DEGREE,
   POINT_SIZE_SELECTED,
@@ -14,18 +16,21 @@ import {
 import { pointCloudColor } from '../materials';
 import { createPointCloudMaterial } from '../pointCloudMaterial';
 import { PointCloudBuffer } from '../pointCloudBuffer';
-import { resolveDensityScale } from '../rendererConfig';
+import { resolveDensityScale, type ResolvedGalaxyGraphTheme } from '../rendererConfig';
 import type { GraphDataset } from '../../domain/types';
 import type { EdgeEndpoints } from '../sceneTypes';
 import type { SelectionState } from './sceneContext';
+import { setMaterialBlending } from './themeRuntime';
 
 const tmpPointSelectionColor = new THREE.Color();
+const tmpPointBaseColor = new THREE.Color();
 
 export interface PointLayerDeps<NMeta = unknown, EMeta = unknown> {
   world: THREE.Object3D;
   nodes: () => GraphNode<NMeta>[];
   nodePositions: Map<string, Vec3>;
   accessors: () => ResolvedAccessors<NMeta, EMeta>;
+  theme: () => ResolvedGalaxyGraphTheme;
   activeGroup: () => string | null;
   /** Live selection record, read by reference (mutated in place by the orchestrator). */
   selection: SelectionState;
@@ -53,6 +58,7 @@ export interface PointLayer<NMeta = unknown> {
   setGalaxyMode(galaxyMode: boolean): void;
   setNodeSizeScale(scale: number): void;
   setPixelRatio(pixelRatio: number): void;
+  setTheme(): void;
 }
 
 /**
@@ -63,7 +69,7 @@ export interface PointLayer<NMeta = unknown> {
 export function createPointLayer<NMeta = unknown, EMeta = unknown>(
   deps: PointLayerDeps<NMeta, EMeta>,
 ): PointLayer<NMeta> {
-  const { world, nodes, nodePositions, accessors, activeGroup, selection, edgeEndpoints } = deps;
+  const { world, nodes, nodePositions, accessors, theme, activeGroup, selection, edgeEndpoints } = deps;
 
   const pointBuffer = new PointCloudBuffer(nodes(), nodePositions);
   const pointsMaterial = createPointCloudMaterial({
@@ -71,6 +77,7 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
     nodeSizeScale: deps.nodeSizeScale,
     nodeCount: nodes().length,
     pixelRatio: deps.pixelRatio,
+    theme: theme(),
   });
   const pointCloud = new THREE.Points(pointBuffer.geometry, pointsMaterial);
   pointCloud.userData.type = 'node-points';
@@ -78,6 +85,7 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
 
   function updateVisibility() {
     const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, selectedEdgeHighlight } = selection;
+    const currentTheme = theme();
     const group = activeGroup();
     const selectedEndpointNodeIds = new Set<string>();
     const selectedEndpoints = selectedEdgeId ? (edgeEndpoints.get(selectedEdgeId) ?? null) : null;
@@ -125,10 +133,20 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
         pointBuffer.baseColors[baseColorOffset + 2],
       );
 
-      if (highlightLevel === 3) tmpPointSelectionColor.set('#ffffff');
-      else if (highlightLevel === 2) tmpPointSelectionColor.multiplyScalar(1.36);
-      else if (highlightLevel === 1) tmpPointSelectionColor.multiplyScalar(1.18);
-      else if (selectedNodeId || selectedEdgeId) tmpPointSelectionColor.multiplyScalar(POINT_UNRELATED_DIM);
+      if (highlightLevel === 3) tmpPointSelectionColor.set(currentTheme.scene.pointSelectedColor);
+      else if (highlightLevel === 2) {
+        if (currentTheme.dataColorStrategy === 'theme')
+          tmpPointSelectionColor.set(currentTheme.scene.pointFirstDegreeColor);
+        else tmpPointSelectionColor.multiplyScalar(POINT_FIRST_DEGREE_BRIGHTEN);
+      } else if (highlightLevel === 1) {
+        if (currentTheme.dataColorStrategy === 'theme')
+          tmpPointSelectionColor.set(currentTheme.scene.pointSecondDegreeColor);
+        else tmpPointSelectionColor.multiplyScalar(POINT_SECOND_DEGREE_BRIGHTEN);
+      } else if (selectedNodeId || selectedEdgeId) {
+        tmpPointSelectionColor.multiplyScalar(
+          currentTheme.dataColorStrategy === 'theme' ? currentTheme.scene.pointDimMultiplier : POINT_UNRELATED_DIM,
+        );
+      }
 
       pointBuffer.colors[baseColorOffset] = tmpPointSelectionColor.r;
       pointBuffer.colors[baseColorOffset + 1] = tmpPointSelectionColor.g;
@@ -139,14 +157,29 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
 
   function updateAppearance() {
     const resolved = accessors();
+    const currentTheme = theme();
     nodes().forEach((node, index) => {
-      const pointColor = pointCloudColor(resolved.nodeColor(node));
+      const pointColor =
+        currentTheme.dataColorStrategy === 'theme'
+          ? tmpPointBaseColor.set(currentTheme.scene.pointColor)
+          : pointCloudColor(resolved.nodeColor(node));
       pointBuffer.baseColors[index * 3] = pointColor.r;
       pointBuffer.baseColors[index * 3 + 1] = pointColor.g;
       pointBuffer.baseColors[index * 3 + 2] = pointColor.b;
       pointBuffer.baseSizes[index] = resolved.nodeSize(node);
     });
     updateVisibility();
+  }
+
+  function setTheme() {
+    const currentTheme = theme();
+    pointsMaterial.uniforms.pointStyle.value = currentTheme.scene.pointStyle === 'disc' ? 1 : 0;
+    pointsMaterial.uniforms.pointOpacity.value = currentTheme.scene.pointOpacity;
+    pointsMaterial.uniforms.pointStrokeColor.value.set(currentTheme.scene.pointStrokeColor);
+    pointsMaterial.uniforms.pointStrokeOpacity.value = currentTheme.scene.pointStrokeOpacity;
+    pointsMaterial.uniforms.pointCoreBoost.value = currentTheme.scene.pointCoreBoost;
+    setMaterialBlending(pointsMaterial, currentTheme.scene.pointBlending);
+    updateAppearance();
   }
 
   return {
@@ -181,5 +214,6 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
       pointsMaterial.uniforms.pixelRatio.value = pixelRatio;
       pointsMaterial.uniforms.minPointSize.value = POINT_MIN_PIXEL_SIZE * pixelRatio;
     },
+    setTheme,
   };
 }

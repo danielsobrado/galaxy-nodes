@@ -208,6 +208,52 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(material.opacity).toBeCloseTo(0.075 + 0.9 * 0.1, 5);
   });
 
+  it('updates renderer theme materials and host CSS variables in place', async () => {
+    const edgeVisuals: THREE.Object3D[] = [];
+    const pointClouds: THREE.Object3D[] = [];
+    const starfields: THREE.Object3D[] = [];
+    const originalAdd = THREE.Object3D.prototype.add;
+    vi.spyOn(THREE.Object3D.prototype, 'add').mockImplementation(function addSpy(
+      this: THREE.Object3D,
+      ...objects: THREE.Object3D[]
+    ) {
+      objects.forEach((object) => {
+        if (object.userData.type === 'edge-visual') edgeVisuals.push(object);
+        if (object.userData.type === 'node-points') pointClouds.push(object);
+        if (object instanceof THREE.Points && object.userData.type !== 'node-points') starfields.push(object);
+      });
+      return originalAdd.apply(this, objects);
+    });
+
+    const { host } = await mountRenderer({}, { renderMode: 'quality', theme: 'network-light' });
+    await waitForFrames(2);
+
+    expect(host.style.getPropertyValue('--gn-bg')).toBe('#ffffff');
+    expect(host.style.getPropertyValue('--gn-scene-vignette')).toBe('none');
+    const edge = edgeMaterial(edgeVisuals[0]);
+    expect(edge.blending).toBe(THREE.NormalBlending);
+    expect(edge.opacity).toBeCloseTo((0.075 + 0.9 * 0.1) * 0.42, 5);
+    expect(edge.color.getHexString()).toBe(new THREE.Color('#8dbed6').getHexString());
+    const points = pointMaterial(pointClouds[0]);
+    expect(points.blending).toBe(THREE.NormalBlending);
+    expect(points.uniforms.pointStyle.value).toBe(1);
+    expect(points.uniforms.pointStrokeOpacity.value).toBeGreaterThan(0.8);
+    const stars = pointsMaterial(starfields[0]);
+    expect(stars.opacity).toBe(0);
+
+    const canvas = getCanvas(host);
+    activeRenderer?.update({ ...rendererOptions(), renderMode: 'quality', theme: 'galaxy-dark' });
+    await waitForFrames(2);
+
+    expect(getCanvas(host)).toBe(canvas);
+    expect(host.style.getPropertyValue('--gn-bg')).toBe('#000000');
+    expect(host.style.getPropertyValue('--gn-scene-vignette')).toContain('radial-gradient');
+    expect(edge.blending).toBe(THREE.AdditiveBlending);
+    expect(points.blending).toBe(THREE.AdditiveBlending);
+    expect(points.uniforms.pointStyle.value).toBe(0);
+    expect(stars.opacity).toBeCloseTo(0.08, 5);
+  });
+
   it('dims unrelated edges when an edge is selected', async () => {
     const focusDataset: GraphDataset = {
       generatedAt: 'edge-focus-test',
@@ -429,6 +475,18 @@ describe('createGalaxyRenderer in Chromium', () => {
     const expected = await decodePng(expectedBase64);
     expect(visualDiffRatio(actual, expected)).toBeLessThan(0.025);
   });
+
+  it('renders a readable network light frame on a white background', async () => {
+    const { host } = await mountRenderer({}, { renderMode: 'quality', theme: 'network-light' });
+
+    await waitForFrames(8);
+    const actualBase64 = await page.screenshot({ element: host, save: false });
+    const actual = await decodePng(actualBase64);
+    const [red, green, blue] = pixelRgb(actual, 4, 4);
+
+    expect(red + green + blue).toBeGreaterThan(720);
+    expect(nonWhitePixelRatio(actual)).toBeGreaterThan(0.001);
+  });
 });
 
 async function mountRenderer(callbacks = {}, optionsOverride: Partial<GalaxyRendererOptions> = {}) {
@@ -485,6 +543,22 @@ function edgeMaterial(object: THREE.Object3D) {
   const material = (object as THREE.Mesh | THREE.LineSegments).material;
   if (!(material instanceof THREE.MeshBasicMaterial) && !(material instanceof THREE.LineBasicMaterial)) {
     throw new Error('Expected edge BasicMaterial.');
+  }
+  return material;
+}
+
+function pointMaterial(object: THREE.Object3D) {
+  const material = (object as THREE.Points).material;
+  if (!(material instanceof THREE.ShaderMaterial)) {
+    throw new Error('Expected point ShaderMaterial.');
+  }
+  return material;
+}
+
+function pointsMaterial(object: THREE.Object3D) {
+  const material = (object as THREE.Points).material;
+  if (!(material instanceof THREE.PointsMaterial)) {
+    throw new Error('Expected PointsMaterial.');
   }
   return material;
 }
@@ -554,6 +628,22 @@ function nonBackgroundPixelRatio(image: ImageData) {
     if (red + green + blue > 44) litPixels += 1;
   }
   return litPixels / (image.width * image.height);
+}
+
+function nonWhitePixelRatio(image: ImageData) {
+  let nonWhitePixels = 0;
+  for (let index = 0; index < image.data.length; index += 4) {
+    const red = image.data[index];
+    const green = image.data[index + 1];
+    const blue = image.data[index + 2];
+    if (red + green + blue < 735) nonWhitePixels += 1;
+  }
+  return nonWhitePixels / (image.width * image.height);
+}
+
+function pixelRgb(image: ImageData, x: number, y: number) {
+  const offset = (y * image.width + x) * 4;
+  return [image.data[offset], image.data[offset + 1], image.data[offset + 2]];
 }
 
 function visualDiffRatio(actual: ImageData, expected: ImageData) {

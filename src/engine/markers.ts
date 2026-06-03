@@ -19,8 +19,10 @@ import {
   MARKER_OUTER_RING_OPACITY_SPAN,
   MARKER_OUTER_RING_SCALE,
 } from './sceneConstants';
+import type { GalaxyGraphBlendMode } from './rendererConfig';
+import { setMaterialBlending, themeBlending } from './scene/themeRuntime';
 
-export function createEndpointMarker(color: string) {
+export function createEndpointMarker(color: string, blending: GalaxyGraphBlendMode = 'additive') {
   const group = new THREE.Group();
   group.visible = false;
 
@@ -29,7 +31,7 @@ export function createEndpointMarker(color: string) {
     color,
     transparent: true,
     opacity: 0.18,
-    blending: THREE.AdditiveBlending,
+    blending: themeBlending(blending),
     depthWrite: false,
     depthTest: false,
   });
@@ -42,7 +44,7 @@ export function createEndpointMarker(color: string) {
     color,
     transparent: true,
     opacity: 0.68,
-    blending: THREE.AdditiveBlending,
+    blending: themeBlending(blending),
     depthWrite: false,
     depthTest: false,
   });
@@ -56,7 +58,7 @@ export function createEndpointMarker(color: string) {
     transparent: true,
     opacity: 0.22,
     side: THREE.DoubleSide,
-    blending: THREE.AdditiveBlending,
+    blending: themeBlending(blending),
     depthWrite: false,
     depthTest: false,
   });
@@ -82,16 +84,23 @@ export function setMarkerColor(marker: EndpointMarker, color: string) {
   (marker.outerRing.material as THREE.MeshBasicMaterial).color.set(color);
 }
 
-export function setMarkerStrength(marker: EndpointMarker, strength: number) {
+export function setMarkerBlending(marker: EndpointMarker, blending: GalaxyGraphBlendMode) {
+  setMaterialBlending(marker.atmosphere.material as THREE.MeshBasicMaterial, blending);
+  setMaterialBlending(marker.core.material as THREE.MeshBasicMaterial, blending);
+  setMaterialBlending(marker.innerRing.material as THREE.MeshBasicMaterial, blending);
+  setMaterialBlending(marker.outerRing.material as THREE.MeshBasicMaterial, blending);
+}
+
+export function setMarkerStrength(marker: EndpointMarker, strength: number, opacityScale = 1) {
   const clamped = Math.max(0, Math.min(1, strength));
   (marker.atmosphere.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_ATMOSPHERE_OPACITY_BASE + clamped * MARKER_ATMOSPHERE_OPACITY_SPAN;
+    (MARKER_ATMOSPHERE_OPACITY_BASE + clamped * MARKER_ATMOSPHERE_OPACITY_SPAN) * opacityScale;
   (marker.core.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_CORE_OPACITY_BASE + clamped * MARKER_CORE_OPACITY_SPAN;
+    (MARKER_CORE_OPACITY_BASE + clamped * MARKER_CORE_OPACITY_SPAN) * opacityScale;
   (marker.innerRing.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_INNER_RING_OPACITY_BASE + clamped * MARKER_INNER_RING_OPACITY_SPAN;
+    (MARKER_INNER_RING_OPACITY_BASE + clamped * MARKER_INNER_RING_OPACITY_SPAN) * opacityScale;
   (marker.outerRing.material as THREE.MeshBasicMaterial).opacity =
-    MARKER_OUTER_RING_OPACITY_BASE + clamped * MARKER_OUTER_RING_OPACITY_SPAN;
+    (MARKER_OUTER_RING_OPACITY_BASE + clamped * MARKER_OUTER_RING_OPACITY_SPAN) * opacityScale;
 }
 
 export function setMarkerVisible(
@@ -100,12 +109,13 @@ export function setMarkerVisible(
   color: string,
   scaleMultiplier: number,
   strength = 1,
+  opacityScale = 1,
 ) {
   marker.group.visible = Boolean(endpoint);
   if (!endpoint) return;
 
   setMarkerColor(marker, color);
-  setMarkerStrength(marker, strength);
+  setMarkerStrength(marker, strength, opacityScale);
   const scale = Math.max(MARKER_MIN_SCALE, endpoint.radius * scaleMultiplier);
   marker.group.position.copy(endpoint.position);
   marker.atmosphere.scale.setScalar(scale * MARKER_ATMOSPHERE_SCALE);
@@ -114,7 +124,7 @@ export function setMarkerVisible(
   marker.outerRing.scale.setScalar(scale * MARKER_OUTER_RING_SCALE);
 }
 
-export function createHoverNodeMarker(color: string): HoverNodeMarker {
+export function createHoverNodeMarker(color: string, blending: GalaxyGraphBlendMode = 'additive'): HoverNodeMarker {
   const group = new THREE.Group();
   group.visible = false;
 
@@ -122,7 +132,7 @@ export function createHoverNodeMarker(color: string): HoverNodeMarker {
     color,
     transparent: true,
     opacity: HOVER_BALL_OPACITY,
-    blending: THREE.AdditiveBlending,
+    blending: themeBlending(blending),
     depthWrite: false,
     depthTest: false,
   });
@@ -131,6 +141,10 @@ export function createHoverNodeMarker(color: string): HoverNodeMarker {
   group.add(ball);
 
   return { ball, group };
+}
+
+export function setHoverNodeMarkerBlending(marker: HoverNodeMarker, blending: GalaxyGraphBlendMode) {
+  setMaterialBlending(marker.ball.material as THREE.MeshBasicMaterial, blending);
 }
 
 export function setHoverNodeMarkerVisible(marker: HoverNodeMarker, endpoint: SceneEdgeEndpoint | null, color: string) {

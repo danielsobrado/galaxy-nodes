@@ -193,6 +193,56 @@ describe('GalaxyGraphVisualizer', () => {
     expect(onDatasetSizeChange).toHaveBeenCalledWith(10);
   });
 
+  it('hides the theme selector by default', () => {
+    render(<GalaxyGraphVisualizer dataset={dataset} />);
+
+    expect(screen.queryByLabelText('Theme')).toBeNull();
+    expect(latestSceneProps?.theme).toBe('galaxy-dark');
+  });
+
+  it('updates the scene theme from the uncontrolled theme selector', () => {
+    const { container } = render(<GalaxyGraphVisualizer dataset={dataset} options={{ showThemeControl: true }} />);
+
+    const select = screen.getByLabelText('Theme') as HTMLSelectElement;
+    expect(select.value).toBe('galaxy-dark');
+    expect(latestSceneProps?.theme).toBe('galaxy-dark');
+
+    fireEvent.change(select, { target: { value: 'network-light' } });
+
+    expect(select.value).toBe('network-light');
+    expect(latestSceneProps?.theme).toBe('network-light');
+    expect((container.firstElementChild as HTMLElement).style.getPropertyValue('--gn-bg')).toBe('#ffffff');
+  });
+
+  it('calls onThemeChange without mutating controlled theme state', () => {
+    const onThemeChange = vi.fn();
+    const { rerender } = render(
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        theme="galaxy-dark"
+        onThemeChange={onThemeChange}
+        options={{ showThemeControl: true }}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Theme'), { target: { value: 'network-light' } });
+
+    expect(onThemeChange).toHaveBeenCalledWith('network-light');
+    expect(latestSceneProps?.theme).toBe('galaxy-dark');
+
+    rerender(
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        theme="network-light"
+        onThemeChange={onThemeChange}
+        options={{ showThemeControl: true }}
+      />,
+    );
+
+    expect((screen.getByLabelText('Theme') as HTMLSelectElement).value).toBe('network-light');
+    expect(latestSceneProps?.theme).toBe('network-light');
+  });
+
   it('shows and hides legend and key legend overlays from options', () => {
     const { rerender } = render(
       <GalaxyGraphVisualizer

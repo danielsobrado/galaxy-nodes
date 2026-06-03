@@ -2,12 +2,27 @@ import * as THREE from 'three';
 import { getEdgeId } from '../../domain/data';
 import type { GraphEdge, GraphNode, ResolvedAccessors, Vec3 } from '../../domain/types';
 import { createEdgeLineGeometry, createTubeGeometry, getEdgeSpec } from '../edges';
-import type { EdgeRenderMode, GalaxyGraphTheme } from '../rendererConfig';
-import { HOVER_EDGE_OVERLAY_OPACITY, HOVER_EDGE_RADIUS_FACTOR } from '../sceneConstants';
+import type { EdgeRenderMode, ResolvedGalaxyGraphTheme } from '../rendererConfig';
+import {
+  EDGE_CONNECTED_OPACITY_BOOST,
+  EDGE_CONNECTED_OPACITY_CAP,
+  EDGE_HOVERED_OPACITY_BOOST,
+  EDGE_HOVERED_OPACITY_CAP,
+  EDGE_RENDER_ORDER_BASE,
+  EDGE_RENDER_ORDER_CONNECTED,
+  EDGE_RENDER_ORDER_HOVERED,
+  EDGE_RENDER_ORDER_SELECTED,
+  EDGE_SELECTED_OPACITY_BOOST,
+  EDGE_SELECTED_OPACITY_CAP,
+  EDGE_UNRELATED_DIM,
+  HOVER_EDGE_OVERLAY_RENDER_ORDER,
+  HOVER_EDGE_RADIUS_FACTOR,
+} from '../sceneConstants';
 import { edgeMatchesActiveGroup } from '../sceneData';
 import type { EdgeEndpoints, EdgeVisualState, SceneEdgeEndpoint } from '../sceneTypes';
 import { resolveEndpoint } from './endpoints';
 import type { SelectionState } from './sceneContext';
+import { setMaterialBlending, themeBlending } from './themeRuntime';
 
 export interface EdgeLayerDeps<NMeta = unknown, EMeta = unknown> {
   world: THREE.Object3D;
@@ -22,7 +37,7 @@ export interface EdgeLayerDeps<NMeta = unknown, EMeta = unknown> {
   accessors: () => ResolvedAccessors<NMeta, EMeta>;
   activeGroup: () => string | null;
   galaxyMode: () => boolean;
-  theme: () => GalaxyGraphTheme | undefined;
+  theme: () => ResolvedGalaxyGraphTheme;
   planetRadius: (node: GraphNode<NMeta>) => number;
   /** Live selection record, read by reference (mutated in place by the orchestrator). */
   selection: SelectionState;
@@ -34,6 +49,7 @@ export interface EdgeLayer<EMeta = unknown> {
   update(): void;
   updateVisibility(): void;
   applyAppearance(): void;
+  setTheme(): void;
 }
 
 export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLayerDeps<NMeta, EMeta>): EdgeLayer<EMeta> {
@@ -58,15 +74,15 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
 
   const hoverEdgeEmptyGeometry = new THREE.BufferGeometry();
   const hoverEdgeMaterial = new THREE.MeshBasicMaterial({
-    color: theme()?.panelAccentColor ?? '#46f4bc',
+    color: theme().scene.edgeHoverColor,
     transparent: true,
-    opacity: HOVER_EDGE_OVERLAY_OPACITY,
-    blending: THREE.AdditiveBlending,
+    opacity: theme().scene.hoverEdgeOpacity,
+    blending: themeBlending(theme().scene.edgeBlending),
     depthWrite: false,
     depthTest: false,
   });
   const hoverEdgeOverlay = new THREE.Mesh(hoverEdgeEmptyGeometry, hoverEdgeMaterial);
-  hoverEdgeOverlay.renderOrder = 19;
+  hoverEdgeOverlay.renderOrder = HOVER_EDGE_OVERLAY_RENDER_ORDER;
   hoverEdgeOverlay.visible = false;
   world.add(hoverEdgeOverlay);
   let hoverEdgeOverlayGeometry: THREE.BufferGeometry | null = null;
@@ -74,6 +90,16 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
 
   function currentAccessors() {
     return accessors() as ResolvedAccessors<unknown, EMeta>;
+  }
+
+  function themedEdgeColor(edge: GraphEdge<EMeta>, fallback: string) {
+    const currentTheme = theme();
+    if (currentTheme.dataColorStrategy === 'data') return fallback;
+    return edge.kind === 'filament' ? currentTheme.scene.filamentColor : currentTheme.scene.edgeColor;
+  }
+
+  function themedEdgeOpacity(opacity: number) {
+    return Math.max(0, Math.min(1, opacity * theme().scene.edgeOpacityMultiplier));
   }
 
   function resolveNodeEndpoint(id: string) {
@@ -91,7 +117,7 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
       color: spec.color,
       transparent: true,
       opacity: spec.opacity,
-      blending: THREE.AdditiveBlending,
+      blending: themeBlending(theme().scene.edgeBlending),
       depthWrite: false,
     };
     return edgeRenderMode === 'line'
@@ -119,25 +145,28 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
     state.endpoints = { source, target };
     edgeEndpoints.set(state.id, state.endpoints);
     const spec = getEdgeSpec(state.edge, state.endpoints, currentAccessors(), galaxyMode());
-    const appearanceKey = `${spec.color}:${spec.opacity.toFixed(4)}`;
+    const baseColor = themedEdgeColor(state.edge, spec.color);
+    const baseOpacity = themedEdgeOpacity(spec.opacity);
+    const appearanceKey = `${baseColor}:${baseOpacity.toFixed(4)}:${theme().scene.edgeBlending}`;
     if (state.geometryKey !== spec.geometryKey || state.appearanceKey !== appearanceKey) {
       const visual = state.visual as THREE.Mesh | THREE.LineSegments;
       visual.geometry.dispose();
       visual.geometry = edgeVisualGeometry(spec);
       const material = visual.material as THREE.MeshBasicMaterial | THREE.LineBasicMaterial;
-      material.color.set(spec.color);
-      material.opacity = spec.opacity;
-      visual.userData.baseOpacity = spec.opacity;
+      material.color.set(baseColor);
+      material.opacity = baseOpacity;
+      setMaterialBlending(material, theme().scene.edgeBlending);
+      visual.userData.baseOpacity = baseOpacity;
       if (state.hit) {
         state.hit.geometry.dispose();
         state.hit.geometry = createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius);
       }
       state.geometryKey = spec.geometryKey;
       state.appearanceKey = appearanceKey;
-      state.baseOpacity = spec.opacity;
+      state.baseOpacity = baseOpacity;
     }
 
-    if (state.hit) (state.hit.material as THREE.MeshBasicMaterial).color.set(spec.color);
+    if (state.hit) (state.hit.material as THREE.MeshBasicMaterial).color.set(baseColor);
   }
 
   function edgeVisibleInSelectionContext(edgeId: string) {
@@ -165,7 +194,9 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
   function updateHoverEdgeOverlay() {
     const { hoveredEdgeId } = selection;
     const state = hoveredEdgeId ? (edgeStates.get(hoveredEdgeId) ?? null) : null;
-    hoverEdgeMaterial.color.set(theme()?.panelAccentColor ?? '#46f4bc');
+    hoverEdgeMaterial.color.set(theme().scene.edgeHoverColor);
+    hoverEdgeMaterial.opacity = theme().scene.hoverEdgeOpacity;
+    setMaterialBlending(hoverEdgeMaterial, theme().scene.edgeBlending);
 
     if (!state || !state.visual.visible || edgeRenderMode !== 'tube') {
       hoverEdgeOverlay.visible = false;
@@ -201,19 +232,32 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
       );
       const hovered = hoveredEdgeId === state.id;
       material.opacity = selected
-        ? Math.min(0.86, baseOpacity + 0.56)
+        ? Math.min(EDGE_SELECTED_OPACITY_CAP, baseOpacity + EDGE_SELECTED_OPACITY_BOOST)
         : hovered
-          ? Math.min(0.54, baseOpacity + 0.26)
+          ? Math.min(EDGE_HOVERED_OPACITY_CAP, baseOpacity + EDGE_HOVERED_OPACITY_BOOST)
           : connectedToSelection
-            ? Math.min(0.82, baseOpacity + 0.52)
+            ? Math.min(EDGE_CONNECTED_OPACITY_CAP, baseOpacity + EDGE_CONNECTED_OPACITY_BOOST)
             : hasSelection
-              ? baseOpacity * 0.28
+              ? baseOpacity * EDGE_UNRELATED_DIM
               : baseOpacity;
       material.depthTest = !(selected || connectedToSelection || hovered);
       material.color.set(
-        selected ? '#ffffff' : hovered ? (theme()?.panelAccentColor ?? '#46f4bc') : accessors().edgeColor(state.edge),
+        selected
+          ? theme().scene.edgeSelectedColor
+          : hovered
+            ? theme().scene.edgeHoverColor
+            : connectedToSelection && theme().dataColorStrategy === 'theme'
+              ? theme().scene.edgeConnectedColor
+              : themedEdgeColor(state.edge, accessors().edgeColor(state.edge)),
       );
-      visual.renderOrder = selected ? 18 : hovered ? 17 : connectedToSelection ? 16 : 0;
+      setMaterialBlending(material, theme().scene.edgeBlending);
+      visual.renderOrder = selected
+        ? EDGE_RENDER_ORDER_SELECTED
+        : hovered
+          ? EDGE_RENDER_ORDER_HOVERED
+          : connectedToSelection
+            ? EDGE_RENDER_ORDER_CONNECTED
+            : EDGE_RENDER_ORDER_BASE;
       visual.scale.setScalar(1);
     });
     updateHoverEdgeOverlay();
@@ -233,10 +277,15 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
     const edgeId = getEdgeId(edge, index);
     const endpoints = { source, target };
     const spec = getEdgeSpec(edge, endpoints, currentAccessors(), galaxyMode());
+    const baseColor = themedEdgeColor(edge, spec.color);
+    const baseOpacity = themedEdgeOpacity(spec.opacity);
     const visual = edgeVisualObject(spec);
+    const visualMaterial = visual.material as THREE.MeshBasicMaterial | THREE.LineBasicMaterial;
+    visualMaterial.color.set(baseColor);
+    visualMaterial.opacity = baseOpacity;
     visual.userData.edgeId = edgeId;
     visual.userData.type = 'edge-visual';
-    visual.userData.baseOpacity = spec.opacity;
+    visual.userData.baseOpacity = baseOpacity;
     visual.frustumCulled = false;
     world.add(visual);
 
@@ -250,7 +299,7 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
       hit = new THREE.Mesh(
         createTubeGeometry(spec.curve, spec.hitSegments, spec.hitRadius),
         new THREE.MeshBasicMaterial({
-          color: spec.color,
+          color: baseColor,
           transparent: true,
           opacity: 0,
           depthWrite: false,
@@ -269,8 +318,8 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
     }
 
     const state = {
-      appearanceKey: `${spec.color}:${spec.opacity.toFixed(4)}`,
-      baseOpacity: spec.opacity,
+      appearanceKey: `${baseColor}:${baseOpacity.toFixed(4)}:${theme().scene.edgeBlending}`,
+      baseOpacity,
       edge,
       endpoints,
       geometryKey: spec.geometryKey,
@@ -290,5 +339,6 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
     update,
     updateVisibility,
     applyAppearance,
+    setTheme: update,
   };
 }
