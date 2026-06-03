@@ -8,13 +8,12 @@ on:
 
 jobs:
   compatibility:
-    name: Node ${{ matrix.node }} / React ${{ matrix.react }} / three ${{ matrix.three }}
+    name: Node 26 / React ${{ matrix.react }} / three ${{ matrix.three }}
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        node: [20, 22]
         react: ['18.2.0', '19.2.6']
         three: ['0.160.0', 'latest']
 
@@ -25,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -51,7 +50,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
@@ -72,7 +71,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies

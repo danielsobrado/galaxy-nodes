@@ -4,11 +4,11 @@ Galaxy Nodes uses Changesets for versioning, changelog generation, git tags, and
 
 ## Supported Runtime Range
 
-- Node.js: `>=20.19.0 <23`
+- Node.js: `>=26.3.0 <27`
 - React peer dependency: `>=18.2.0 <20`
 - three peer dependency: `>=0.160.0 <1`
 
-CI exercises Node 20 and 22 across React 18/19 and the minimum/latest supported three versions.
+CI exercises Node 26 across React 18/19 and the minimum/latest supported three versions.
 
 ## Semver Contract
 

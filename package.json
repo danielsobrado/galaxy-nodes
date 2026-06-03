@@ -2,7 +2,7 @@
   "name": "galaxy-nodes",
   "description": "Reusable React + Three.js library for interactive galaxy-like graph visualizations.",
   "version": "0.1.0",
-  "packageManager": "npm@11.1.0",
+  "packageManager": "npm@11.16.0",
   "private": false,
   "license": "MIT",
   "author": "Daniel Sobrado",
@@ -74,8 +74,8 @@
     "postcss": "8.5.15"
   },
   "engines": {
-    "node": ">=20.19.0 <23",
-    "npm": ">=10"
+    "node": ">=26.3.0 <27",
+    "npm": ">=11.16.0"
   },
   "scripts": {
     "api:check": "npm run build:types && node scripts/fix-declaration-imports.mjs && node scripts/api-extractor.mjs",
@@ -145,29 +145,29 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "25.9.1",
-    "@types/react": "19.2.15",
+    "@types/react": "^19.2.16",
     "@types/react-dom": "19.2.3",
     "@types/three": "0.184.1",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitest/browser": "3.2.4",
-    "@vitest/coverage-v8": "3.2.4",
+    "@vitest/browser": "^4.1.8",
+    "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^9.39.4",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.6.0",
     "jsdom": "^29.1.1",
-    "next": "^16.2.6",
+    "next": "^16.2.7",
     "playwright": "1.60.0",
     "prettier": "^3.8.3",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "size-limit": "^12.1.0",
     "three": "0.184.0",
     "typedoc": "^0.28.19",
     "typescript": "6.0.3",
-    "typescript-eslint": "^8.60.0",
-    "vite": "8.0.14",
-    "vitest": "3.2.4"
+    "typescript-eslint": "^8.60.1",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
   },
   "directories": {
     "doc": "docs",
