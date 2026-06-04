@@ -16,6 +16,8 @@ Try the hosted playground at [danielsobrado.github.io/galaxy-nodes/demo/](https:
 
 The playground ships with a synthetic corporate graph by default. Use the **CodeGraph** button (file-with-code icon) in the left toolbar to explore this repository’s indexed code graph—symbols, files, and relationships such as calls, contains, references, and imports—without running anything locally.
 
+The local dev app (`npm run dev`) also exposes a **Visibility model** toggle in the control bar (eye icon). It is **off by default**; turn it on to exercise the opt-in visibility projection described in [Visibility view model](#visibility-view-model).
+
 ![Short Galaxy Nodes demo](docs/images/GalaxyDemo2.gif)
 
 ## Install
@@ -208,6 +210,162 @@ The repository includes `examples/next`, and CI runs `npm run build:next` plus `
 ## Accessibility And Labels
 
 The WebGL canvas is paired with a screen-reader-only graph summary. By default the summary lists the first 50 nodes and first 50 edges in the current filtered view, plus counts for the full view. Use `options.accessibleSummaryLimit` to tune that cap, or provide `renderAccessibleSummary` when your product needs a table, grouped list, or domain-specific fields. When focus is on the graph scene, Page Down/Page Up traverses nodes, Home/End jumps to the first or last visible node, Enter refocuses the current node, and Escape clears selection. Selection changes are announced through a polite live region.
+
+## Visibility view model
+
+Galaxy Nodes can cap what appears on screen using a **pure projection** over the loaded graph (`projectGraphVisibility` in the engine). The projection chooses visible nodes, edges, cluster labels, and planet markers under per-mode budgets (`default`, `expanded`, `deep`, `path`). It is **opt-in**: omit `visibilityModel` or leave `enabled: false` to keep the legacy focus-based limits.
+
+Enable it on the React visualizer or imperative renderer:
+
+```tsx
+<GalaxyGraphVisualizer
+  dataset={dataset}
+  options={{
+    focusModel: { enabled: true, variant: 'fullFocus' },
+    visibilityModel: { enabled: true },
+  }}
+  onSelectCluster={(cluster) => console.log('cluster', cluster?.id)}
+  onGraphUxEvent={(event) => {
+    if (event.type === 'visibility_projected' || event.type === 'view_mode_changed') {
+      console.log(event);
+    }
+  }}
+/>
+```
+
+```ts
+import { createGalaxyRenderer } from 'galaxy-nodes/core';
+
+const renderer = createGalaxyRenderer(host, {
+  dataset,
+  activeGroup: null,
+  showClusters: true,
+  galaxyMode: true,
+  visibilityModel: { enabled: true },
+  focusModel: { enabled: true, variant: 'fullFocus' },
+  cameraCommand: null,
+  selectedNodeId: null,
+  selectedEdgeId: null,
+});
+
+// Toggle at runtime: call update() with the full GalaxyRendererOptions object and visibilityModel changed.
+```
+
+`focusModel` with `variant: 'fullFocus'` is recommended when testing visibility transitions (expand, path, deep). The projection still runs when focus is off, but expand/path/deep state changes are driven by the focus state machine.
+
+### Custom projection hooks
+
+Optional fields on `GalaxyVisibilityModelOptions` tune ranking and overflow grouping without forking the engine:
+
+```tsx
+options={{
+  visibilityModel: {
+    enabled: true,
+    budgets: {
+      default: { maxVisibleNodes: 180 },
+      expanded: { maxPrimaryNeighbors: 30 },
+    },
+    nodeImportance: ({ node, degree }) => (node.major ? 2 : 0) + (degree?.total ?? 0),
+    edgeImportance: ({ edge, path }) => (path ? 10 : 0) + (edge.weight ?? 0),
+    overflowGroup: ({ node }) => node.group ?? 'other',
+  },
+}}
+```
+
+Exported types include `GalaxyViewMode`, `GalaxyVisibilityBudget`, `GalaxyVisibilityOverflow`, and related options from `galaxy-nodes` / `galaxy-nodes/core`.
+
+### Local demo toggle
+
+`examples/basic` (`npm run dev`) wires **Visibility model** next to **Click focus**. Default is **OFF** so behavior matches pre-0.1 integrations. Turn it **ON**, keep **Click focus** on, then:
+
+1. Increase dataset size (initiatives mode) and compare idle density with the toggle off vs on.
+2. Click a node — after the camera settles, the scene auto-issues `EXPAND_NEIGHBORS` depth `1` when visibility is enabled.
+3. Use **Expand neighbors** in the node detail panel.
+4. Click a cluster label — `onSelectCluster` fires and the camera moves to that cluster.
+5. Select an edge, open detail, click **Trace link** — see [behavior with visibility off vs on](#behavior-with-visibility-off-vs-on).
+
+The hosted Pages demo is built from the same example; redeploy to surface the toggle on the live site.
+
+### Behavior with visibility off vs on
+
+| Action | Visibility off | Visibility on |
+| --- | --- | --- |
+| **Trace link** on edge | `focus-edge` camera command | `show-path` with `path` + `pathType` |
+| Node/edge/planet/cluster layers | Legacy focus neighbor limits | `projectGraphVisibility` budgets per view mode |
+| After node focus camera completes | No automatic expand | `EXPAND_NEIGHBORS` depth `1` |
+| `expandNeighbors(2)` (core) / depth-2 expand | Normal neighbor expand | `EXPAND_DEEP` |
+
+View modes map from focus state: `expanded` during focus/orbit, `path` in path focus, `deep` in deep focus, otherwise `default`.
+
+### Built-in chrome vs programmatic commands
+
+The React visualizer HUD exposes **Expand neighbors** and **Trace link** only. It does **not** ship buttons for `expand-deep`, `collapse-all`, `collapse-neighbors`, `hide-path`, or `inspect-path`.
+
+**Observe** commands issued by the visualizer (search focus, trace link, expand, keyboard navigation, etc.):
+
+```tsx
+<GalaxyGraphVisualizer
+  dataset={dataset}
+  onNavigate={(command) => console.log(command)}
+/>
+```
+
+`onNavigate` receives the full `CameraCommand` (including a monotonic `nonce`). Use it for logging, analytics, or syncing external UI.
+
+**Drive** commands from your own UI in two ways:
+
+1. **Imperative renderer** (`galaxy-nodes/core`) — call methods on the handle:
+
+```ts
+renderer.expandNeighbors(); // depth 1
+renderer.expandNeighbors(2); // depth 2 → EXPAND_DEEP when visibility is enabled
+renderer.expandDeep();
+renderer.collapseNeighbors();
+renderer.collapseAll();
+renderer.showPath('dependency', {
+  nodeIds: ['alpha', 'beta'],
+  edgeIds: ['depends:alpha->beta:0'],
+});
+renderer.hidePath();
+renderer.inspectPath('alpha');
+```
+
+2. **`cameraCommand` on `renderer.update`** — same types as `CameraCommand`; bump `nonce` each time so the runtime applies a new command:
+
+```ts
+let nonce = 0;
+renderer.update({
+  ...options,
+  cameraCommand: { type: 'expand-deep', nonce: ++nonce },
+});
+renderer.update({
+  ...options,
+  cameraCommand: {
+    type: 'show-path',
+    pathType: 'dependency',
+    path: { nodeIds: ['a', 'b'], edgeIds: ['e1'] },
+    nonce: ++nonce,
+  },
+});
+renderer.update({
+  ...options,
+  cameraCommand: { type: 'collapse-all', nonce: ++nonce },
+});
+```
+
+`PathFocusType` is `'dependency' | 'impact' | 'ownership' | string`. `FocusPathResult` is `{ nodeIds: string[]; edgeIds: string[]; label?: string }`.
+
+When embedding `GalaxyScene` directly (no `GalaxyGraphVisualizer` HUD), own `cameraCommand` in React state the same way the visualizer does internally and pass it into scene props.
+
+### UX telemetry
+
+With visibility enabled, the scene emits:
+
+- `view_mode_changed` — `from` / `to` `GalaxyViewMode` when the focus state changes mode.
+- `visibility_projected` — visible/hidden counts and `overflow` summaries after each projection refresh.
+- `cluster_click` — includes `clusterId` and current `viewMode`.
+
+Wire `onGraphUxEvent` on `GalaxyGraphVisualizer` or `onGraphUxEvent` in core callbacks.
 
 Built-in chrome labels are overridable with the `labels` prop so applications can localize controls and status text:
 

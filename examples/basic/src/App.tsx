@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Activity, Database, FileCode, Import, MousePointerClick } from 'lucide-react';
+import { Activity, Database, Eye, FileCode, Import, MousePointerClick } from 'lucide-react';
 import {
   GalaxyGraphVisualizer,
   getEdgeId,
@@ -142,6 +142,7 @@ export default function App() {
   const [theme, setTheme] = useState<GalaxyGraphThemeInput>('galaxy-dark');
   const [sharpMoney, setSharpMoney] = useState(true);
   const [focusModelEnabled, setFocusModelEnabled] = useState(true);
+  const [visibilityModelEnabled, setVisibilityModelEnabled] = useState(false);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const [codegraphStatus, setCodegraphStatus] = useState<'idle' | 'loading' | 'loaded' | 'missing' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -311,6 +312,7 @@ export default function App() {
         enabled: focusModelEnabled,
         variant: 'fullFocus' as const,
       },
+      visibilityModel: { enabled: visibilityModelEnabled },
       showDatasetSizeControls: demoMode === 'initiatives',
       showKeyLegend: true,
       showLegend: true,
@@ -326,6 +328,15 @@ export default function App() {
         >
           <MousePointerClick size={15} aria-hidden="true" />
           Click focus <span>{focusModelEnabled ? 'ON' : 'OFF'}</span>
+        </button>
+        <button
+          type="button"
+          className={visibilityModelEnabled ? 'toggle is-on' : 'toggle'}
+          aria-pressed={visibilityModelEnabled}
+          onClick={() => setVisibilityModelEnabled((value) => !value)}
+        >
+          <Eye size={15} aria-hidden="true" />
+          Visibility model <span>{visibilityModelEnabled ? 'ON' : 'OFF'}</span>
         </button>
         {demoMode === 'initiatives' ? (
           <button
