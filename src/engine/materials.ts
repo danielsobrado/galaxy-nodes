@@ -2,10 +2,21 @@ import * as THREE from 'three';
 import {
   DIM_COLOR_LERP,
   DIM_COLOR_MULTIPLIER,
+  EDGE_LIGHT_MAX_LIGHTNESS,
+  EDGE_LIGHT_MIN_LIGHTNESS,
+  EDGE_LIGHT_LIGHTNESS_SCALE,
+  EDGE_LIGHT_MAX_SATURATION,
+  NODE_LIGHT_DESATURATED_HUE,
+  NODE_LIGHT_DESATURATED_MIN_SATURATION,
+  NODE_LIGHT_LIGHTNESS_SCALE,
+  NODE_LIGHT_MAX_LIGHTNESS,
+  NODE_LIGHT_MAX_SATURATION,
+  NODE_LIGHT_MIN_LIGHTNESS,
   PLANET_COLOR_WHITEN,
   POINT_COLOR_BRIGHTEN,
   POINT_COLOR_LERP,
 } from './sceneConstants';
+import type { ResolvedGalaxyGraphTheme } from './rendererConfig';
 
 const tmpPointCloudColor = new THREE.Color();
 const pointCloudLerpColor = new THREE.Color(0xf4f7f2);
@@ -118,4 +129,67 @@ export function planetColor(color: string) {
 
 export function pointCloudColor(color: string) {
   return tmpPointCloudColor.set(color).lerp(pointCloudLerpColor, POINT_COLOR_LERP).multiplyScalar(POINT_COLOR_BRIGHTEN);
+}
+
+/**
+ * Resolve a data-driven node color for the active theme. Dark scenes keep the additive glow
+ * lift; light scenes remap near-white symbol colors into a darker, hue-preserving band.
+ */
+export function nodeSceneColor(
+  color: string,
+  theme: Pick<ResolvedGalaxyGraphTheme, 'mode' | 'dataColorStrategy'>,
+): THREE.Color {
+  if (theme.mode !== 'light' || theme.dataColorStrategy !== 'data') {
+    return pointCloudColor(color);
+  }
+
+  const result = new THREE.Color(color);
+  const hsl = { h: 0, s: 0, l: 0 };
+  result.getHSL(hsl);
+  const desaturated = hsl.s < 0.08;
+  result.setHSL(
+    desaturated ? NODE_LIGHT_DESATURATED_HUE : hsl.h,
+    Math.min(desaturated ? NODE_LIGHT_DESATURATED_MIN_SATURATION : hsl.s, NODE_LIGHT_MAX_SATURATION),
+    THREE.MathUtils.clamp(hsl.l * NODE_LIGHT_LIGHTNESS_SCALE, NODE_LIGHT_MIN_LIGHTNESS, NODE_LIGHT_MAX_LIGHTNESS),
+  );
+  return result;
+}
+
+export function nodeSceneColorHex(
+  color: string,
+  theme: Pick<ResolvedGalaxyGraphTheme, 'mode' | 'dataColorStrategy'>,
+): string {
+  return `#${nodeSceneColor(color, theme).getHexString()}`;
+}
+
+/**
+ * Tone data edge colors for legibility on white while preserving relationship hue.
+ * On a white background the bright, additive-tuned edge palette washes out, so in light
+ * mode every edge color is pushed to a dark, hue-preserving shade. Returns a fresh color
+ * each call so callers may retain the result.
+ */
+export function edgeSceneColor(
+  color: string,
+  theme: Pick<ResolvedGalaxyGraphTheme, 'mode' | 'dataColorStrategy'>,
+): THREE.Color {
+  const result = new THREE.Color(color);
+  if (theme.mode !== 'light' || theme.dataColorStrategy !== 'data') {
+    return result;
+  }
+
+  const hsl = { h: 0, s: 0, l: 0 };
+  result.getHSL(hsl);
+  result.setHSL(
+    hsl.h,
+    Math.min(hsl.s, EDGE_LIGHT_MAX_SATURATION),
+    THREE.MathUtils.clamp(hsl.l * EDGE_LIGHT_LIGHTNESS_SCALE, EDGE_LIGHT_MIN_LIGHTNESS, EDGE_LIGHT_MAX_LIGHTNESS),
+  );
+  return result;
+}
+
+export function edgeSceneColorHex(
+  color: string,
+  theme: Pick<ResolvedGalaxyGraphTheme, 'mode' | 'dataColorStrategy'>,
+): string {
+  return `#${edgeSceneColor(color, theme).getHexString()}`;
 }

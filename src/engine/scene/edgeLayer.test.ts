@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createEdgeLayer } from './edgeLayer';
 import { resolveAccessors } from '../../domain/data';
-import { resolveGalaxyGraphTheme } from '../rendererConfig';
+import { resolveGalaxyGraphTheme, type GalaxyGraphThemeInput } from '../rendererConfig';
 import type { GraphEdge, GraphNode, Vec3 } from '../../domain/types';
 import { EDGE_UNRELATED_DIM } from '../sceneConstants';
 import type { EdgeEndpoints, EdgeVisualState } from '../sceneTypes';
@@ -31,7 +31,7 @@ function emptySelection(): SelectionState {
   };
 }
 
-function build(selection: SelectionState) {
+function build(selection: SelectionState, theme: GalaxyGraphThemeInput = 'galaxy-dark') {
   const edgeStates = new Map<string, EdgeVisualState>();
   const layer = createEdgeLayer({
     world: new THREE.Group(),
@@ -46,7 +46,7 @@ function build(selection: SelectionState) {
     accessors: () => resolveAccessors(undefined),
     activeGroup: () => null,
     galaxyMode: () => true,
-    theme: () => resolveGalaxyGraphTheme(),
+    theme: () => resolveGalaxyGraphTheme(theme),
     planetRadius: () => 1,
     selection,
     indexSelectableEdge: () => {},
@@ -54,7 +54,11 @@ function build(selection: SelectionState) {
   edges.forEach(layer.addEdge);
   const opacity = (id: string) => (edgeStates.get(id)!.visual.material as Mat).opacity;
   const baseOpacity = (id: string) => edgeStates.get(id)!.baseOpacity;
-  return { layer, opacity, baseOpacity };
+  const radius = (id: string) => {
+    const geometry = edgeStates.get(id)!.visual.geometry as THREE.TubeGeometry;
+    return geometry.parameters.radius;
+  };
+  return { layer, opacity, baseOpacity, radius };
 }
 
 describe('edgeLayer.applyAppearance', () => {
@@ -72,5 +76,12 @@ describe('edgeLayer.applyAppearance', () => {
     expect(opacity('e0')).toBeGreaterThan(baseOpacity('e0'));
     expect(opacity('e0')).toBeGreaterThan(opacity('e1'));
     expect(opacity('e1')).toBeCloseTo(baseOpacity('e1') * EDGE_UNRELATED_DIM, 6);
+  });
+
+  it('keeps edge tube radius unchanged in the light theme', () => {
+    const dark = build(emptySelection(), 'galaxy-dark');
+    const light = build(emptySelection(), 'network-light');
+
+    expect(light.radius('e0')).toBeCloseTo(dark.radius('e0'), 6);
   });
 });

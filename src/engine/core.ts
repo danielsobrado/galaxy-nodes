@@ -4,6 +4,7 @@ import { createScene } from './scene/createScene';
 
 export { getGalaxyRendererContextBudget } from './environment';
 export type { GalaxyMotionPreference, GalaxyRendererContextBudget } from './environment';
+export { edgeSceneColorHex, nodeSceneColorHex } from './materials';
 export {
   GALAXY_GRAPH_THEME_CHOICES,
   GALAXY_GRAPH_THEMES,

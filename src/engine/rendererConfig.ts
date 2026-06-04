@@ -185,7 +185,7 @@ const NETWORK_LIGHT_THEME: ResolvedGalaxyGraphTheme = {
   id: 'network-light',
   label: 'Network light',
   mode: 'light',
-  dataColorStrategy: 'theme',
+  dataColorStrategy: 'data',
   background: '#ffffff',
   panelAccentColor: '#2f80a8',
   selectedColor: '#ffffff',
@@ -222,9 +222,9 @@ const NETWORK_LIGHT_THEME: ResolvedGalaxyGraphTheme = {
     pointStrokeOpacity: 0.92,
     pointCoreBoost: 0,
     pointBlending: 'normal',
-    edgeColor: '#8dbed6',
-    filamentColor: '#c8dce8',
-    edgeOpacityMultiplier: 0.42,
+    edgeColor: '#3d6d8a',
+    filamentColor: '#6a94ad',
+    edgeOpacityMultiplier: 1,
     edgeSelectedColor: '#111827',
     edgeHoverColor: '#2f80a8',
     edgeConnectedColor: '#4c95b8',
@@ -341,6 +341,9 @@ export function galaxyGraphThemeCssVariables(theme: ResolvedGalaxyGraphTheme): R
       : '0 22px 70px rgba(0, 0, 0, 0.36), 0 0 28px rgba(70, 244, 188, 0.16)',
     '--gn-panel-accent': theme.panelAccentColor,
     '--gn-selected': theme.selectedColor,
+    '--gn-legend-rel-color': light ? 'rgba(22, 35, 49, 0.86)' : 'rgba(245, 249, 247, 0.74)',
+    '--gn-legend-sep-color': light ? 'rgba(20, 44, 62, 0.24)' : 'rgba(245, 249, 247, 0.18)',
+    '--gn-legend-swatch-shadow': light ? 'none' : '0 0 6px var(--rel)',
   };
 }
 

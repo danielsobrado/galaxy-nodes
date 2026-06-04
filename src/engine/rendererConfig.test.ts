@@ -26,7 +26,7 @@ describe('resolveGalaxyGraphTheme', () => {
     expect(theme.label).toBe('Network light');
     expect(theme.mode).toBe('light');
     expect(theme.background).toBe('#ffffff');
-    expect(theme.dataColorStrategy).toBe('theme');
+    expect(theme.dataColorStrategy).toBe('data');
     expect(theme.chrome.sceneVignette).toBe('none');
     expect(theme.scene.pointStyle).toBe('disc');
     expect(theme.scene.pointBlending).toBe('normal');

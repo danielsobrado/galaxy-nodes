@@ -13,7 +13,7 @@ import {
   POINT_UNRELATED_DIM,
   SELECTION_POINT_OPACITY,
 } from '../sceneConstants';
-import { pointCloudColor } from '../materials';
+import { nodeSceneColor } from '../materials';
 import { createPointCloudMaterial } from '../pointCloudMaterial';
 import { PointCloudBuffer } from '../pointCloudBuffer';
 import { resolveDensityScale, type ResolvedGalaxyGraphTheme } from '../rendererConfig';
@@ -165,7 +165,7 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
       const pointColor =
         currentTheme.dataColorStrategy === 'theme'
           ? tmpPointBaseColor.set(currentTheme.scene.pointColor)
-          : pointCloudColor(resolved.nodeColor(node));
+          : nodeSceneColor(resolved.nodeColor(node), currentTheme);
       pointBuffer.baseColors[index * 3] = pointColor.r;
       pointBuffer.baseColors[index * 3 + 1] = pointColor.g;
       pointBuffer.baseColors[index * 3 + 2] = pointColor.b;

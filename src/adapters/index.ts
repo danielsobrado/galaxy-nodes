@@ -38,7 +38,13 @@ export type {
   PlanetSizingMode,
   ResolvedGalaxyGraphTheme,
 } from '../ui/GalaxyScene';
-export { GALAXY_GRAPH_THEME_CHOICES, GALAXY_GRAPH_THEMES, resolveGalaxyGraphTheme } from '../engine/core';
+export {
+  edgeSceneColorHex,
+  nodeSceneColorHex,
+  GALAXY_GRAPH_THEME_CHOICES,
+  GALAXY_GRAPH_THEMES,
+  resolveGalaxyGraphTheme,
+} from '../engine/core';
 export { getGalaxyRendererContextBudget } from '../engine/core';
 export type { GalaxyRendererContextBudget } from '../engine/core';
 export {

@@ -244,6 +244,24 @@ export const EDGE_FILAMENT_OPACITY_GALAXY = 0.078;
 export const EDGE_FILAMENT_OPACITY_DEFAULT = 0.052;
 export const EDGE_OPACITY_BASE = 0.075;
 export const EDGE_OPACITY_PER_WEIGHT = 0.1;
+// Light-background edge rendering. Base edge opacities target additive blending on black;
+// on white they need a much higher floor, and the colors must be pushed dark to read at all.
+export const EDGE_LIGHT_OPACITY_GAIN = 5;
+export const EDGE_LIGHT_OPACITY_FLOOR = 0.52;
+// HSL remap applied to every edge color in light mode: keep hue, cap saturation, and scale
+// lightness down into a dark band so cyan/gold/grey relationships stay distinct yet legible.
+export const EDGE_LIGHT_LIGHTNESS_SCALE = 0.45;
+export const EDGE_LIGHT_MIN_LIGHTNESS = 0.24;
+export const EDGE_LIGHT_MAX_LIGHTNESS = 0.36;
+export const EDGE_LIGHT_MAX_SATURATION = 0.7;
+// Light-background node rendering. pointCloudColor lifts colors for additive dark scenes;
+// on white, near-white symbol colors (file, variable) must be remapped to a darker band.
+export const NODE_LIGHT_LIGHTNESS_SCALE = 0.5;
+export const NODE_LIGHT_MIN_LIGHTNESS = 0.28;
+export const NODE_LIGHT_MAX_LIGHTNESS = 0.45;
+export const NODE_LIGHT_MAX_SATURATION = 0.75;
+export const NODE_LIGHT_DESATURATED_HUE = 0.58;
+export const NODE_LIGHT_DESATURATED_MIN_SATURATION = 0.22;
 // Selection-state opacity tiers for edges: cap = max final opacity, boost = base + boost.
 export const EDGE_SELECTED_OPACITY_CAP = 0.86;
 export const EDGE_SELECTED_OPACITY_BOOST = 0.56;

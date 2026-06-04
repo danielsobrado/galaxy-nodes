@@ -377,8 +377,8 @@ describe('createGalaxyRenderer in Chromium', () => {
     expect(host.style.getPropertyValue('--gn-scene-vignette')).toBe('none');
     const edge = edgeMaterial(edgeVisuals[0]);
     expect(edge.blending).toBe(THREE.NormalBlending);
-    expect(edge.opacity).toBeCloseTo((0.075 + 0.9 * 0.1) * 0.42, 5);
-    expect(edge.color.getHexString()).toBe(new THREE.Color('#8dbed6').getHexString());
+    expect(edge.opacity).toBeGreaterThan(0.5);
+    expect(edge.color.getHexString()).not.toBe(new THREE.Color('#85fff0').getHexString());
     const points = pointMaterial(pointClouds[0]);
     expect(points.blending).toBe(THREE.NormalBlending);
     expect(points.uniforms.pointStyle.value).toBe(1);

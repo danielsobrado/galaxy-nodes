@@ -2,6 +2,7 @@ import { useState, type CSSProperties, type ReactNode } from 'react';
 import { FileCode, GitBranch } from 'lucide-react';
 import { formatCompactNumber, getEdgeId } from '../../../src/domain/data';
 import type { EdgeEndpoint, GraphEdge, GraphNode } from '../../../src/domain/types';
+import { edgeSceneColorHex, nodeSceneColorHex, type ResolvedGalaxyGraphTheme } from '../../../src/engine/core';
 import {
   CODEGRAPH_EDGE_LEGEND,
   CODEGRAPH_NODE_LEGEND,
@@ -217,19 +218,21 @@ export function renderCodeGraphEdgeDetail(
   );
 }
 
-export function codegraphLegend(style?: CSSProperties): ReactNode {
+export function codegraphLegend(style?: CSSProperties, theme?: ResolvedGalaxyGraphTheme): ReactNode {
+  const edgeSwatch = (color: string) => (theme ? edgeSceneColorHex(color, theme) : color);
+  const nodeSwatch = (color: string) => (theme ? nodeSceneColorHex(color, theme) : color);
   return (
     <>
       <span>Symbols</span>
       {CODEGRAPH_NODE_LEGEND.map(({ label, color }) => (
-        <b key={label} className="rel" style={{ '--rel': color, ...style } as CSSProperties}>
+        <b key={label} className="rel" style={{ '--rel': nodeSwatch(color), ...style } as CSSProperties}>
           {label}
         </b>
       ))}
       <span className="legend-sep" aria-hidden="true" />
       <span>Links</span>
       {CODEGRAPH_EDGE_LEGEND.map(({ label, color }) => (
-        <b key={label} className="rel" style={{ '--rel': color, ...style } as CSSProperties}>
+        <b key={label} className="rel" style={{ '--rel': edgeSwatch(color), ...style } as CSSProperties}>
           {label}
         </b>
       ))}

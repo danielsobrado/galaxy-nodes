@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { getEdgeId } from '../../domain/data';
 import type { GraphEdge, GraphNode, ResolvedAccessors, Vec3 } from '../../domain/types';
 import { createEdgeLineGeometry, createTubeGeometry, getEdgeSpec } from '../edges';
+import { edgeSceneColor } from '../materials';
 import type { EdgeRenderMode, ResolvedGalaxyGraphTheme } from '../rendererConfig';
 import {
   EDGE_CONNECTED_OPACITY_BOOST,
@@ -14,6 +15,8 @@ import {
   EDGE_RENDER_ORDER_SELECTED,
   EDGE_SELECTED_OPACITY_BOOST,
   EDGE_SELECTED_OPACITY_CAP,
+  EDGE_LIGHT_OPACITY_FLOOR,
+  EDGE_LIGHT_OPACITY_GAIN,
   EDGE_UNRELATED_DIM,
   HOVER_EDGE_OVERLAY_RENDER_ORDER,
   HOVER_EDGE_RADIUS_FACTOR,
@@ -95,12 +98,20 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
 
   function themedEdgeColor(edge: GraphEdge<EMeta>, fallback: string) {
     const currentTheme = theme();
-    if (currentTheme.dataColorStrategy === 'data') return fallback;
+    if (currentTheme.dataColorStrategy === 'data') {
+      return `#${edgeSceneColor(fallback, currentTheme).getHexString()}`;
+    }
     return edge.kind === 'filament' ? currentTheme.scene.filamentColor : currentTheme.scene.edgeColor;
   }
 
   function themedEdgeOpacity(opacity: number) {
-    return Math.max(0, Math.min(1, opacity * theme().scene.edgeOpacityMultiplier));
+    const currentTheme = theme();
+    const scaled = opacity * currentTheme.scene.edgeOpacityMultiplier;
+    if (currentTheme.mode === 'light') {
+      // Base edge opacities target additive blending on dark backgrounds; on white they need a higher floor.
+      return Math.max(0, Math.min(1, Math.max(scaled * EDGE_LIGHT_OPACITY_GAIN, EDGE_LIGHT_OPACITY_FLOOR)));
+    }
+    return Math.max(0, Math.min(1, scaled));
   }
 
   function resolveNodeEndpoint(id: string) {

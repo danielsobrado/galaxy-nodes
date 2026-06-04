@@ -27,28 +27,6 @@ body,
   overflow: hidden;
 }
 
-/* Relationship-colour swatches appended to the node-status legend. */
-.galaxy-nodes .legend .legend-sep {
-  width: 1px;
-  height: 12px;
-  background: rgba(245, 249, 247, 0.18);
-}
-.galaxy-nodes .legend .rel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: rgba(245, 249, 247, 0.74);
-  font-weight: 500;
-}
-.galaxy-nodes .legend .rel::before {
-  content: '';
-  width: 16px;
-  height: 2px;
-  border-radius: 2px;
-  background: var(--rel);
-  box-shadow: 0 0 6px var(--rel);
-}
-
 /* Compact navigation-keys hint, bottom-left, non-interactive. */
 .keys-badge {
   position: fixed;

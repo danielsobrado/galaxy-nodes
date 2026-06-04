@@ -4,6 +4,8 @@ import {
   GalaxyGraphVisualizer,
   getEdgeId,
   parseGraphDataset,
+  edgeSceneColorHex,
+  resolveGalaxyGraphTheme,
   type GalaxyGraphThemeInput,
   type GalaxyGraphVisualizerProps,
   type GraphDataset,
@@ -43,20 +45,22 @@ const RELATIONSHIP_LEGEND: ReadonlyArray<{ label: string; color: string }> = [
   { label: 'blocks', color: '#ff6f86' },
 ];
 
-const initiativeLegend = (
-  <>
-    <span>Nodes</span>
-    <b className="yes">ON TRACK</b>
-    <b className="no">AT RISK</b>
-    <span className="legend-sep" aria-hidden="true" />
-    <span>Links</span>
-    {RELATIONSHIP_LEGEND.map(({ label, color }) => (
-      <b key={label} className="rel" style={{ '--rel': color } as CSSProperties}>
-        {label}
-      </b>
-    ))}
-  </>
-);
+function initiativeLegend(theme: ReturnType<typeof resolveGalaxyGraphTheme>) {
+  return (
+    <>
+      <span>Nodes</span>
+      <b className="yes">ON TRACK</b>
+      <b className="no">AT RISK</b>
+      <span className="legend-sep" aria-hidden="true" />
+      <span>Links</span>
+      {RELATIONSHIP_LEGEND.map(({ label, color }) => (
+        <b key={label} className="rel" style={{ '--rel': edgeSceneColorHex(color, theme) } as CSSProperties}>
+          {label}
+        </b>
+      ))}
+    </>
+  );
+}
 
 // Small overlay explaining the keyboard/mouse navigation the engine supports.
 const navKeysBadge = (
@@ -142,6 +146,8 @@ export default function App() {
   const [codegraphStatus, setCodegraphStatus] = useState<'idle' | 'loading' | 'loaded' | 'missing' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamChunkRef = useRef(0);
+
+  const resolvedTheme = useMemo(() => resolveGalaxyGraphTheme(theme), [theme]);
 
   const initiativeAccessors = useMemo(() => createInitiativeAccessors({ sharpMoney }), [sharpMoney]);
   const codegraphAccessors = useMemo(() => createCodeGraphAccessors(), []);
@@ -284,7 +290,8 @@ export default function App() {
     accessors,
     brandLabel: demoMode === 'codegraph' ? 'Galaxy Nodes · CodeGraph' : 'Galaxy Nodes',
     groups: demoMode === 'codegraph' ? codegraphGroups : INITIATIVE_CATEGORIES,
-    legend: demoMode === 'codegraph' ? codegraphLegend() : initiativeLegend,
+    legend:
+      demoMode === 'codegraph' ? codegraphLegend(undefined, resolvedTheme) : initiativeLegend(resolvedTheme),
     keyLegend: navKeysBadge,
     renderNodeDetail: demoMode === 'codegraph' ? renderCodeGraphNodeDetail : renderInitiativeNodeDetail,
     renderEdgeDetail: demoMode === 'codegraph' ? renderCodeGraphEdgeDetail : renderInitiativeEdgeDetail,
