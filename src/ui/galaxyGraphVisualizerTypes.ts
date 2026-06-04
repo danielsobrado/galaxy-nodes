@@ -9,6 +9,8 @@ import type {
   GalaxyRenderMode,
   GalaxySceneFailure,
   GalaxySceneProps,
+  GraphUxEvent,
+  GraphUxVariant,
 } from './GalaxyScene';
 import type { GraphLayoutInput } from '../domain/layout';
 import type {
@@ -58,6 +60,8 @@ export interface GalaxyGraphVisualizerOptions {
   showTimeline?: boolean;
   showThemeControl?: boolean;
   themeChoices?: readonly GalaxyGraphThemeChoice[];
+  /** UX experiment variant attached to graph interaction telemetry. Defaults to `'baseline'`. */
+  uxVariant?: GraphUxVariant;
   webglContextLimit?: number;
 }
 
@@ -195,6 +199,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   /** Called when a dataset-size button is pressed; supply a new dataset. */
   onDatasetSizeChange?: (size: number) => void;
   onGroupChange?: (group: string | null) => void;
+  onGraphUxEvent?: (event: GraphUxEvent) => void;
   onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onHoverNode?: (node: GraphNode<NMeta> | null) => void;
   onContextBudgetExceeded?: GalaxySceneProps<NMeta, EMeta, CMeta>['onContextBudgetExceeded'];

@@ -28,6 +28,66 @@ export interface GalaxyNodeHoverAnchor {
   y: number;
 }
 
+export type GraphUxVariant = 'baseline' | 'cameraOnly' | 'fullFocus';
+
+export type GraphCameraState = 'idle' | 'moving' | 'focused' | 'orbit';
+
+export type GraphUxEvent =
+  | {
+      type: 'node_hover';
+      nodeId: string;
+      timestampMs: number;
+    }
+  | {
+      type: 'node_click';
+      nodeId: string;
+      timestampMs: number;
+      cameraState: GraphCameraState;
+    }
+  | {
+      type: 'focus_started';
+      nodeId: string;
+      timestampMs: number;
+      variant: GraphUxVariant;
+    }
+  | {
+      type: 'focus_completed';
+      nodeId: string;
+      timestampMs: number;
+      durationMs: number;
+      visibleNodeCount: number;
+      visibleEdgeCount: number;
+    }
+  | {
+      type: 'camera_reset';
+      timestampMs: number;
+      focusedNodeId?: string;
+    }
+  | {
+      type: 'zoom_changed';
+      timestampMs: number;
+      zoomDistance: number;
+      focusedNodeId?: string;
+    }
+  | {
+      type: 'pan_or_orbit';
+      timestampMs: number;
+      focusedNodeId?: string;
+    }
+  | {
+      type: 'task_started';
+      taskId: string;
+      timestampMs: number;
+      variant: string;
+    }
+  | {
+      type: 'task_completed';
+      taskId: string;
+      timestampMs: number;
+      success: boolean;
+      answerCorrect: boolean;
+    };
+
 export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   dataset: GraphDataset<NMeta, EMeta, CMeta>;
   /** Active group filter, or `null` to show everything. */
@@ -39,6 +99,8 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
   accessors?: GraphAccessors<NMeta, EMeta>;
   theme?: GalaxyGraphThemeInput;
   cameraCommand: CameraCommand | null;
+  /** UX experiment variant attached to graph interaction telemetry. Defaults to `'baseline'`. */
+  uxVariant?: GraphUxVariant;
   /** Maximum active Galaxy renderer WebGL contexts allowed in this browser tab. Defaults to 12. */
   contextLimit?: number;
   motionPreference?: GalaxyMotionPreference;
@@ -68,6 +130,7 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
   onContextBudgetExceeded?: (budget: GalaxyRendererContextBudget) => void;
   onSceneFailure?: (failure: GalaxySceneFailure) => void;
   onSceneReady?: () => void;
+  onGraphUxEvent?: (event: GraphUxEvent) => void;
   onSelectNode?: (node: GraphNode<NMeta> | null) => void;
   onHoverNode?: (node: GraphNode<NMeta> | null) => void;
   onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
@@ -82,7 +145,7 @@ export interface MutableRef<T> {
 export type SceneCallbacks<NMeta = unknown, EMeta = unknown> = Required<
   Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onHoverEdge' | 'onHoverNode' | 'onSelectEdge' | 'onSelectNode'>
 > &
-  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange' | 'onHoverNodeAnchor'>;
+  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange' | 'onGraphUxEvent' | 'onHoverNodeAnchor'>;
 
 export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   focusEdge: (edgeId: string) => void;
@@ -111,6 +174,7 @@ export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   updatePlanetSizing: (planetSizing: GalaxyPlanetSizingOptions | undefined) => void;
   updateSelection: (selectedNodeId: string | null, selectedEdgeId: string | null) => void;
   updateTheme: (theme: GalaxyGraphThemeInput | undefined) => void;
+  updateUxVariant: (variant: GraphUxVariant | undefined) => void;
   appendDataset: (dataset: GraphDataset<NMeta, EMeta>) => void;
   dispose: () => void;
 }
@@ -126,6 +190,7 @@ export interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
   selectedNodeId: string | null;
   showClusters: boolean;
   theme: GalaxyGraphThemeInput | undefined;
+  uxVariant: GraphUxVariant | undefined;
 }
 
 export interface CoreState<NMeta = unknown, EMeta = unknown, CMeta = unknown> {

@@ -6,6 +6,7 @@ import {
   getGalaxyRendererContextBudget,
   type GalaxyRenderer,
   type GalaxyRendererOptions,
+  type GraphUxEvent,
 } from './core';
 import '../styles.css';
 import type { GraphDataset } from '../domain/types';
@@ -181,6 +182,150 @@ describe('createGalaxyRenderer in Chromium', () => {
     activeRenderer = null;
     expect(host.childElementCount).toBe(0);
     expect(getGalaxyRendererContextBudget().active).toBe(0);
+  });
+
+  it('emits graph UX telemetry for hover, click, focus, reset, and variant changes', async () => {
+    const calls: string[] = [];
+    const events: GraphUxEvent[] = [];
+    const onGraphUxEvent = vi.fn((event: GraphUxEvent) => {
+      events.push(event);
+      calls.push(`ux:${event.type}`);
+    });
+    const onSelectNode = vi.fn(() => {
+      calls.push('select:node');
+    });
+    const { host } = await mountRenderer({ onGraphUxEvent, onSelectNode }, { uxVariant: 'fullFocus' });
+    const canvas = getCanvas(host);
+
+    await userEvent.hover(canvas);
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'node_hover' && event.nodeId === 'hub')).toBe(true),
+    );
+
+    await userEvent.click(canvas, { position: { x: canvas.clientWidth / 2, y: canvas.clientHeight / 2 } });
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'node_click' && event.nodeId === 'hub')).toBe(true),
+    );
+    expect(calls.indexOf('ux:node_click')).toBeLessThan(calls.indexOf('select:node'));
+
+    activeRenderer?.update({
+      ...rendererOptions(),
+      cameraCommand: { nodeId: 'hub', nonce: 1, type: 'focus' },
+      selectedNodeId: 'hub',
+      uxVariant: 'fullFocus',
+    });
+
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'focus_completed' && event.nodeId === 'hub')).toBe(true),
+    );
+    const focusStarted = events.find((event) => event.type === 'focus_started' && event.nodeId === 'hub');
+    const focusCompleted = events.find((event) => event.type === 'focus_completed' && event.nodeId === 'hub');
+    expect(focusStarted).toEqual(expect.objectContaining({ variant: 'fullFocus' }));
+    expect(focusCompleted).toEqual(
+      expect.objectContaining({
+        visibleEdgeCount: dataset.edges.length,
+        visibleNodeCount: dataset.nodes.length,
+      }),
+    );
+    expect((focusCompleted as Extract<GraphUxEvent, { type: 'focus_completed' }>).durationMs).toBeGreaterThanOrEqual(0);
+    expect(events.some((event) => event.type === 'pan_or_orbit' || event.type === 'zoom_changed')).toBe(false);
+
+    activeRenderer?.update({
+      ...rendererOptions(),
+      cameraCommand: { nonce: 2, type: 'reset' },
+      selectedNodeId: 'hub',
+      uxVariant: 'fullFocus',
+    });
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'camera_reset' && event.focusedNodeId === 'hub')).toBe(true),
+    );
+
+    activeRenderer?.update({
+      ...rendererOptions(),
+      cameraCommand: { nodeId: 'alpha', nonce: 3, type: 'focus' },
+      selectedNodeId: 'alpha',
+      uxVariant: 'cameraOnly',
+    });
+    await vi.waitFor(() =>
+      expect(
+        events.some(
+          (event) => event.type === 'focus_started' && event.nodeId === 'alpha' && event.variant === 'cameraOnly',
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it('classifies user camera zoom and pan/orbit telemetry while focused', async () => {
+    const events: GraphUxEvent[] = [];
+    const { host } = await mountRenderer(
+      { onGraphUxEvent: (event: GraphUxEvent) => events.push(event) },
+      {
+        cameraCommand: { nodeId: 'hub', nonce: 1, type: 'focus' },
+        selectedNodeId: 'hub',
+        uxVariant: 'fullFocus',
+      },
+    );
+    const canvas = getCanvas(host);
+    await vi.waitFor(() => expect(events.some((event) => event.type === 'focus_completed')).toBe(true));
+    events.length = 0;
+
+    canvas.dispatchEvent(
+      new WheelEvent('wheel', {
+        bubbles: true,
+        cancelable: true,
+        clientX: canvas.clientWidth / 2,
+        clientY: canvas.clientHeight / 2,
+        deltaY: -180,
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'zoom_changed' && event.focusedNodeId === 'hub')).toBe(true),
+    );
+
+    events.length = 0;
+    const originalSetPointerCapture = canvas.setPointerCapture;
+    const originalReleasePointerCapture = canvas.releasePointerCapture;
+    canvas.setPointerCapture = () => undefined;
+    canvas.releasePointerCapture = () => undefined;
+    canvas.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        buttons: 1,
+        clientX: canvas.clientWidth / 2,
+        clientY: canvas.clientHeight / 2,
+        pointerId: 7,
+        pointerType: 'mouse',
+      }),
+    );
+    document.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        buttons: 1,
+        clientX: canvas.clientWidth / 2 + 70,
+        clientY: canvas.clientHeight / 2 + 20,
+        pointerId: 7,
+        pointerType: 'mouse',
+      }),
+    );
+    document.dispatchEvent(
+      new PointerEvent('pointerup', {
+        bubbles: true,
+        button: 0,
+        buttons: 0,
+        clientX: canvas.clientWidth / 2 + 70,
+        clientY: canvas.clientHeight / 2 + 20,
+        pointerId: 7,
+        pointerType: 'mouse',
+      }),
+    );
+
+    canvas.setPointerCapture = originalSetPointerCapture;
+    canvas.releasePointerCapture = originalReleasePointerCapture;
+
+    await vi.waitFor(() =>
+      expect(events.some((event) => event.type === 'pan_or_orbit' && event.focusedNodeId === 'hub')).toBe(true),
+    );
   });
 
   it('renders relationships with the 0.1 additive BasicMaterial path, not a shader material', async () => {

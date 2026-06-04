@@ -42,6 +42,7 @@ export type SceneFactory = <NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   nodeSizeScale: number,
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
   initialTheme: GalaxyGraphThemeInput | undefined,
+  initialUxVariant: GalaxyRendererOptions<NMeta, EMeta, CMeta>['uxVariant'],
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,
@@ -72,6 +73,7 @@ function resolveRendererCallbacks<NMeta, EMeta>(
 ): SceneCallbacks<NMeta, EMeta> {
   return {
     onCameraViewChange: callbacks?.onCameraViewChange,
+    onGraphUxEvent: callbacks?.onGraphUxEvent,
     onHoverEdge: callbacks?.onHoverEdge ?? noop,
     onHoverNode: callbacks?.onHoverNode ?? noop,
     onHoverNodeAnchor: callbacks?.onHoverNodeAnchor,
@@ -207,6 +209,7 @@ function snapshotAppliedState<NMeta, EMeta, CMeta>(
     selectedNodeId: state.options.selectedNodeId,
     showClusters: state.options.showClusters,
     theme: state.options.theme,
+    uxVariant: state.options.uxVariant,
     ...overrides,
   };
 }
@@ -226,6 +229,7 @@ function patchRuntime<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: 
   if (!applied || applied.planetSizing !== next.planetSizing) runtime.updatePlanetSizing(next.planetSizing);
   if (!applied || applied.accessors !== next.accessors) runtime.updateAccessors(next.accessors);
   if (!applied || applied.theme !== next.theme) runtime.updateTheme(next.theme);
+  if (!applied || applied.uxVariant !== next.uxVariant) runtime.updateUxVariant(next.uxVariant);
   if (!applied || applied.selectedNodeId !== next.selectedNodeId || applied.selectedEdgeId !== next.selectedEdgeId) {
     runtime.updateSelection(next.selectedNodeId, next.selectedEdgeId);
   }
@@ -299,6 +303,7 @@ function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         resolveNodeSizeScale(state.options.nodeSizeScale),
         state.options.planetSizing,
         state.options.theme,
+        state.options.uxVariant,
         state.callbacksRef,
         state.pausedRef,
         (nextFailure) => reportRendererFailure(host, state, nextFailure.reason, nextFailure.message, nextFailure.error),

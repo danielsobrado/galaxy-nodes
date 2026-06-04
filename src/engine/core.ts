@@ -34,6 +34,9 @@ export type {
   GalaxyRenderer,
   GalaxyRendererCallbacks,
   GalaxyRendererOptions,
+  GraphCameraState,
+  GraphUxEvent,
+  GraphUxVariant,
 } from './rendererTypes';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
 

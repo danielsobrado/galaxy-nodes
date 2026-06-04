@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GalaxyScene, { type GalaxySceneProps } from './GalaxyScene';
 import { createGalaxyRenderer } from '../engine/core';
-import type { GalaxyRenderer, GalaxyRendererCallbacks, GalaxyRendererOptions } from '../engine/core';
+import type { GalaxyRenderer, GalaxyRendererCallbacks, GalaxyRendererOptions, GraphUxEvent } from '../engine/core';
 import type { GraphDataset } from '../domain/types';
 
 const mocks = vi.hoisted(() => ({
@@ -88,6 +88,33 @@ describe('GalaxyScene', () => {
 
     const scene = screen.getByRole('img', { name: 'Revenue graph' });
     expect(scene.getAttribute('aria-describedby')).toBe('graph-summary');
+  });
+
+  it('passes graph UX telemetry options and callbacks to the core renderer', () => {
+    const onGraphUxEvent = vi.fn<(event: GraphUxEvent) => void>();
+    const { rerender } = render(<GalaxyScene {...makeProps({ onGraphUxEvent, uxVariant: 'fullFocus' })} />);
+
+    expect(createGalaxyRenderer).toHaveBeenCalledWith(
+      expect.any(HTMLDivElement),
+      expect.objectContaining({ uxVariant: 'fullFocus' }),
+      expect.objectContaining({ onGraphUxEvent }),
+    );
+
+    act(() => {
+      mocks.latestCallbacks?.onGraphUxEvent?.({
+        taskId: 'task-1',
+        timestampMs: 12,
+        type: 'task_started',
+        variant: 'fullFocus',
+      });
+    });
+    expect(onGraphUxEvent).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'task-1' }));
+
+    rerender(<GalaxyScene {...makeProps({ onGraphUxEvent, uxVariant: 'cameraOnly' })} />);
+    expect(mocks.renderer.update).toHaveBeenCalledWith(
+      expect.objectContaining({ uxVariant: 'cameraOnly' }),
+      expect.objectContaining({ onGraphUxEvent }),
+    );
   });
 
   it('renders fallback state from core failures and retries the renderer', () => {

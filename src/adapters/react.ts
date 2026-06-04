@@ -30,6 +30,9 @@ export type {
   GalaxySceneFailure,
   GalaxySceneFailureReason,
   GalaxySceneProps,
+  GraphCameraState,
+  GraphUxEvent,
+  GraphUxVariant,
   PlanetSizingMode,
   ResolvedGalaxyGraphTheme,
 } from '../ui/GalaxyScene';

@@ -45,6 +45,8 @@ export interface PointLayer<NMeta = unknown> {
   readonly object: THREE.Points;
   /** Per-node rendered size; 0 means hidden (used by picking to reject invisible points). */
   visibleSizeAt(index: number): number;
+  /** Current number of rendered node points. */
+  visibleCount(): number;
   /** Recompute base colors/sizes from accessors, then refresh visibility. */
   updateAppearance(): void;
   /** Recompute per-node highlight color/size from the current selection + active group. */
@@ -185,6 +187,7 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
   return {
     object: pointCloud,
     visibleSizeAt: (index: number) => pointBuffer.visibleSizes[index],
+    visibleCount: () => pointBuffer.visibleSizes.reduce((count, size) => count + (size > 0 ? 1 : 0), 0),
     updateAppearance,
     updateVisibility,
     grow(prevCount, dataset) {

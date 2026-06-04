@@ -46,6 +46,7 @@ export interface EdgeLayerDeps<NMeta = unknown, EMeta = unknown> {
 
 export interface EdgeLayer<EMeta = unknown> {
   addEdge(edge: GraphEdge<EMeta>, index: number): void;
+  visibleCount(): number;
   update(): void;
   updateVisibility(): void;
   applyAppearance(): void;
@@ -336,6 +337,7 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
 
   return {
     addEdge,
+    visibleCount: () => Array.from(edgeStates.values()).reduce((count, state) => count + (state.visible ? 1 : 0), 0),
     update,
     updateVisibility,
     applyAppearance,

@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GalaxyGraphVisualizer from './GalaxyGraphVisualizer';
-import type { CameraCommand, GalaxySceneProps } from './GalaxyScene';
+import type { CameraCommand, GalaxySceneProps, GraphUxEvent } from './GalaxyScene';
 import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode } from '../domain/types';
 
 let latestSceneProps: GalaxySceneProps | null = null;
@@ -351,6 +351,26 @@ describe('GalaxyGraphVisualizer', () => {
     expect(latestSceneProps?.contextLimit).toBe(2);
     latestSceneProps?.onContextBudgetExceeded?.({ active: 2, limit: 2, remaining: 0 });
     expect(onContextBudgetExceeded).toHaveBeenCalledWith({ active: 2, limit: 2, remaining: 0 });
+  });
+
+  it('passes graph UX telemetry variant and callback to the scene', () => {
+    const onGraphUxEvent = vi.fn<(event: GraphUxEvent) => void>();
+    render(
+      <GalaxyGraphVisualizer dataset={dataset} onGraphUxEvent={onGraphUxEvent} options={{ uxVariant: 'fullFocus' }} />,
+    );
+
+    expect(latestSceneProps?.uxVariant).toBe('fullFocus');
+
+    act(() => {
+      latestSceneProps?.onGraphUxEvent?.({
+        taskId: 'task-1',
+        timestampMs: 42,
+        type: 'task_completed',
+        success: true,
+        answerCorrect: true,
+      });
+    });
+    expect(onGraphUxEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'task_completed' }));
   });
 
   it('does not show large-graph controls unless enabled', () => {

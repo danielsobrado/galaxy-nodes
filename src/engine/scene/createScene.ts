@@ -12,6 +12,7 @@ import type {
   GraphEdge,
   GraphNode,
   ResolvedAccessors,
+  SpaceDirection,
 } from '../../domain/types';
 import {
   SELECTED_NODE_RELATIONSHIP_LABEL_LIMIT,
@@ -50,7 +51,15 @@ import {
   type GalaxyGraphThemeInput,
   type GalaxyPlanetSizingOptions,
 } from '../rendererConfig';
-import type { GalaxyNodeHoverAnchor, MutableRef, SceneCallbacks, SceneRuntime } from '../rendererTypes';
+import type {
+  GalaxyNodeHoverAnchor,
+  GraphCameraState,
+  GraphUxEvent,
+  GraphUxVariant,
+  MutableRef,
+  SceneCallbacks,
+  SceneRuntime,
+} from '../rendererTypes';
 import { selectedEdgeLabelPosition } from '../edges';
 import {
   edgeDisplayLabel,
@@ -77,6 +86,8 @@ import { createCameraController } from './cameraController';
 
 const CAMERA_HOME = new THREE.Vector3(120, 430, 1540);
 const TARGET_HOME = new THREE.Vector3(0, 0, 0);
+const DEFAULT_UX_VARIANT: GraphUxVariant = 'baseline';
+const ZOOM_DISTANCE_EPSILON = 0.5;
 const tmpVector = new THREE.Vector3();
 
 export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
@@ -92,6 +103,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   initialNodeSizeScale: number,
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
   initialTheme: GalaxyGraphThemeInput | undefined,
+  initialUxVariant: GraphUxVariant | undefined,
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,
@@ -114,6 +126,12 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   let accessors = resolveAccessors(accessorsInput);
   let nodeSizeScale = initialNodeSizeScale;
   let planetSizing = resolvePlanetSizing(planetSizingInput);
+  let uxVariant = initialUxVariant ?? DEFAULT_UX_VARIANT;
+  let cameraState: GraphCameraState = 'idle';
+  let programmaticCameraChangeDepth = 0;
+  let userControlActive = false;
+  let userControlPanOrOrbitEmitted = false;
+  let keyboardCameraActive = false;
   let sceneDisposed = false;
   // Render-on-demand flag. The animation loop only submits a frame when something
   // actually changed (camera moved, hover/selection updated, data appended), unless
@@ -198,6 +216,49 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   controls.target.copy(TARGET_HOME);
 
   const selectionFocusPosition = new THREE.Vector3();
+
+  function emitGraphUxEvent(event: GraphUxEvent) {
+    callbacksRef.current.onGraphUxEvent?.(event);
+  }
+
+  function focusedNodePayload() {
+    return selection.selectedNodeId ? { focusedNodeId: selection.selectedNodeId } : {};
+  }
+
+  function currentZoomDistance() {
+    return camera.position.distanceTo(controls.target);
+  }
+
+  let lastControlZoomDistance = currentZoomDistance();
+
+  function emitPanOrOrbit() {
+    if (selection.selectedNodeId && cameraState !== 'moving') cameraState = 'orbit';
+    emitGraphUxEvent({
+      type: 'pan_or_orbit',
+      timestampMs: performance.now(),
+      ...focusedNodePayload(),
+    });
+  }
+
+  function emitZoomChanged(zoomDistance: number) {
+    if (selection.selectedNodeId && cameraState !== 'moving') cameraState = 'orbit';
+    emitGraphUxEvent({
+      type: 'zoom_changed',
+      timestampMs: performance.now(),
+      zoomDistance,
+      ...focusedNodePayload(),
+    });
+  }
+
+  function runProgrammaticCameraChange(fn: () => void) {
+    programmaticCameraChangeDepth += 1;
+    try {
+      fn();
+    } finally {
+      lastControlZoomDistance = currentZoomDistance();
+      programmaticCameraChangeDepth -= 1;
+    }
+  }
 
   scene.add(new THREE.AmbientLight(0x96ffe2, AMBIENT_LIGHT_INTENSITY));
   const keyLight = new THREE.PointLight(0xffffff, KEY_LIGHT_INTENSITY, KEY_LIGHT_DISTANCE);
@@ -333,8 +394,6 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       callbacksRef.current.onCameraViewChange?.(view);
     },
   });
-  controls.addEventListener('change', cameraController.emitView);
-
   const markerLayer = createMarkerLayer<NMeta, EMeta>({
     world,
     labelsRoot,
@@ -483,6 +542,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     selection.selectedNodeHighlight = nextSelectedNodeId ? getNodeSelectionHighlight(nextSelectedNodeId) : null;
     selection.selectedEdgeHighlight = nextSelectedEdgeId ? getEdgeSelectionHighlight(nextSelectedEdgeId) : null;
     const hasSelection = Boolean(nextSelectedNodeId || nextSelectedEdgeId);
+    if (!hasSelection && cameraState !== 'moving') cameraState = 'idle';
     const selectedEndpoints = nextSelectedEdgeId ? (edgeEndpoints.get(nextSelectedEdgeId) ?? null) : null;
     const selectedEdgeState = nextSelectedEdgeId ? (edgeStates.get(nextSelectedEdgeId) ?? null) : null;
     const selectedNodeEndpoint = nextSelectedNodeId ? resolveNodeEndpoint(nextSelectedNodeId) : null;
@@ -597,6 +657,10 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updateHoverHighlight();
   }
 
+  function updateUxVariant(nextUxVariant: GraphUxVariant | undefined) {
+    uxVariant = nextUxVariant ?? DEFAULT_UX_VARIANT;
+  }
+
   function updateAccessors(nextAccessors: GraphAccessors<NMeta, EMeta> | undefined) {
     accessors = resolveAccessors(nextAccessors);
     updatePointAppearance();
@@ -697,6 +761,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       updateHoverHighlight();
     }
     if (nodeChanged) {
+      if (nodeId) emitGraphUxEvent({ type: 'node_hover', nodeId, timestampMs: performance.now() });
       callbacksRef.current.onHoverNode(node);
       callbacksRef.current.onHoverNodeAnchor?.(nodeId ? nodeHoverAnchor(resolveNodeEndpoint(nodeId)) : null);
     }
@@ -708,6 +773,12 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   function processSelect(clientX: number, clientY: number) {
     const { node, edge } = picking.intersectAt(clientX, clientY);
     if (node) {
+      emitGraphUxEvent({
+        type: 'node_click',
+        nodeId: node.id,
+        timestampMs: performance.now(),
+        cameraState,
+      });
       callbacksRef.current.onSelectEdge(null);
       callbacksRef.current.onSelectNode(node);
       return;
@@ -756,11 +827,48 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     });
   }
 
+  function handleControlsStart() {
+    if (programmaticCameraChangeDepth > 0) return;
+    userControlActive = true;
+    userControlPanOrOrbitEmitted = false;
+    lastControlZoomDistance = currentZoomDistance();
+  }
+
+  function handleControlsEnd() {
+    userControlActive = false;
+    userControlPanOrOrbitEmitted = false;
+    lastControlZoomDistance = currentZoomDistance();
+  }
+
+  function handleControlsChange() {
+    cameraController.emitView();
+
+    const zoomDistance = currentZoomDistance();
+    if (programmaticCameraChangeDepth > 0 || !userControlActive) {
+      lastControlZoomDistance = zoomDistance;
+      return;
+    }
+
+    if (Math.abs(zoomDistance - lastControlZoomDistance) > ZOOM_DISTANCE_EPSILON) {
+      emitZoomChanged(zoomDistance);
+      lastControlZoomDistance = zoomDistance;
+      return;
+    }
+
+    if (!userControlPanOrOrbitEmitted) {
+      emitPanOrOrbit();
+      userControlPanOrOrbitEmitted = true;
+    }
+  }
+
   renderer.domElement.addEventListener('pointermove', handlePointerMove);
   renderer.domElement.addEventListener('pointerleave', handlePointerLeave);
   renderer.domElement.addEventListener('pointerdown', handlePointerDown);
   renderer.domElement.addEventListener('pointerup', handlePointerUp);
   renderer.domElement.addEventListener('webglcontextlost', handleContextLost);
+  controls.addEventListener('start', handleControlsStart);
+  controls.addEventListener('end', handleControlsEnd);
+  controls.addEventListener('change', handleControlsChange);
   host.addEventListener('keydown', cameraController.handleKeyDown);
   host.addEventListener('keyup', cameraController.handleKeyUp);
   window.addEventListener('resize', resize);
@@ -776,7 +884,14 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   function animate() {
     animationFrame = window.requestAnimationFrame(animate);
     frame += 1;
-    if (cameraController.tickKeyboardMovement()) needsRender = true;
+    const keyboardMoved = cameraController.tickKeyboardMovement();
+    if (keyboardMoved) {
+      if (!keyboardCameraActive) emitPanOrOrbit();
+      keyboardCameraActive = true;
+      needsRender = true;
+    } else {
+      keyboardCameraActive = false;
+    }
     controls.update();
 
     const paused = pausedRef.current;
@@ -839,11 +954,51 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       return result;
     };
 
+  function focusNodeWithTelemetry(nodeId: string) {
+    const node = nodeLookup.get(nodeId);
+    if (!node || !nodePositions.has(node.id)) return;
+
+    const startedAt = performance.now();
+    cameraState = 'moving';
+    emitGraphUxEvent({ type: 'focus_started', nodeId, timestampMs: startedAt, variant: uxVariant });
+    runProgrammaticCameraChange(() => cameraController.focusNode(nodeId));
+    cameraState = 'focused';
+
+    const completedAt = performance.now();
+    emitGraphUxEvent({
+      type: 'focus_completed',
+      nodeId,
+      timestampMs: completedAt,
+      durationMs: completedAt - startedAt,
+      visibleNodeCount: pointLayer.visibleCount(),
+      visibleEdgeCount: edgeLayer.visibleCount(),
+    });
+  }
+
+  function focusEdgeWithTelemetry(edgeId: string) {
+    runProgrammaticCameraChange(() => cameraController.focusEdge(edgeId));
+  }
+
+  function moveCameraWithTelemetry(direction: SpaceDirection, multiplier?: number) {
+    emitPanOrOrbit();
+    runProgrammaticCameraChange(() => cameraController.move(direction, multiplier));
+  }
+
+  function resetCameraWithTelemetry() {
+    emitGraphUxEvent({
+      type: 'camera_reset',
+      timestampMs: performance.now(),
+      ...focusedNodePayload(),
+    });
+    cameraState = 'idle';
+    runProgrammaticCameraChange(cameraController.reset);
+  }
+
   return {
-    focusEdge: wake(cameraController.focusEdge),
-    focusNode: wake(cameraController.focusNode),
-    moveCamera: wake(cameraController.move),
-    resetCamera: wake(cameraController.reset),
+    focusEdge: wake(focusEdgeWithTelemetry),
+    focusNode: wake(focusNodeWithTelemetry),
+    moveCamera: wake(moveCameraWithTelemetry),
+    resetCamera: wake(resetCameraWithTelemetry),
     updateAccessors: wake(updateAccessors),
     updateActiveGroup: wake(updateActiveGroup),
     updateClusterVisibility: wake(updateClusterVisibilityFromProp),
@@ -853,6 +1008,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updatePlanetSizing: wake(updatePlanetSizing),
     updateSelection: wake(updateSelection),
     updateTheme: wake(updateTheme),
+    updateUxVariant: wake(updateUxVariant),
     appendDataset: wake(appendDataset),
     dispose: () => {
       if (sceneDisposed) return;
@@ -867,7 +1023,9 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       renderer.domElement.removeEventListener('webglcontextlost', handleContextLost);
-      controls.removeEventListener('change', cameraController.emitView);
+      controls.removeEventListener('start', handleControlsStart);
+      controls.removeEventListener('end', handleControlsEnd);
+      controls.removeEventListener('change', handleControlsChange);
       controls.dispose();
       scene.traverse((object) => {
         const mesh = object as THREE.Mesh;

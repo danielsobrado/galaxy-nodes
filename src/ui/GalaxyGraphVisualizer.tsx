@@ -42,6 +42,8 @@ function resolveHoverDetailDelayMs(delayMs: number | undefined) {
     : DEFAULT_HOVER_DETAIL_DELAY_MS;
 }
 
+export type { GraphCameraState, GraphUxEvent, GraphUxVariant } from './GalaxyScene';
+
 export type {
   GalaxyAccessibleSummaryContext,
   GalaxyGraphTheme,
@@ -73,6 +75,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   onContextBudgetExceeded,
   onDatasetSizeChange,
   onGroupChange,
+  onGraphUxEvent,
   onHoverEdge,
   onHoverNode,
   onNavigate,
@@ -612,6 +615,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         renderMode={options?.renderMode}
         theme={activeTheme}
         cameraCommand={cameraCommand}
+        uxVariant={options?.uxVariant}
         selectedNodeId={currentSelectedNodeId}
         selectedEdgeId={currentSelectedEdgeId}
         onSceneFailure={(failure) => {
@@ -621,6 +625,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         onSceneReady={() => setSceneReady(true)}
         onCameraViewChange={handleCameraViewChange}
         onContextBudgetExceeded={onContextBudgetExceeded}
+        onGraphUxEvent={onGraphUxEvent}
         onSelectNode={selectNode}
         onHoverNode={hover}
         onHoverNodeAnchor={setHoverNodeAnchor}

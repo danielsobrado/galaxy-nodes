@@ -173,13 +173,32 @@ export function createCameraController<NMeta = unknown, EMeta = unknown>(
 
   function tickKeyboardMovement() {
     const keySpeed = pressedKeys.has('shift') ? KEY_SHIFT_BOOST : 1;
-    if (pressedKeys.has('w') || pressedKeys.has('arrowup')) move('forward', keySpeed * KEY_MOVE_SPEED, true);
-    if (pressedKeys.has('s') || pressedKeys.has('arrowdown')) move('back', keySpeed * KEY_MOVE_SPEED, true);
-    if (pressedKeys.has('a') || pressedKeys.has('arrowleft')) move('left', keySpeed * KEY_MOVE_SPEED, true);
-    if (pressedKeys.has('d') || pressedKeys.has('arrowright')) move('right', keySpeed * KEY_MOVE_SPEED, true);
-    if (pressedKeys.has('e')) move('up', keySpeed * KEY_MOVE_SPEED_VERTICAL, true);
-    if (pressedKeys.has('q')) move('down', keySpeed * KEY_MOVE_SPEED_VERTICAL, true);
-    return pressedKeys.size > 0;
+    let moved = false;
+    if (pressedKeys.has('w') || pressedKeys.has('arrowup')) {
+      move('forward', keySpeed * KEY_MOVE_SPEED, true);
+      moved = true;
+    }
+    if (pressedKeys.has('s') || pressedKeys.has('arrowdown')) {
+      move('back', keySpeed * KEY_MOVE_SPEED, true);
+      moved = true;
+    }
+    if (pressedKeys.has('a') || pressedKeys.has('arrowleft')) {
+      move('left', keySpeed * KEY_MOVE_SPEED, true);
+      moved = true;
+    }
+    if (pressedKeys.has('d') || pressedKeys.has('arrowright')) {
+      move('right', keySpeed * KEY_MOVE_SPEED, true);
+      moved = true;
+    }
+    if (pressedKeys.has('e')) {
+      move('up', keySpeed * KEY_MOVE_SPEED_VERTICAL, true);
+      moved = true;
+    }
+    if (pressedKeys.has('q')) {
+      move('down', keySpeed * KEY_MOVE_SPEED_VERTICAL, true);
+      moved = true;
+    }
+    return moved;
   }
 
   return {
