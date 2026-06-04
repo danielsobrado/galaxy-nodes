@@ -14,6 +14,8 @@ A framework-neutral Three.js library for navigating dense graph data as a galaxy
 
 Try the hosted playground at [danielsobrado.github.io/galaxy-nodes/demo/](https://danielsobrado.github.io/galaxy-nodes/demo/). The GitHub Pages workflow builds `examples/basic`, publishes it under `/demo/`, and publishes generated TypeDoc output under `/api/`.
 
+The playground ships with a synthetic corporate graph by default. Use the **CodeGraph** button (file-with-code icon) in the left toolbar to explore this repository’s indexed code graph—symbols, files, and relationships such as calls, contains, references, and imports—without running anything locally.
+
 ![Short Galaxy Nodes demo](docs/images/GalaxyDemo2.gif)
 
 ## Install
@@ -554,3 +556,30 @@ docker compose up --build
 ```
 
 That starts Memgraph Platform, seeds a graph dataset into Memgraph, and exposes a graph API on `http://localhost:8787/graph`. Run the example with `VITE_GRAPH_API_URL=http://127.0.0.1:8787`, then use the database button in the left toolbar to load nodes and relationships from Memgraph.
+
+## CodeGraph Demo
+
+This repo indexes itself with [CodeGraph](https://www.npmjs.com/package/codegraph) and visualizes the result in the same Galaxy Nodes demo. The export pipeline maps the local SQLite index (`.codegraph/codegraph.db`) into the library’s `GraphDataset` JSON shape—nodes for functions, classes, files, and other symbols; edges for `calls`, `contains`, `references`, `imports`, and `instantiates`; clusters per source file; groups by top-level folder (`src`, `examples`, `demo`, …).
+
+### Hosted demo
+
+GitHub Pages regenerates the snapshot on each build (`codegraph init -i`, then `npm run codegraph:export`), so the [live demo](https://danielsobrado.github.io/galaxy-nodes/demo/) always includes an up-to-date code graph. Open the demo and click **CodeGraph** in the left toolbar.
+
+### Local workflow
+
+```bash
+codegraph init -i   # or codegraph sync after edits
+npm run codegraph:export
+npm run dev
+```
+
+Click **CodeGraph** in the toolbar to load `codegraph-dataset.json`. Click again to reload after re-exporting. The JSON is written to `examples/basic/public/codegraph-dataset.json` (gitignored; not committed).
+
+Optional export filters:
+
+```bash
+npm run codegraph:export -- --edge-kinds calls,references
+npm run codegraph:export -- --node-kinds function,class,interface,file
+```
+
+Preset source: [`examples/shared/presets/codegraph`](examples/shared/presets/codegraph). More detail: [demo/codegraph/README.md](demo/codegraph/README.md).

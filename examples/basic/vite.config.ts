@@ -19,6 +19,10 @@ export default defineConfig({
         replacement: fileURLToPath(new URL('../shared/presets/initiatives.tsx', import.meta.url)),
       },
       {
+        find: 'galaxy-nodes/presets/codegraph',
+        replacement: fileURLToPath(new URL('../shared/presets/codegraph.tsx', import.meta.url)),
+      },
+      {
         find: 'galaxy-nodes',
         replacement: fileURLToPath(new URL('../../src/adapters/index.ts', import.meta.url)),
       },

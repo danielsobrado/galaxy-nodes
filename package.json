@@ -88,6 +88,7 @@
     "build:types": "tsc -p tsconfig.build.json",
     "benchmark": "vite-node scripts/benchmark.mjs",
     "benchmark:browser": "node scripts/browser-perf.mjs",
+    "codegraph:export": "node scripts/export-codegraph-dataset.mjs",
     "changeset": "changeset",
     "ci": "npm run ci:compat && npm run size && npm run benchmark -- --sizes 10000 --iterations 1 --warmups 0 && npm run build:example && npm run build:next && npm run test:next && npm run package:check && npm run docs:api",
     "ci:compat": "npm run lint && npm run format:check && npm run test:coverage && npm run test:browser && npm run build && npm run api:check",

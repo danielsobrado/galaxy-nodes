@@ -38,6 +38,11 @@ jobs:
       - name: Build package
         run: npm run build
 
+      - name: Index and export CodeGraph
+        run: |
+          npx --yes codegraph@latest init -i
+          npm run codegraph:export
+
       - name: Build live demo
         run: npm run build:example -- --base /${{ github.event.repository.name }}/demo/
 

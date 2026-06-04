@@ -1,15 +1,26 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Activity, Database, Import, MousePointerClick } from 'lucide-react';
+import { Activity, Database, FileCode, Import, MousePointerClick } from 'lucide-react';
 import {
   GalaxyGraphVisualizer,
   getEdgeId,
   parseGraphDataset,
   type GalaxyGraphThemeInput,
+  type GalaxyGraphVisualizerProps,
   type GraphDataset,
   type GraphDatasetPatch,
   type LargeGraphExpandRequest,
   type LargeGraphOptions,
 } from 'galaxy-nodes';
+import {
+  codegraphGroupsFromDataset,
+  codegraphLegend,
+  createCodeGraphAccessors,
+  renderCodeGraphEdgeDetail,
+  renderCodeGraphNodeDetail,
+  type CodeGraphClusterMeta,
+  type CodeGraphEdgeMeta,
+  type CodeGraphNodeMeta,
+} from 'galaxy-nodes/presets/codegraph';
 import {
   createInitiativeAccessors,
   DATASET_SIZES,
@@ -20,6 +31,8 @@ import {
   type InitiativeClusterMeta,
   type InitiativeNodeMeta,
 } from 'galaxy-nodes/presets/initiatives';
+
+type DemoMode = 'initiatives' | 'codegraph';
 
 // Mirrors the edge `kind -> color` mapping in createInitiativeAccessors.
 const RELATIONSHIP_LEGEND: ReadonlyArray<{ label: string; color: string }> = [
@@ -71,6 +84,7 @@ const navKeysBadge = (
 );
 
 const INITIAL_DATASET_SIZE = DATASET_SIZES[0];
+const CODEGRAPH_DATASET_URL = `${import.meta.env.BASE_URL}codegraph-dataset.json`;
 
 function graphApiHeaders(token: string | undefined, headers?: HeadersInit): Headers {
   const nextHeaders = new Headers(headers);
@@ -119,18 +133,25 @@ function synthesizeExpansionPatch(
 export default function App() {
   const graphApiUrl = (import.meta.env.VITE_GRAPH_API_URL as string | undefined) ?? 'http://127.0.0.1:8787';
   const graphApiToken = import.meta.env.VITE_GRAPH_API_TOKEN as string | undefined;
-  const [dataset, setDataset] = useState<GraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>>(() =>
-    generateGalaxyDataset(INITIAL_DATASET_SIZE),
-  );
+  const [demoMode, setDemoMode] = useState<DemoMode>('initiatives');
+  const [dataset, setDataset] = useState<GraphDataset>(() => generateGalaxyDataset(INITIAL_DATASET_SIZE));
   const [theme, setTheme] = useState<GalaxyGraphThemeInput>('galaxy-dark');
   const [sharpMoney, setSharpMoney] = useState(true);
   const [focusModelEnabled, setFocusModelEnabled] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
+  const [codegraphStatus, setCodegraphStatus] = useState<'idle' | 'loading' | 'loaded' | 'missing' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamChunkRef = useRef(0);
 
-  // Memoize so parent renders do not force redundant color/size buffer refreshes.
-  const accessors = useMemo(() => createInitiativeAccessors({ sharpMoney }), [sharpMoney]);
+  const initiativeAccessors = useMemo(() => createInitiativeAccessors({ sharpMoney }), [sharpMoney]);
+  const codegraphAccessors = useMemo(() => createCodeGraphAccessors(), []);
+  const accessors = demoMode === 'codegraph' ? codegraphAccessors : initiativeAccessors;
+
+  const codegraphGroups = useMemo(() => {
+    if (demoMode !== 'codegraph') return [];
+    return codegraphGroupsFromDataset(dataset.nodes as GraphDataset<CodeGraphNodeMeta>['nodes']);
+  }, [demoMode, dataset.nodes]);
+
   const apiBase = graphApiUrl.replace(/\/$/, '');
   const fetchGraphApi = useMemo(
     () =>
@@ -141,22 +162,13 @@ export default function App() {
         }),
     [graphApiToken],
   );
-  const largeGraph = useMemo<LargeGraphOptions<InitiativeNodeMeta, unknown, InitiativeClusterMeta>>(
-    () => ({
-      // Always enabled so the progressive "load more" controls are available out of the
-      // box. When the Memgraph API is connected we stream real neighborhoods; otherwise
-      // we synthesize chunks locally — either way the library appends them in place.
+  const largeGraph = useMemo<LargeGraphOptions | undefined>(() => {
+    if (demoMode === 'codegraph') return { enabled: false };
+    return {
       enabled: true,
-      // Keep the merged edge set untrimmed so appended chunks always extend the existing
-      // prefix and take the in-place append path (rather than a budget-trim rebuild).
       edgeBudget: 20_000,
-      async expandGraph(
-        request: LargeGraphExpandRequest,
-        signal: AbortSignal,
-      ): Promise<GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta>> {
+      async expandGraph(request: LargeGraphExpandRequest, signal: AbortSignal) {
         if (dbStatus !== 'loaded') {
-          // Simulate streaming latency so the loading state and incremental append are
-          // visible, then hand back a locally synthesized chunk.
           await new Promise((resolve) => setTimeout(resolve, 280));
           if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
           streamChunkRef.current += 1;
@@ -184,8 +196,6 @@ export default function App() {
         return (await response.json()) as GraphDatasetPatch<InitiativeNodeMeta, unknown, InitiativeClusterMeta>;
       },
       async loadEdgeDetail(edge, _endpoints, signal) {
-        // Offline demo nodes/edges carry their detail in `meta`, so only the API-backed
-        // graph needs a remote fetch.
         if (dbStatus !== 'loaded') return null;
         const response = await fetchGraphApi(`${apiBase}/graph/edge/${encodeURIComponent(getEdgeId(edge))}/detail`, {
           signal,
@@ -199,13 +209,14 @@ export default function App() {
         if (!response.ok) throw new Error(`Node detail returned ${response.status}`);
         return response.json();
       },
-    }),
-    [apiBase, dbStatus, fetchGraphApi],
-  );
+    };
+  }, [apiBase, dbStatus, demoMode, fetchGraphApi]);
 
   async function importDataset(file: File) {
-    setDataset(parseGraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>(JSON.parse(await file.text())));
+    setDataset(parseGraphDataset(JSON.parse(await file.text())));
+    setDemoMode('initiatives');
     setDbStatus('idle');
+    setCodegraphStatus('idle');
   }
 
   async function loadDatabaseGraph() {
@@ -214,47 +225,84 @@ export default function App() {
       const response = await fetchGraphApi(`${apiBase}/graph`);
       if (!response.ok) throw new Error(`Graph API returned ${response.status}`);
       setDataset(parseGraphDataset<InitiativeNodeMeta, unknown, InitiativeClusterMeta>(await response.json()));
+      setDemoMode('initiatives');
       setDbStatus('loaded');
+      setCodegraphStatus('idle');
     } catch {
       setDbStatus('error');
     }
   }
 
-  return (
-    <GalaxyGraphVisualizer
-      dataset={dataset}
-      accessors={accessors}
-      groups={INITIATIVE_CATEGORIES}
-      legend={initiativeLegend}
-      keyLegend={navKeysBadge}
-      renderNodeDetail={renderInitiativeNodeDetail}
-      renderEdgeDetail={renderInitiativeEdgeDetail}
-      largeGraph={largeGraph}
-      onDatasetSizeChange={(size) => setDataset(generateGalaxyDataset(size))}
-      theme={theme}
-      onThemeChange={setTheme}
-      options={{
-        datasetSizes: DATASET_SIZES,
-        focusModel: {
-          enabled: focusModelEnabled,
-          variant: 'fullFocus',
-        },
-        showDatasetSizeControls: true,
-        showKeyLegend: true,
-        showLegend: true,
-        showThemeControl: true,
-      }}
-      controlActions={
-        <>
-          <button
-            type="button"
-            className={focusModelEnabled ? 'toggle is-on' : 'toggle'}
-            aria-pressed={focusModelEnabled}
-            onClick={() => setFocusModelEnabled((value) => !value)}
-          >
-            <MousePointerClick size={15} aria-hidden="true" />
-            Click focus <span>{focusModelEnabled ? 'ON' : 'OFF'}</span>
-          </button>
+  async function loadCodeGraphDataset(refresh = false) {
+    setCodegraphStatus('loading');
+    try {
+      const url = refresh ? `${CODEGRAPH_DATASET_URL}?t=${Date.now()}` : CODEGRAPH_DATASET_URL;
+      const response = await fetch(url);
+      if (response.status === 404) {
+        setCodegraphStatus('missing');
+        return;
+      }
+      if (!response.ok) throw new Error(`CodeGraph dataset returned ${response.status}`);
+      setDataset(
+        parseGraphDataset<CodeGraphNodeMeta, CodeGraphEdgeMeta, CodeGraphClusterMeta>(await response.json()),
+      );
+      setDemoMode('codegraph');
+      setDbStatus('idle');
+      setCodegraphStatus('loaded');
+    } catch {
+      setCodegraphStatus('error');
+    }
+  }
+
+  const codegraphButtonTitle =
+    codegraphStatus === 'missing'
+      ? 'CodeGraph dataset not found. Run: codegraph init -i && npm run codegraph:export'
+      : codegraphStatus === 'loaded'
+        ? 'Reload CodeGraph dataset (re-run npm run codegraph:export after sync)'
+        : 'Load CodeGraph dataset for this repository';
+
+  const visualizerProps = {
+    dataset,
+    accessors,
+    brandLabel: demoMode === 'codegraph' ? 'Galaxy Nodes · CodeGraph' : 'Galaxy Nodes',
+    groups: demoMode === 'codegraph' ? codegraphGroups : INITIATIVE_CATEGORIES,
+    legend: demoMode === 'codegraph' ? codegraphLegend() : initiativeLegend,
+    keyLegend: navKeysBadge,
+    renderNodeDetail: demoMode === 'codegraph' ? renderCodeGraphNodeDetail : renderInitiativeNodeDetail,
+    renderEdgeDetail: demoMode === 'codegraph' ? renderCodeGraphEdgeDetail : renderInitiativeEdgeDetail,
+    largeGraph,
+    onDatasetSizeChange:
+      demoMode === 'initiatives'
+        ? (size: number) => {
+            setDataset(generateGalaxyDataset(size));
+            setCodegraphStatus('idle');
+          }
+        : undefined,
+    theme,
+    onThemeChange: setTheme,
+    options: {
+      datasetSizes: demoMode === 'initiatives' ? DATASET_SIZES : undefined,
+      focusModel: {
+        enabled: focusModelEnabled,
+        variant: 'fullFocus' as const,
+      },
+      showDatasetSizeControls: demoMode === 'initiatives',
+      showKeyLegend: true,
+      showLegend: true,
+      showThemeControl: true,
+    },
+    controlActions: (
+      <>
+        <button
+          type="button"
+          className={focusModelEnabled ? 'toggle is-on' : 'toggle'}
+          aria-pressed={focusModelEnabled}
+          onClick={() => setFocusModelEnabled((value) => !value)}
+        >
+          <MousePointerClick size={15} aria-hidden="true" />
+          Click focus <span>{focusModelEnabled ? 'ON' : 'OFF'}</span>
+        </button>
+        {demoMode === 'initiatives' ? (
           <button
             type="button"
             className={sharpMoney ? 'toggle is-on' : 'toggle'}
@@ -264,10 +312,12 @@ export default function App() {
             <Activity size={15} aria-hidden="true" />
             Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
           </button>
-        </>
-      }
-      sideRailActions={
-        <>
+        ) : null}
+      </>
+    ),
+    sideRailActions: (
+      <>
+        {demoMode === 'initiatives' ? (
           <button
             type="button"
             className={
@@ -278,22 +328,38 @@ export default function App() {
           >
             <Database size={17} aria-hidden="true" />
           </button>
-          <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
-            <Import size={17} aria-hidden="true" />
-          </button>
-          <input
-            ref={fileInputRef}
-            className="visually-hidden"
-            type="file"
-            accept="application/json,.json"
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              if (file) void importDataset(file);
-              event.currentTarget.value = '';
-            }}
-          />
-        </>
-      }
-    />
-  );
+        ) : null}
+        <button
+          type="button"
+          className={
+            codegraphStatus === 'loaded' || codegraphStatus === 'loading'
+              ? 'is-active'
+              : codegraphStatus === 'missing' || codegraphStatus === 'error'
+                ? 'is-error'
+                : ''
+          }
+          title={codegraphButtonTitle}
+          onClick={() => void loadCodeGraphDataset(codegraphStatus === 'loaded')}
+        >
+          <FileCode size={17} aria-hidden="true" />
+        </button>
+        <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
+          <Import size={17} aria-hidden="true" />
+        </button>
+        <input
+          ref={fileInputRef}
+          className="visually-hidden"
+          type="file"
+          accept="application/json,.json"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) void importDataset(file);
+            event.currentTarget.value = '';
+          }}
+        />
+      </>
+    ),
+  } as GalaxyGraphVisualizerProps;
+
+  return <GalaxyGraphVisualizer {...visualizerProps} />;
 }

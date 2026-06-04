@@ -4,6 +4,7 @@ docs/api/
 coverage/
 temp/
 examples/basic/dist/
+examples/basic/public/codegraph-dataset.json
 examples/next/.next/
 examples/next/out/
 .site/
