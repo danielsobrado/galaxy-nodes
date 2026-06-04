@@ -108,8 +108,12 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
         Boolean(selectedEdgeHighlight?.secondDegreeNodeIds.has(node.id));
       const highlightLevel = selected ? 3 : firstDegree ? 2 : secondDegree ? 1 : 0;
       const visibleByGroup = group === null || node.group === group;
+      const visibleByProjection = selection.visibility
+        ? selection.visibility.visibleNodeIds.has(node.id)
+        : visibleByGroup;
+      const visibleByScope = visibleByProjection || highlightLevel > 0;
 
-      if (!visibleByGroup && highlightLevel === 0) {
+      if (!visibleByScope) {
         pointBuffer.colors[baseColorOffset] = pointBuffer.baseColors[baseColorOffset] * DIMMED_POINT_COLOR_FACTOR;
         pointBuffer.colors[baseColorOffset + 1] =
           pointBuffer.baseColors[baseColorOffset + 1] * DIMMED_POINT_COLOR_FACTOR;
@@ -127,8 +131,9 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
             : highlightLevel === 1
               ? POINT_SIZE_SECOND_DEGREE
               : 1;
-      pointBuffer.visibleSizes[index] =
-        visibleByGroup || highlightLevel > 0 ? Math.max(baseSize * sizeMultiplier, baseSize + highlightLevel) : 0;
+      pointBuffer.visibleSizes[index] = visibleByScope
+        ? Math.max(baseSize * sizeMultiplier, baseSize + highlightLevel)
+        : 0;
 
       tmpPointSelectionColor.setRGB(
         pointBuffer.baseColors[baseColorOffset],

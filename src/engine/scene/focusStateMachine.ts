@@ -9,6 +9,7 @@ export type FocusState =
   | { name: 'focusedPartial'; nodeId: string; previousNodeId?: string }
   | { name: 'focused'; nodeId: string }
   | { name: 'expandedFocus'; depth: 1 | 2; nodeId: string }
+  | { name: 'deepFocus'; nodeId: string; previousNodeId?: string }
   | { name: 'pathFocus'; nodeId: string; path: FocusPathResult; pathType: PathFocusType }
   | { name: 'orbitFocus'; nodeId: string }
   | { name: 'navigatingBack'; targetNodeId?: string }
@@ -25,9 +26,14 @@ export type FocusEvent =
   | { type: 'LOAD_FAILED'; nodeId: string }
   | { type: 'CAMERA_SETTLED'; nodeId?: string }
   | { type: 'EXPAND_NEIGHBORS'; depth: 1 | 2 }
+  | { type: 'EXPAND_DEEP' }
+  | { type: 'EXIT_DEEP' }
+  | { type: 'EXPAND_BRANCH'; nodeId: string }
   | { type: 'COLLAPSE_NEIGHBORS' }
+  | { type: 'COLLAPSE_ALL' }
   | { type: 'SHOW_PATH'; nodeId?: string; path: FocusPathResult; pathType: PathFocusType }
   | { type: 'HIDE_PATH' }
+  | { type: 'INSPECT_PATH'; nodeId?: string }
   | { type: 'USER_ORBIT_OR_ZOOM' }
   | { type: 'RECENTER' }
   | { type: 'BACK'; targetNodeId?: string }
@@ -42,6 +48,7 @@ export function focusedNodeId(state: FocusState): string | null {
     state.name === 'focusedPartial' ||
     state.name === 'focused' ||
     state.name === 'expandedFocus' ||
+    state.name === 'deepFocus' ||
     state.name === 'pathFocus' ||
     state.name === 'orbitFocus'
   ) {
@@ -61,16 +68,24 @@ export function reduceFocusState(state: FocusState, event: FocusEvent): FocusSta
     return { name: 'unfocusing', nodeId: focusedNodeId(state) ?? undefined };
   }
 
+  if (event.type === 'COLLAPSE_ALL') {
+    return { name: 'unfocusing', nodeId: focusedNodeId(state) ?? undefined };
+  }
+
   if (event.type === 'CANCEL') return { name: 'idle' };
 
   switch (state.name) {
     case 'idle':
       if (event.type === 'NODE_HOVER') return { name: 'hoverPreview', nodeId: event.nodeId };
+      if (event.type === 'SHOW_PATH' && event.nodeId)
+        return { name: 'pathFocus', nodeId: event.nodeId, path: event.path, pathType: event.pathType };
       return state;
 
     case 'hoverPreview':
       if (event.type === 'HOVER_END') return { name: 'idle' };
       if (event.type === 'NODE_HOVER') return { name: 'hoverPreview', nodeId: event.nodeId };
+      if (event.type === 'SHOW_PATH' && event.nodeId)
+        return { name: 'pathFocus', nodeId: event.nodeId, path: event.path, pathType: event.pathType };
       return state;
 
     case 'preFocus':
@@ -115,6 +130,7 @@ export function reduceFocusState(state: FocusState, event: FocusEvent): FocusSta
 
     case 'focused':
       if (event.type === 'EXPAND_NEIGHBORS') return { name: 'expandedFocus', nodeId: state.nodeId, depth: event.depth };
+      if (event.type === 'EXPAND_DEEP') return { name: 'deepFocus', nodeId: state.nodeId };
       if (event.type === 'SHOW_PATH')
         return { name: 'pathFocus', nodeId: event.nodeId ?? state.nodeId, path: event.path, pathType: event.pathType };
       if (event.type === 'USER_ORBIT_OR_ZOOM') return { name: 'orbitFocus', nodeId: state.nodeId };
@@ -123,12 +139,27 @@ export function reduceFocusState(state: FocusState, event: FocusEvent): FocusSta
 
     case 'expandedFocus':
       if (event.type === 'COLLAPSE_NEIGHBORS') return { name: 'focused', nodeId: state.nodeId };
+      if (event.type === 'EXPAND_DEEP') return { name: 'deepFocus', nodeId: state.nodeId };
+      if (event.type === 'SHOW_PATH')
+        return { name: 'pathFocus', nodeId: event.nodeId ?? state.nodeId, path: event.path, pathType: event.pathType };
+      if (event.type === 'USER_ORBIT_OR_ZOOM') return { name: 'orbitFocus', nodeId: state.nodeId };
+      if (event.type === 'BACK') return { name: 'navigatingBack', targetNodeId: event.targetNodeId };
+      return state;
+
+    case 'deepFocus':
+      if (event.type === 'EXIT_DEEP') return { name: 'expandedFocus', nodeId: state.nodeId, depth: 1 };
+      if (event.type === 'EXPAND_BRANCH')
+        return { name: 'deepFocus', nodeId: event.nodeId, previousNodeId: state.nodeId };
+      if (event.type === 'SHOW_PATH')
+        return { name: 'pathFocus', nodeId: event.nodeId ?? state.nodeId, path: event.path, pathType: event.pathType };
       if (event.type === 'USER_ORBIT_OR_ZOOM') return { name: 'orbitFocus', nodeId: state.nodeId };
       if (event.type === 'BACK') return { name: 'navigatingBack', targetNodeId: event.targetNodeId };
       return state;
 
     case 'pathFocus':
-      if (event.type === 'HIDE_PATH') return { name: 'focused', nodeId: state.nodeId };
+      if (event.type === 'HIDE_PATH') return { name: 'expandedFocus', nodeId: state.nodeId, depth: 1 };
+      if (event.type === 'INSPECT_PATH')
+        return { name: 'deepFocus', nodeId: event.nodeId ?? state.nodeId, previousNodeId: state.nodeId };
       if (event.type === 'BACK') return { name: 'navigatingBack', targetNodeId: event.targetNodeId };
       return state;
 

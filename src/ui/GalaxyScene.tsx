@@ -35,6 +35,10 @@ export type {
   GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
   GalaxyFocusModelOptions,
+  GalaxyViewMode,
+  GalaxyVisibilityBudget,
+  GalaxyVisibilityModelOptions,
+  GalaxyVisibilityOverflowSummary,
   GalaxyRenderMode,
   PlanetSizingMode,
   ResolvedGalaxyGraphTheme,
@@ -61,6 +65,7 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
   onContextBudgetExceeded?: GalaxyRendererCallbacks<NMeta, EMeta>['onContextBudgetExceeded'];
   onGraphUxEvent?: (event: GraphUxEvent) => void;
   onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
+  onSelectCluster?: GalaxyRendererCallbacks<NMeta, EMeta>['onSelectCluster'];
   onSelectNode: (node: GraphNode<NMeta> | null) => void;
   onHoverNode: (node: GraphNode<NMeta> | null) => void;
   onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
@@ -78,6 +83,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   theme,
   cameraCommand,
   focusModel,
+  visibilityModel,
   uxVariant,
   motionPreference = 'system',
   onSceneFailure,
@@ -86,6 +92,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   onContextBudgetExceeded,
   onGraphUxEvent,
   onHoverNodeAnchor,
+  onSelectCluster,
   paused = false,
   nodeSizeScale,
   planetSizing,
@@ -110,6 +117,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       dataset,
       expectedSize,
       focusModel,
+      visibilityModel,
       galaxyMode,
       layout,
       motionPreference,
@@ -130,6 +138,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       dataset,
       expectedSize,
       focusModel,
+      visibilityModel,
       galaxyMode,
       layout,
       motionPreference,
@@ -161,6 +170,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
         setFailure(null);
         onSceneReady?.();
       },
+      onSelectCluster,
       onSelectEdge,
       onSelectNode,
     }),
@@ -173,6 +183,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       onHoverNodeAnchor,
       onSceneFailure,
       onSceneReady,
+      onSelectCluster,
       onSelectEdge,
       onSelectNode,
     ],

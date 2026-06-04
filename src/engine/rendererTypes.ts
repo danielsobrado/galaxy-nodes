@@ -2,6 +2,7 @@ import type { GraphLayoutInput } from '../domain/layout';
 import type {
   GalaxyCameraView,
   GraphAccessors,
+  GraphCluster,
   GraphDataset,
   GraphEdge,
   GraphNode,
@@ -10,6 +11,14 @@ import type {
 import type { GalaxyMotionPreference, GalaxyRendererContextBudget, ResolvedGalaxyMotion } from './environment';
 import type { GalaxyGraphThemeInput, GalaxyPlanetSizingOptions, GalaxyRenderMode } from './rendererConfig';
 import type { GalaxySceneFailure } from './sceneFallback';
+import type { GalaxyViewMode, GalaxyVisibilityModelOptions, GalaxyVisibilityOverflow } from './visibilityModel';
+
+export type {
+  GalaxyViewMode,
+  GalaxyVisibilityBudget,
+  GalaxyVisibilityModelOptions,
+  GalaxyVisibilityOverflowSummary,
+} from './visibilityModel';
 
 export type PathFocusType = 'dependency' | 'impact' | 'ownership' | string;
 
@@ -36,9 +45,12 @@ export interface CameraCommand {
     | 'move'
     | 'reset'
     | 'expand-neighbors'
+    | 'expand-deep'
     | 'collapse-neighbors'
+    | 'collapse-all'
     | 'show-path'
     | 'hide-path'
+    | 'inspect-path'
     | 'back'
     | 'recenter'
     | 'unfocus'
@@ -111,6 +123,30 @@ export type GraphUxEvent =
       focusedNodeId?: string;
     }
   | {
+      type: 'cluster_click';
+      clusterId: string;
+      timestampMs: number;
+      viewMode: GalaxyViewMode;
+    }
+  | {
+      type: 'view_mode_changed';
+      focusedNodeId?: string;
+      from: GalaxyViewMode;
+      timestampMs: number;
+      to: GalaxyViewMode;
+    }
+  | {
+      type: 'visibility_projected';
+      focusedNodeId?: string;
+      hiddenEdgeCount: number;
+      hiddenNodeCount: number;
+      overflow: GalaxyVisibilityOverflow;
+      timestampMs: number;
+      viewMode: GalaxyViewMode;
+      visibleEdgeCount: number;
+      visibleNodeCount: number;
+    }
+  | {
       type: 'task_started';
       taskId: string;
       timestampMs: number;
@@ -139,6 +175,8 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
   uxVariant?: GraphUxVariant;
   /** Click-to-focus state machine and camera behavior. Disabled by default for compatibility. */
   focusModel?: GalaxyFocusModelOptions;
+  /** Opt-in render-graph projection for default/expanded/deep/path views. Disabled by default. */
+  visibilityModel?: GalaxyVisibilityModelOptions<NMeta, EMeta>;
   /** Maximum active Galaxy renderer WebGL contexts allowed in this browser tab. Defaults to 12. */
   contextLimit?: number;
   motionPreference?: GalaxyMotionPreference;
@@ -174,6 +212,7 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
   onHoverNodeAnchor?: (anchor: GalaxyNodeHoverAnchor | null) => void;
   onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
+  onSelectCluster?: (cluster: GraphCluster | null) => void;
 }
 
 export interface MutableRef<T> {
@@ -183,15 +222,21 @@ export interface MutableRef<T> {
 export type SceneCallbacks<NMeta = unknown, EMeta = unknown> = Required<
   Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onHoverEdge' | 'onHoverNode' | 'onSelectEdge' | 'onSelectNode'>
 > &
-  Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange' | 'onGraphUxEvent' | 'onHoverNodeAnchor'>;
+  Pick<
+    GalaxyRendererCallbacks<NMeta, EMeta>,
+    'onCameraViewChange' | 'onGraphUxEvent' | 'onHoverNodeAnchor' | 'onSelectCluster'
+  >;
 
 export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
   backFocus: () => void;
+  collapseAll: () => void;
   collapseNeighbors: () => void;
+  expandDeep: () => void;
   expandNeighbors: (depth?: 1 | 2) => void;
   focusEdge: (edgeId: string) => void;
   focusNode: (nodeId: string) => void;
   hidePath: () => void;
+  inspectPath: (nodeId?: string) => void;
   moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
   recenterFocus: () => void;
   resetCamera: () => void;
@@ -207,13 +252,16 @@ export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknow
 
 export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   backFocus: () => void;
+  collapseAll: () => void;
   collapseNeighbors: () => void;
   completeFocusData: (nodeId: string) => void;
+  expandDeep: () => void;
   expandNeighbors: (depth?: 1 | 2) => void;
   failFocusData: (nodeId: string) => void;
   focusEdge: (edgeId: string) => void;
   focusNode: (nodeId: string, dataReady?: boolean) => void;
   hidePath: () => void;
+  inspectPath: (nodeId?: string) => void;
   moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
   recenterFocus: () => void;
   resetCamera: () => void;
@@ -231,6 +279,7 @@ export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   updateTheme: (theme: GalaxyGraphThemeInput | undefined) => void;
   updateFocusModel: (focusModel: GalaxyFocusModelOptions | undefined) => void;
   updateUxVariant: (variant: GraphUxVariant | undefined) => void;
+  updateVisibilityModel: (visibilityModel: GalaxyVisibilityModelOptions<NMeta, EMeta> | undefined) => void;
   appendDataset: (dataset: GraphDataset<NMeta, EMeta>) => void;
   dispose: () => void;
 }
@@ -248,6 +297,7 @@ export interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
   theme: GalaxyGraphThemeInput | undefined;
   focusModel: GalaxyFocusModelOptions | undefined;
   uxVariant: GraphUxVariant | undefined;
+  visibilityModel: GalaxyVisibilityModelOptions<NMeta, EMeta> | undefined;
 }
 
 export interface CoreState<NMeta = unknown, EMeta = unknown, CMeta = unknown> {

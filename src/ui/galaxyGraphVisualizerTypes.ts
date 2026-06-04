@@ -11,6 +11,7 @@ import type {
   GalaxySceneProps,
   FocusPathResult,
   GalaxyFocusModelOptions,
+  GalaxyVisibilityModelOptions,
   GraphUxEvent,
   GraphUxVariant,
   PathFocusType,
@@ -20,6 +21,7 @@ import type {
   EdgeEndpoint,
   GalaxyCameraView,
   GraphAccessors,
+  GraphCluster,
   GraphDataset,
   GraphDatasetPatch,
   GraphEdge,
@@ -66,6 +68,8 @@ export interface GalaxyGraphVisualizerOptions {
   themeChoices?: readonly GalaxyGraphThemeChoice[];
   /** UX experiment variant attached to graph interaction telemetry. Defaults to `'baseline'`. */
   uxVariant?: GraphUxVariant;
+  /** Opt-in render-graph projection for default/expanded/deep/path views. */
+  visibilityModel?: GalaxyVisibilityModelOptions;
   webglContextLimit?: number;
 }
 
@@ -220,6 +224,7 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   onGraphUxEvent?: (event: GraphUxEvent) => void;
   onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
   onHoverNode?: (node: GraphNode<NMeta> | null) => void;
+  onSelectCluster?: (cluster: GraphCluster<CMeta> | null) => void;
   onContextBudgetExceeded?: GalaxySceneProps<NMeta, EMeta, CMeta>['onContextBudgetExceeded'];
   onNavigate?: (command: CameraCommand) => void;
   onSceneFailure?: (failure: GalaxySceneFailure) => void;

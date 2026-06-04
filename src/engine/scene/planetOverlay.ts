@@ -185,7 +185,16 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
     const currentTheme = theme();
     const group = activeGroup();
     const { selectedNodeId, selectedEdgeId, selectedNodeHighlight, hoveredNodeId } = selection;
-    const majorNodes = nodeSizing.selectPlanetOverlayNodes();
+    const projection = selection.visibility;
+    const majorNodes = nodeSizing
+      .selectPlanetOverlayNodes()
+      .filter(
+        (node) =>
+          !projection ||
+          projection.visibleNodeIds.has(node.id) ||
+          selectedNodeId === node.id ||
+          selection.pathNodeIds?.has(node.id),
+      );
     const hasSelection = Boolean(selectedNodeId || selectedEdgeId);
     const selectedEndpoints = selectedEdgeId ? (edgeEndpoints.get(selectedEdgeId) ?? null) : null;
     const maxDegree = nodeSizing.maxDegreeForMode(planetSizing().mode);
@@ -262,7 +271,8 @@ export function createPlanetOverlay<NMeta = unknown, EMeta = unknown>(
       planetInstanceNodeIds[index] = node.id;
 
       const label = nodeLabelPool[index];
-      const labelText = !emphasized && shouldShowMajorLabel(index, group) ? resolved.nodeLabel(node) : null;
+      const labelAllowed = projection ? projection.labelNodeIds.has(node.id) : shouldShowMajorLabel(index, group);
+      const labelText = !emphasized && labelAllowed ? resolved.nodeLabel(node) : null;
       setSceneLabel(
         label,
         labelText,

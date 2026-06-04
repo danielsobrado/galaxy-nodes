@@ -3,6 +3,7 @@
  * describe the cross-cutting selection/highlight state that several layers read when they
  * recompute their appearance.
  */
+import type { GalaxyVisibilityProjection } from '../visibilityModel';
 
 export interface NodeSelectionHighlight {
   connectedEdgeIds: Set<string>;
@@ -10,7 +11,7 @@ export interface NodeSelectionHighlight {
   secondDegreeNodeIds: Set<string>;
 }
 
-export type SceneFocusMode = 'none' | 'cameraOnly' | 'fullFocus' | 'expanded' | 'path' | 'orbit' | 'partial';
+export type SceneFocusMode = 'none' | 'cameraOnly' | 'fullFocus' | 'expanded' | 'deep' | 'path' | 'orbit' | 'partial';
 
 export interface SelectionState {
   selectedNodeId: string | null;
@@ -22,4 +23,5 @@ export interface SelectionState {
   focusMode: SceneFocusMode;
   pathEdgeIds: Set<string>;
   pathNodeIds: Set<string>;
+  visibility?: GalaxyVisibilityProjection;
 }

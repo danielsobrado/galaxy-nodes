@@ -24,7 +24,7 @@ export interface CameraCommand {
     // (undocumented)
     pathType?: PathFocusType;
     // (undocumented)
-    type: 'focus' | 'focus-edge' | 'move' | 'reset' | 'expand-neighbors' | 'collapse-neighbors' | 'show-path' | 'hide-path' | 'back' | 'recenter' | 'unfocus' | 'focus-data-ready' | 'focus-data-missing' | 'focus-data-timeout' | 'focus-load-failed';
+    type: 'focus' | 'focus-edge' | 'move' | 'reset' | 'expand-neighbors' | 'expand-deep' | 'collapse-neighbors' | 'collapse-all' | 'show-path' | 'hide-path' | 'inspect-path' | 'back' | 'recenter' | 'unfocus' | 'focus-data-ready' | 'focus-data-missing' | 'focus-data-timeout' | 'focus-load-failed';
 }
 
 // @public (undocumented)
@@ -413,6 +413,7 @@ export interface GalaxyGraphVisualizerOptions {
     // (undocumented)
     themeChoices?: readonly GalaxyGraphThemeChoice[];
     uxVariant?: GraphUxVariant;
+    visibilityModel?: GalaxyVisibilityModelOptions;
     // (undocumented)
     webglContextLimit?: number;
 }
@@ -454,6 +455,8 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
     onNavigate?: (command: CameraCommand) => void;
     // (undocumented)
     onSceneFailure?: (failure: GalaxySceneFailure) => void;
+    // (undocumented)
+    onSelectCluster?: (cluster: GraphCluster<CMeta> | null) => void;
     // (undocumented)
     onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
     // (undocumented)
@@ -552,6 +555,8 @@ export interface GalaxySceneProps<NMeta = unknown, EMeta = unknown, CMeta = unkn
     // (undocumented)
     onSceneReady?: () => void;
     // (undocumented)
+    onSelectCluster?: GalaxyRendererCallbacks<NMeta, EMeta>['onSelectCluster'];
+    // (undocumented)
     onSelectEdge: (edge: GraphEdge<EMeta> | null) => void;
     // (undocumented)
     onSelectNode: (node: GraphNode<NMeta> | null) => void;
@@ -607,6 +612,27 @@ export type GraphUxEvent = {
     type: 'pan_or_orbit';
     timestampMs: number;
     focusedNodeId?: string;
+} | {
+    type: 'cluster_click';
+    clusterId: string;
+    timestampMs: number;
+    viewMode: GalaxyViewMode;
+} | {
+    type: 'view_mode_changed';
+    focusedNodeId?: string;
+    from: GalaxyViewMode;
+    timestampMs: number;
+    to: GalaxyViewMode;
+} | {
+    type: 'visibility_projected';
+    focusedNodeId?: string;
+    hiddenEdgeCount: number;
+    hiddenNodeCount: number;
+    overflow: GalaxyVisibilityOverflow;
+    timestampMs: number;
+    viewMode: GalaxyViewMode;
+    visibleEdgeCount: number;
+    visibleNodeCount: number;
 } | {
     type: 'task_started';
     taskId: string;

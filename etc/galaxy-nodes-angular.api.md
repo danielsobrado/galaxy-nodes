@@ -21,7 +21,7 @@ export interface CameraCommand {
     // (undocumented)
     pathType?: PathFocusType;
     // (undocumented)
-    type: 'focus' | 'focus-edge' | 'move' | 'reset' | 'expand-neighbors' | 'collapse-neighbors' | 'show-path' | 'hide-path' | 'back' | 'recenter' | 'unfocus' | 'focus-data-ready' | 'focus-data-missing' | 'focus-data-timeout' | 'focus-load-failed';
+    type: 'focus' | 'focus-edge' | 'move' | 'reset' | 'expand-neighbors' | 'expand-deep' | 'collapse-neighbors' | 'collapse-all' | 'show-path' | 'hide-path' | 'inspect-path' | 'back' | 'recenter' | 'unfocus' | 'focus-data-ready' | 'focus-data-missing' | 'focus-data-timeout' | 'focus-load-failed';
 }
 
 // @public
@@ -266,9 +266,13 @@ export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknow
     // (undocumented)
     backFocus: () => void;
     // (undocumented)
+    collapseAll: () => void;
+    // (undocumented)
     collapseNeighbors: () => void;
     // (undocumented)
     dispose: () => void;
+    // (undocumented)
+    expandDeep: () => void;
     // (undocumented)
     expandNeighbors: (depth?: 1 | 2) => void;
     // (undocumented)
@@ -277,6 +281,8 @@ export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknow
     focusNode: (nodeId: string) => void;
     // (undocumented)
     hidePath: () => void;
+    // (undocumented)
+    inspectPath: (nodeId?: string) => void;
     // (undocumented)
     moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
     // (undocumented)
@@ -311,6 +317,8 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
     onSceneFailure?: (failure: GalaxySceneFailure) => void;
     // (undocumented)
     onSceneReady?: () => void;
+    // (undocumented)
+    onSelectCluster?: (cluster: GraphCluster | null) => void;
     // (undocumented)
     onSelectEdge?: (edge: GraphEdge<EMeta> | null) => void;
     // (undocumented)
@@ -359,6 +367,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     // (undocumented)
     theme?: GalaxyGraphThemeInput;
     uxVariant?: GraphUxVariant;
+    visibilityModel?: GalaxyVisibilityModelOptions<NMeta, EMeta>;
 }
 
 // @public (undocumented)
@@ -504,6 +513,27 @@ export type GraphUxEvent = {
     type: 'pan_or_orbit';
     timestampMs: number;
     focusedNodeId?: string;
+} | {
+    type: 'cluster_click';
+    clusterId: string;
+    timestampMs: number;
+    viewMode: GalaxyViewMode;
+} | {
+    type: 'view_mode_changed';
+    focusedNodeId?: string;
+    from: GalaxyViewMode;
+    timestampMs: number;
+    to: GalaxyViewMode;
+} | {
+    type: 'visibility_projected';
+    focusedNodeId?: string;
+    hiddenEdgeCount: number;
+    hiddenNodeCount: number;
+    overflow: GalaxyVisibilityOverflow;
+    timestampMs: number;
+    viewMode: GalaxyViewMode;
+    visibleEdgeCount: number;
+    visibleNodeCount: number;
 } | {
     type: 'task_started';
     taskId: string;

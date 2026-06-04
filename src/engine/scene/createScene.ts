@@ -60,6 +60,7 @@ import {
 import type {
   GalaxyNodeHoverAnchor,
   GalaxyFocusModelOptions,
+  GalaxyVisibilityModelOptions,
   FocusPathResult,
   GraphCameraState,
   GraphUxEvent,
@@ -69,6 +70,7 @@ import type {
   SceneRuntime,
   PathFocusType,
 } from '../rendererTypes';
+import { projectGraphVisibility, type GalaxyViewMode, type GalaxyVisibilityProjection } from '../visibilityModel';
 import {
   focusedNodeId as focusStateNodeId,
   reduceFocusState,
@@ -94,7 +96,7 @@ import { createPointLayer } from './pointLayer';
 import { createSelectionModel } from './selectionModel';
 import { createMarkerLayer } from './markerLayer';
 import { createPlanetOverlay } from './planetOverlay';
-import type { SelectionState } from './sceneContext';
+import type { NodeSelectionHighlight, SelectionState } from './sceneContext';
 import { createEdgeLayer } from './edgeLayer';
 import { createPicking } from './picking';
 import { createCameraController } from './cameraController';
@@ -171,6 +173,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   initialTheme: GalaxyGraphThemeInput | undefined,
   initialUxVariant: GraphUxVariant | undefined,
   initialFocusModel: GalaxyFocusModelOptions | undefined,
+  initialVisibilityModel: GalaxyVisibilityModelOptions<NMeta, EMeta> | undefined,
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,
@@ -191,6 +194,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     focusMode: 'none',
     pathEdgeIds: new Set(),
     pathNodeIds: new Set(),
+    visibility: undefined,
   };
   let theme = resolveGalaxyGraphTheme(initialTheme);
   let accessors = resolveAccessors(accessorsInput);
@@ -199,7 +203,11 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   let uxVariant = initialUxVariant ?? DEFAULT_UX_VARIANT;
   let focusModelInput = initialFocusModel;
   let focusModel = resolveFocusModel(focusModelInput, uxVariant);
+  let visibilityModelInput = initialVisibilityModel;
   let focusState: FocusState = { name: 'idle' };
+  let focusedClusterId: string | null = null;
+  let lastVisibilityMode: GalaxyViewMode = 'default';
+  let lastVisibilityProjectionKey = '';
   const focusHistory: string[] = [];
   let dataTimeoutId: number | null = null;
   let cameraState: GraphCameraState = 'idle';
@@ -387,6 +395,20 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     return { position: target.clone().add(positionOffset), target };
   }
 
+  function targetForCluster(clusterId: string): CameraPose | null {
+    const cluster = graphLayout.clusterLookup.get(clusterId);
+    if (!cluster) return null;
+    const target = new THREE.Vector3(cluster.center.x, cluster.center.y, cluster.center.z).applyQuaternion(
+      world.quaternion,
+    );
+    const positionOffset = new THREE.Vector3(
+      cluster.radius * 0.45 + FOCUS_NODE_OFFSET_X_BASE,
+      cluster.radius * 0.24 + FOCUS_NODE_OFFSET_Y_BASE,
+      cluster.radius * 2.4 + FOCUS_NODE_OFFSET_Z_BASE,
+    );
+    return { position: target.clone().add(positionOffset), target };
+  }
+
   function homePose(): CameraPose {
     return { position: CAMERA_HOME.clone(), target: TARGET_HOME.clone() };
   }
@@ -463,6 +485,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   const nodePositions = graphLayout.nodePositions;
   const nodeLookup = graphLayout.nodeLookup;
+  const clusterDataLookup = new Map<string, GraphCluster>(graphLayout.clusters.map((cluster) => [cluster.id, cluster]));
   const clusterLookup = new Map<string, SceneEdgeEndpoint>(
     graphLayout.clusters.map((cluster) => [
       cluster.id,
@@ -480,6 +503,19 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   const edgeEndpoints = new Map<string, EdgeEndpoints>();
   const edgeStates = new Map<string, EdgeVisualState<EMeta>>();
   const interactiveEdgeMeshes: THREE.Object3D[] = [];
+  const clusterHitGeometry = new THREE.SphereGeometry(1, 16, 8);
+  const clusterHitMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+  const interactiveClusterMeshes = graphLayout.clusters.map((cluster) => {
+    const hit = new THREE.Mesh(clusterHitGeometry, clusterHitMaterial);
+    hit.position.set(cluster.center.x, cluster.center.y, cluster.center.z);
+    hit.scale.setScalar(Math.max(CLUSTER_ENDPOINT_MIN_RADIUS, cluster.radius));
+    hit.visible = false;
+    hit.userData.clusterId = cluster.id;
+    hit.userData.pickable = true;
+    hit.userData.type = 'cluster';
+    world.add(hit);
+    return hit;
+  });
 
   const selectionModel = createSelectionModel<NMeta, EMeta>({
     nodeLookup,
@@ -530,8 +566,25 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     galaxyMode: () => galaxyMode,
     activeGroup: () => activeGroup,
     showClusters: () => showClusters,
+    visibility: () => selection.visibility,
   });
-  const updateClusterVisibility = clusterLayer.updateVisibility;
+
+  function updateClusterPickTargets() {
+    const projection = selection.visibility;
+    interactiveClusterMeshes.forEach((hit) => {
+      const clusterId = hit.userData.clusterId as string | undefined;
+      const cluster = clusterId ? graphLayout.clusterLookup.get(clusterId) : null;
+      const visibleByGroup = activeGroup === null || cluster?.group === activeGroup;
+      hit.userData.pickable =
+        showClusters &&
+        (projection ? Boolean(clusterId && projection.visibleClusterIds.has(clusterId)) : visibleByGroup);
+    });
+  }
+
+  function updateClusterVisibility() {
+    clusterLayer.updateVisibility();
+    updateClusterPickTargets();
+  }
 
   function focusFogDensity(hasSelection: boolean) {
     const baseDensity = (galaxyMode ? FOG_DENSITY_GALAXY : FOG_DENSITY_DEFAULT) * theme.scene.fogDensityScale;
@@ -731,6 +784,104 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     };
   }
 
+  function visibilityModelEnabled() {
+    return Boolean(visibilityModelInput?.enabled);
+  }
+
+  function visibilityModeForState(state: FocusState): GalaxyViewMode {
+    if (!visibilityModelEnabled()) return 'default';
+    if (state.name === 'pathFocus') return 'path';
+    if (state.name === 'deepFocus') return 'deep';
+    if (
+      state.name === 'preFocus' ||
+      state.name === 'loadingFocusData' ||
+      state.name === 'focusingCamera' ||
+      state.name === 'focusedPartial' ||
+      state.name === 'focused' ||
+      state.name === 'expandedFocus' ||
+      state.name === 'orbitFocus'
+    ) {
+      return 'expanded';
+    }
+    return 'default';
+  }
+
+  function visibilityProjectionKey(projection: GalaxyVisibilityProjection) {
+    return [
+      projection.mode,
+      projection.visibleNodeIds.size,
+      projection.visibleEdgeIds.size,
+      projection.visibleClusterIds.size,
+      projection.overflow.hiddenNodeCount,
+      projection.overflow.hiddenEdgeCount,
+    ].join(':');
+  }
+
+  function refreshVisibilityProjection() {
+    if (!visibilityModelEnabled()) {
+      selection.visibility = undefined;
+      lastVisibilityMode = 'default';
+      lastVisibilityProjectionKey = '';
+      return;
+    }
+
+    const projection = projectGraphVisibility({
+      accessors,
+      activeGroup,
+      clusters: graphLayout.clusters,
+      dataset,
+      focusedClusterId,
+      mode: visibilityModeForState(focusState),
+      nodeDegrees,
+      options: visibilityModelInput,
+      pathEdgeIds: selection.pathEdgeIds,
+      pathNodeIds: selection.pathNodeIds,
+      selectedNodeId: selection.selectedNodeId ?? focusStateNodeId(focusState),
+    });
+    selection.visibility = projection;
+
+    if (projection.mode !== lastVisibilityMode) {
+      emitGraphUxEvent({
+        type: 'view_mode_changed',
+        focusedNodeId: focusStateNodeId(focusState) ?? undefined,
+        from: lastVisibilityMode,
+        timestampMs: performance.now(),
+        to: projection.mode,
+      });
+      lastVisibilityMode = projection.mode;
+    }
+
+    const projectionKey = visibilityProjectionKey(projection);
+    if (projectionKey !== lastVisibilityProjectionKey) {
+      emitGraphUxEvent({
+        type: 'visibility_projected',
+        focusedNodeId: focusStateNodeId(focusState) ?? undefined,
+        hiddenEdgeCount: projection.overflow.hiddenEdgeCount,
+        hiddenNodeCount: projection.overflow.hiddenNodeCount,
+        overflow: projection.overflow,
+        timestampMs: performance.now(),
+        viewMode: projection.mode,
+        visibleEdgeCount: projection.visibleEdgeIds.size,
+        visibleNodeCount: projection.visibleNodeIds.size,
+      });
+      lastVisibilityProjectionKey = projectionKey;
+    }
+  }
+
+  function filterHighlightForVisibility(highlight: NodeSelectionHighlight | null) {
+    const projection = selection.visibility;
+    if (!projection || !highlight) return highlight;
+    const filterNodeIds = (ids: Set<string>) =>
+      new Set(Array.from(ids).filter((nodeId) => projection.visibleNodeIds.has(nodeId)));
+    const filterEdgeIds = (ids: Set<string>) =>
+      new Set(Array.from(ids).filter((edgeId) => projection.visibleEdgeIds.has(edgeId)));
+    return {
+      connectedEdgeIds: filterEdgeIds(highlight.connectedEdgeIds),
+      firstDegreeNodeIds: filterNodeIds(highlight.firstDegreeNodeIds),
+      secondDegreeNodeIds: filterNodeIds(highlight.secondDegreeNodeIds),
+    };
+  }
+
   function updateSelection(nextSelectedNodeId: string | null, nextSelectedEdgeId: string | null) {
     selection.selectedNodeId = nextSelectedNodeId;
     selection.selectedEdgeId = nextSelectedEdgeId;
@@ -752,7 +903,11 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
           .lerp(selectedEndpoints.target.position, EDGE_MIDPOINT_LERP)
       : (selectedNodeEndpoint?.position ?? null);
     applyFocusState(hasSelection, focusPosition);
+    refreshVisibilityProjection();
+    selection.selectedNodeHighlight = filterHighlightForVisibility(selection.selectedNodeHighlight);
+    selection.selectedEdgeHighlight = filterHighlightForVisibility(selection.selectedEdgeHighlight);
 
+    updateClusterVisibility();
     updatePointVisibility();
     updateMajorOverlay();
     edgeLayer.updateVisibility();
@@ -792,6 +947,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     if (!focusModel.enabled || focusModel.variant === 'baseline') return 'none' as const;
     if (focusModel.variant === 'cameraOnly') return 'cameraOnly' as const;
     if (state.name === 'expandedFocus') return 'expanded' as const;
+    if (state.name === 'deepFocus') return 'deep' as const;
     if (state.name === 'pathFocus') return 'path' as const;
     if (state.name === 'orbitFocus') return 'orbit' as const;
     if (state.name === 'focusedPartial') return 'partial' as const;
@@ -811,6 +967,12 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     const startedAt = performance.now();
     emitGraphUxEvent({ type: 'focus_started', nodeId, timestampMs: startedAt, variant: focusModel.variant });
     startCameraJob(kind, pose, { type: 'CAMERA_SETTLED', nodeId }, { nodeId, telemetryStartedAt: startedAt });
+  }
+
+  function startClusterCamera(clusterId: string) {
+    const pose = targetForCluster(clusterId);
+    if (!pose) return;
+    startCameraJob('focus', pose, { type: 'CANCEL' });
   }
 
   function startUnfocusCamera() {
@@ -885,6 +1047,10 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     }
 
     applyFocusStateSelection(nextState);
+
+    if (visibilityModelEnabled() && nextState.name === 'focused' && previousState.name === 'focusingCamera') {
+      dispatchFocusEvent({ type: 'EXPAND_NEIGHBORS', depth: 1 });
+    }
   }
 
   function beginNodeFocus(nodeId: string, dataReady = true) {
@@ -895,6 +1061,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
     const previousNodeId = focusStateNodeId(focusState);
     if (previousNodeId && previousNodeId !== nodeId) focusHistory.push(previousNodeId);
+    focusedClusterId = null;
     activeCameraJob = null;
     updateSelection(nodeId, null);
     dispatchFocusEvent({ type: 'NODE_CLICK', nodeId, previousNodeId: previousNodeId ?? undefined });
@@ -933,6 +1100,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   function updateActiveGroup(nextActiveGroup: string | null) {
     activeGroup = nextActiveGroup;
+    focusedClusterId = null;
     updateClusterVisibility();
     edgeLayer.updateVisibility();
     updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
@@ -1004,6 +1172,11 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     applyFocusStateSelection(focusState);
   }
 
+  function updateVisibilityModel(nextVisibilityModel: GalaxyVisibilityModelOptions<NMeta, EMeta> | undefined) {
+    visibilityModelInput = nextVisibilityModel;
+    applyFocusStateSelection(focusState);
+  }
+
   function updateAccessors(nextAccessors: GraphAccessors<NMeta, EMeta> | undefined) {
     accessors = resolveAccessors(nextAccessors);
     updatePointAppearance();
@@ -1023,9 +1196,11 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     nodes: () => dataset.nodes,
     nodeLookup,
     edgeLookup,
+    clusterLookup: clusterDataLookup,
     planetOverlay,
     pointLayer,
     edgePickTargets: () => interactiveEdgeMeshes,
+    clusterPickTargets: () => interactiveClusterMeshes,
   });
   let animationFrame = 0;
   let frame = 0;
@@ -1117,8 +1292,9 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   }
 
   function processSelect(clientX: number, clientY: number) {
-    const { node, edge } = picking.intersectAt(clientX, clientY);
+    const { node, edge, cluster, clusterId } = picking.intersectAt(clientX, clientY);
     if (node) {
+      focusedClusterId = null;
       emitGraphUxEvent({
         type: 'node_click',
         nodeId: node.id,
@@ -1126,6 +1302,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         cameraState,
       });
       callbacksRef.current.onSelectEdge(null);
+      callbacksRef.current.onSelectCluster?.(null);
       if (focusModel.enabled && focusModel.variant !== 'baseline') {
         updateSelection(node.id, null);
         beginNodeFocus(node.id);
@@ -1134,10 +1311,34 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       return;
     }
     if (edge) {
+      focusedClusterId = null;
       callbacksRef.current.onSelectNode(null);
+      callbacksRef.current.onSelectCluster?.(null);
       callbacksRef.current.onSelectEdge(edge);
       return;
     }
+    if (cluster && clusterId) {
+      focusedClusterId = clusterId;
+      focusState = { name: 'idle' };
+      activeCameraJob = null;
+      selection.focusMode = 'none';
+      selection.pathNodeIds = new Set();
+      selection.pathEdgeIds = new Set();
+      updateSelection(null, null);
+      emitGraphUxEvent({
+        type: 'cluster_click',
+        clusterId,
+        timestampMs: performance.now(),
+        viewMode: selection.visibility?.mode ?? 'default',
+      });
+      callbacksRef.current.onSelectNode(null);
+      callbacksRef.current.onSelectEdge(null);
+      callbacksRef.current.onSelectCluster?.(cluster);
+      startClusterCamera(clusterId);
+      return;
+    }
+    focusedClusterId = null;
+    callbacksRef.current.onSelectCluster?.(null);
     if (focusModel.enabled && focusModel.variant !== 'baseline')
       dispatchFocusEvent({ type: 'ESC_OR_BACKGROUND_CLICK' });
     else {
@@ -1358,19 +1559,33 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   }
 
   function expandNeighborsCommand(depth: 1 | 2 = 1) {
-    dispatchFocusEvent({ type: 'EXPAND_NEIGHBORS', depth });
+    dispatchFocusEvent(
+      visibilityModelEnabled() && depth === 2 ? { type: 'EXPAND_DEEP' } : { type: 'EXPAND_NEIGHBORS', depth },
+    );
+  }
+
+  function expandDeepCommand() {
+    dispatchFocusEvent({ type: 'EXPAND_DEEP' });
   }
 
   function collapseNeighborsCommand() {
     dispatchFocusEvent({ type: 'COLLAPSE_NEIGHBORS' });
   }
 
+  function collapseAllCommand() {
+    dispatchFocusEvent({ type: 'COLLAPSE_ALL' });
+  }
+
   function showPathCommand(pathType: PathFocusType, path: FocusPathResult) {
-    dispatchFocusEvent({ type: 'SHOW_PATH', pathType, path });
+    dispatchFocusEvent({ type: 'SHOW_PATH', nodeId: path.nodeIds[0], pathType, path });
   }
 
   function hidePathCommand() {
     dispatchFocusEvent({ type: 'HIDE_PATH' });
+  }
+
+  function inspectPathCommand(nodeId?: string) {
+    dispatchFocusEvent({ type: 'INSPECT_PATH', nodeId });
   }
 
   function recenterFocusCommand() {
@@ -1382,13 +1597,16 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   return {
     backFocus: wake(navigateBackFocus),
+    collapseAll: wake(collapseAllCommand),
     collapseNeighbors: wake(collapseNeighborsCommand),
     completeFocusData: wake(completeFocusData),
+    expandDeep: wake(expandDeepCommand),
     expandNeighbors: wake(expandNeighborsCommand),
     failFocusData: wake(failFocusData),
     focusEdge: wake(focusEdgeWithTelemetry),
     focusNode: wake(focusNodeCommand),
     hidePath: wake(hidePathCommand),
+    inspectPath: wake(inspectPathCommand),
     moveCamera: wake(moveCameraWithTelemetry),
     recenterFocus: wake(recenterFocusCommand),
     resetCamera: wake(resetCameraWithTelemetry),
@@ -1406,6 +1624,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updateTheme: wake(updateTheme),
     updateFocusModel: wake(updateFocusModel),
     updateUxVariant: wake(updateUxVariant),
+    updateVisibilityModel: wake(updateVisibilityModel),
     appendDataset: wake(appendDataset),
     dispose: () => {
       if (sceneDisposed) return;

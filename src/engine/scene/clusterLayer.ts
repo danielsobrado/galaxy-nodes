@@ -9,10 +9,12 @@ import { makeGlowTexture } from '../materials';
 import { makeSceneLabel, shouldShowClusterLabel } from '../labels';
 import type { SceneLabel } from '../sceneTypes';
 import type { ResolvedGalaxyGraphTheme } from '../rendererConfig';
+import type { GalaxyVisibilityProjection } from '../visibilityModel';
 import { setMaterialBlending, themeBlending } from './themeRuntime';
 
 interface ClusterVisual {
   group?: string;
+  id: string;
   label: SceneLabel;
   labelText: string;
   labelIndex: number;
@@ -30,6 +32,7 @@ export interface ClusterLayerDeps {
   galaxyMode: () => boolean;
   activeGroup: () => string | null;
   showClusters: () => boolean;
+  visibility?: () => GalaxyVisibilityProjection | undefined;
 }
 
 export interface ClusterLayer {
@@ -53,6 +56,7 @@ export function createClusterLayer({
   galaxyMode,
   activeGroup,
   showClusters,
+  visibility,
 }: ClusterLayerDeps): ClusterLayer {
   const glowTexture = makeGlowTexture();
   const glowMaterial = new THREE.SpriteMaterial({
@@ -78,6 +82,7 @@ export function createClusterLayer({
 
     return {
       group: cluster.group,
+      id: cluster.id,
       label,
       labelText: cluster.label,
       labelIndex: index,
@@ -90,19 +95,25 @@ export function createClusterLayer({
     const group = activeGroup();
     const galaxy = galaxyMode();
     const clustersVisible = showClusters();
+    const projection = visibility?.();
     let visibleClusterIndex = 0;
     clusterVisuals.forEach((clusterVisual) => {
       const visibleByGroup = group === null || clusterVisual.group === group;
-      const visible = clustersVisible && visibleByGroup;
+      const visibleByProjection = projection ? projection.visibleClusterIds.has(clusterVisual.id) : visibleByGroup;
+      const visible = clustersVisible && visibleByProjection;
       const scale = clusterVisual.radius * (galaxy ? CLUSTER_SPRITE_SCALE_GALAXY : CLUSTER_SPRITE_SCALE_DEFAULT);
       clusterVisual.sprite.visible = visible;
       clusterVisual.sprite.scale.set(scale, scale, 1);
 
-      const shouldLabel = visible && shouldShowClusterLabel(visibleClusterIndex, group);
+      const shouldLabel =
+        visible &&
+        (projection
+          ? projection.labelClusterIds.has(clusterVisual.id)
+          : shouldShowClusterLabel(visibleClusterIndex, group));
       clusterVisual.label.active = shouldLabel;
       clusterVisual.label.element.textContent = shouldLabel ? clusterVisual.labelText : '';
       clusterVisual.label.element.style.display = shouldLabel ? clusterVisual.label.element.style.display : 'none';
-      if (visibleByGroup) visibleClusterIndex += 1;
+      if (visibleByProjection) visibleClusterIndex += 1;
     });
   }
 

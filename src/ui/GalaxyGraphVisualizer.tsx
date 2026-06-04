@@ -12,7 +12,14 @@ import {
   resolveAccessors,
 } from '../domain/data';
 import type { CameraCommand, GalaxyNodeHoverAnchor } from './GalaxyScene';
-import type { GalaxyCameraView, GraphDataset, GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
+import type {
+  GalaxyCameraView,
+  GraphCluster,
+  GraphDataset,
+  GraphEdge,
+  GraphNode,
+  SpaceDirection,
+} from '../domain/types';
 import {
   DEFAULT_GALAXY_GRAPH_LABELS,
   EMPTY_DETAIL_STATE,
@@ -45,6 +52,7 @@ function resolveHoverDetailDelayMs(delayMs: number | undefined) {
 export type {
   FocusPathResult,
   GalaxyFocusModelOptions,
+  GalaxyVisibilityModelOptions,
   GraphCameraState,
   GraphUxEvent,
   GraphUxVariant,
@@ -88,6 +96,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   onHoverNode,
   onNavigate,
   onSceneFailure,
+  onSelectCluster,
   onSelectEdge,
   onSelectNode,
   onThemeChange,
@@ -155,6 +164,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const focusModel = options?.focusModel;
   const focusModelVariant = focusModel?.variant ?? options?.uxVariant ?? 'baseline';
   const focusModelEnabled = focusModel?.enabled ?? focusModelVariant !== 'baseline';
+  const visibilityModelEnabled = Boolean(options?.visibilityModel?.enabled);
   const resolvedAccessors = useMemo(() => resolveAccessors(accessors), [accessors]);
   const focusDataRequestRef = useRef(0);
 
@@ -336,6 +346,18 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     [onHoverEdge],
   );
 
+  const selectCluster = useCallback(
+    (cluster: GraphCluster | null) => {
+      if (selectedNodeId === undefined) setInternalSelectedNode(null);
+      if (selectedEdgeId === undefined) {
+        setInternalSelectedEdge(null);
+        setInternalSelectedEdgeId(null);
+      }
+      onSelectCluster?.(cluster as GraphCluster<CMeta> | null);
+    },
+    [onSelectCluster, selectedEdgeId, selectedNodeId],
+  );
+
   function clearSelection() {
     const shouldNotifyNode = selectedNodeId !== undefined ? selectedNodeId !== null : selectedNode !== null;
     const shouldNotifyEdge = selectedEdgeId !== undefined ? selectedEdgeId !== null : selectedEdge !== null;
@@ -346,6 +368,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
       setInternalSelectedEdgeId(null);
     }
     if (shouldNotifyEdge) onSelectEdge?.(null);
+    onSelectCluster?.(null);
   }
 
   function chooseGroup(group: string | null) {
@@ -388,7 +411,17 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   function focusEdge(edge: GraphEdge<EMeta> | null) {
     if (!edge || !sceneReady) return;
     selectEdge(edge);
-    issueCameraCommand({ edgeId: displayEdgeId(edge), type: 'focus-edge' });
+    const edgeId = displayEdgeId(edge);
+    if (visibilityModelEnabled) {
+      const pathType = edge.type ?? (edge.kind === 'depends' ? 'dependency' : edge.kind) ?? 'dependency';
+      issueCameraCommand({
+        path: { edgeIds: [edgeId], nodeIds: [edge.source, edge.target] },
+        pathType,
+        type: 'show-path',
+      });
+      return;
+    }
+    issueCameraCommand({ edgeId, type: 'focus-edge' });
   }
 
   function moveCamera(direction: SpaceDirection) {
@@ -639,6 +672,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         expectedSize={options?.expectedSize}
         renderMode={options?.renderMode}
         focusModel={focusModel}
+        visibilityModel={options?.visibilityModel}
         theme={activeTheme}
         cameraCommand={cameraCommand}
         uxVariant={options?.uxVariant}
@@ -655,6 +689,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         onSelectNode={selectNode}
         onHoverNode={hover}
         onHoverNodeAnchor={setHoverNodeAnchor}
+        onSelectCluster={selectCluster}
         onSelectEdge={selectEdge}
         onHoverEdge={hoverConnection}
       />
@@ -770,8 +805,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
             )
           ) : null}
 
-          {(showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange) ||
-          datasetRibbonActions ? (
+          {(showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange) || datasetRibbonActions ? (
             <div className="dataset-ribbon">
               {showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange ? (
                 <div className="segmented" aria-label={chromeLabels.datasetSize}>

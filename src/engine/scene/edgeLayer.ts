@@ -198,7 +198,10 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
         state.endpoints.target.group,
         activeGroup(),
       );
-      const visible = visibleByGroup || selected === state.id || edgeVisibleInSelectionContext(state.id);
+      const visibleByProjection = selection.visibility
+        ? selection.visibility.visibleEdgeIds.has(state.id)
+        : visibleByGroup;
+      const visible = visibleByProjection || selected === state.id || edgeVisibleInSelectionContext(state.id);
       state.visible = visible;
       state.visual.visible = visible;
       if (state.hit) state.hit.userData.pickable = visible;
