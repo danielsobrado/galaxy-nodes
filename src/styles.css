@@ -524,6 +524,12 @@
   color: var(--gn-text);
   font-weight: 850;
 }
+.galaxy-nodes .dataset-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
 .galaxy-nodes .segmented {
   padding: 3px;
   border-radius: 7px;
@@ -566,7 +572,8 @@
     inset 0 0 0 1px var(--gn-active-ring),
     var(--gn-active-glow);
 }
-.galaxy-nodes .side-rail button.is-error {
+.galaxy-nodes .side-rail button.is-error,
+.galaxy-nodes .pill-button.is-error {
   color: var(--gn-no);
   box-shadow: inset 0 0 0 1px var(--gn-error-ring);
 }

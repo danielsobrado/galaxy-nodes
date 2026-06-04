@@ -198,6 +198,8 @@ export interface GalaxyGraphVisualizerProps<NMeta = unknown, EMeta = unknown, CM
   className?: string;
   /** Extra toggles rendered in the control ribbon (e.g. domain-specific modes). */
   controlActions?: ReactNode;
+  /** Actions rendered beside dataset size controls (e.g. CodeGraph load). */
+  datasetRibbonActions?: ReactNode;
   dataset: GraphDataset<NMeta, EMeta, CMeta>;
   /** Group filter buttons. Defaults to the distinct `node.group` values. */
   groups?: readonly string[];

@@ -70,6 +70,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   brandLabel = 'Galaxy Nodes',
   className,
   controlActions,
+  datasetRibbonActions,
   dataset,
   groups,
   initialGroup = null,
@@ -769,19 +770,25 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
             )
           ) : null}
 
-          {showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange ? (
-            <div className="segmented" aria-label={chromeLabels.datasetSize}>
-              {options.datasetSizes.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={graphDataset.nodes.length === size ? 'is-active' : ''}
-                  aria-pressed={graphDataset.nodes.length === size}
-                  onClick={() => requestDatasetSize(size)}
-                >
-                  {formatCompactNumber(size)}
-                </button>
-              ))}
+          {(showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange) ||
+          datasetRibbonActions ? (
+            <div className="dataset-ribbon">
+              {showDatasetSizeControls && options?.datasetSizes?.length && onDatasetSizeChange ? (
+                <div className="segmented" aria-label={chromeLabels.datasetSize}>
+                  {options.datasetSizes.map((size) => (
+                    <button
+                      key={size}
+                      type="button"
+                      className={graphDataset.nodes.length === size ? 'is-active' : ''}
+                      aria-pressed={graphDataset.nodes.length === size}
+                      onClick={() => requestDatasetSize(size)}
+                    >
+                      {formatCompactNumber(size)}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {datasetRibbonActions}
             </div>
           ) : null}
 

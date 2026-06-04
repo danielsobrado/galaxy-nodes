@@ -7,6 +7,8 @@
 // @public (undocumented)
 export interface CameraCommand {
     // (undocumented)
+    dataReady?: boolean;
+    // (undocumented)
     direction?: SpaceDirection;
     // (undocumented)
     edgeId?: string;
@@ -15,7 +17,11 @@ export interface CameraCommand {
     // (undocumented)
     nonce: number;
     // (undocumented)
-    type: 'focus' | 'focus-edge' | 'move' | 'reset';
+    path?: FocusPathResult;
+    // (undocumented)
+    pathType?: PathFocusType;
+    // (undocumented)
+    type: 'focus' | 'focus-edge' | 'move' | 'reset' | 'expand-neighbors' | 'collapse-neighbors' | 'show-path' | 'hide-path' | 'back' | 'recenter' | 'unfocus' | 'focus-data-ready' | 'focus-data-missing' | 'focus-data-timeout' | 'focus-load-failed';
 }
 
 // @public (undocumented)
@@ -66,6 +72,16 @@ export interface EdgeEndpoint<NMeta = unknown> {
 export type EdgeRenderMode = 'tube' | 'line';
 
 // @public (undocumented)
+export interface FocusPathResult {
+    // (undocumented)
+    edgeIds: string[];
+    // (undocumented)
+    label?: string;
+    // (undocumented)
+    nodeIds: string[];
+}
+
+// @public (undocumented)
 export function formatCompactNumber(value: number): string;
 
 // @public (undocumented)
@@ -89,6 +105,24 @@ export interface GalaxyCameraView {
     target: Vec3;
     // (undocumented)
     up: Vec3;
+}
+
+// @public (undocumented)
+export interface GalaxyFocusModelOptions {
+    // (undocumented)
+    cameraDurationMs?: number;
+    // (undocumented)
+    dataTimeoutMs?: number;
+    // (undocumented)
+    enabled?: boolean;
+    // (undocumented)
+    maxExpandedNeighbors?: number;
+    // (undocumented)
+    maxPrimaryNeighbors?: number;
+    // (undocumented)
+    maxSecondHopNeighbors?: number;
+    // (undocumented)
+    variant?: GraphUxVariant;
 }
 
 // @public (undocumented)
@@ -271,17 +305,31 @@ export interface GalaxyPlanetSizingOptions {
 // @public (undocumented)
 export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
     // (undocumented)
+    backFocus: () => void;
+    // (undocumented)
+    collapseNeighbors: () => void;
+    // (undocumented)
     dispose: () => void;
+    // (undocumented)
+    expandNeighbors: (depth?: 1 | 2) => void;
     // (undocumented)
     focusEdge: (edgeId: string) => void;
     // (undocumented)
     focusNode: (nodeId: string) => void;
     // (undocumented)
+    hidePath: () => void;
+    // (undocumented)
     moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
+    // (undocumented)
+    recenterFocus: () => void;
     // (undocumented)
     resetCamera: () => void;
     // (undocumented)
     retry: () => void;
+    // (undocumented)
+    showPath: (pathType: PathFocusType, path: FocusPathResult) => void;
+    // (undocumented)
+    unfocus: () => void;
     // (undocumented)
     update: (options: GalaxyRendererOptions<NMeta, EMeta, CMeta>, callbacks?: GalaxyRendererCallbacks<NMeta, EMeta>) => void;
 }
@@ -292,6 +340,8 @@ export interface GalaxyRendererCallbacks<NMeta = unknown, EMeta = unknown> {
     onCameraViewChange?: (view: GalaxyCameraView) => void;
     // (undocumented)
     onContextBudgetExceeded?: (budget: GalaxyRendererContextBudget) => void;
+    // (undocumented)
+    onGraphUxEvent?: (event: GraphUxEvent) => void;
     // (undocumented)
     onHoverEdge?: (edge: GraphEdge<EMeta> | null) => void;
     // (undocumented)
@@ -328,6 +378,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     // (undocumented)
     dataset: GraphDataset<NMeta, EMeta, CMeta>;
     expectedSize?: number;
+    focusModel?: GalaxyFocusModelOptions;
     // (undocumented)
     galaxyMode: boolean;
     // (undocumented)
@@ -348,6 +399,7 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
     showClusters: boolean;
     // (undocumented)
     theme?: GalaxyGraphThemeInput;
+    uxVariant?: GraphUxVariant;
 }
 
 // @public (undocumented)
@@ -383,6 +435,9 @@ export interface GraphAccessors<NMeta = unknown, EMeta = unknown> {
     nodeRing?: (node: GraphNode<NMeta>) => boolean;
     nodeSize?: (node: GraphNode<NMeta>) => number;
 }
+
+// @public (undocumented)
+export type GraphCameraState = 'idle' | 'moving' | 'focused' | 'orbit';
 
 // @public (undocumented)
 export interface GraphCluster<TMeta = unknown> {
@@ -479,6 +534,57 @@ export interface GraphNode<TMeta = unknown> {
 }
 
 // @public (undocumented)
+export type GraphUxEvent = {
+    type: 'node_hover';
+    nodeId: string;
+    timestampMs: number;
+} | {
+    type: 'node_click';
+    nodeId: string;
+    timestampMs: number;
+    cameraState: GraphCameraState;
+} | {
+    type: 'focus_started';
+    nodeId: string;
+    timestampMs: number;
+    variant: GraphUxVariant;
+} | {
+    type: 'focus_completed';
+    nodeId: string;
+    timestampMs: number;
+    durationMs: number;
+    visibleNodeCount: number;
+    visibleEdgeCount: number;
+} | {
+    type: 'camera_reset';
+    timestampMs: number;
+    focusedNodeId?: string;
+} | {
+    type: 'zoom_changed';
+    timestampMs: number;
+    zoomDistance: number;
+    focusedNodeId?: string;
+} | {
+    type: 'pan_or_orbit';
+    timestampMs: number;
+    focusedNodeId?: string;
+} | {
+    type: 'task_started';
+    taskId: string;
+    timestampMs: number;
+    variant: string;
+} | {
+    type: 'task_completed';
+    taskId: string;
+    timestampMs: number;
+    success: boolean;
+    answerCorrect: boolean;
+};
+
+// @public (undocumented)
+export type GraphUxVariant = 'baseline' | 'cameraOnly' | 'fullFocus';
+
+// @public (undocumented)
 export function mergeGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown>(base: GraphDataset<NMeta, EMeta, CMeta>, patch: GraphDatasetPatch<NMeta, EMeta, CMeta>, options?: MergeGraphDatasetOptions): GraphDataset<NMeta, EMeta, CMeta>;
 
 // @public (undocumented)
@@ -495,6 +601,9 @@ export type ParsedGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown
 
 // @public
 export function parseGraphDataset<NMeta = unknown, EMeta = unknown, CMeta = unknown>(raw: unknown): ParsedGraphDataset<NMeta, EMeta, CMeta>;
+
+// @public (undocumented)
+export type PathFocusType = 'dependency' | 'impact' | 'ownership' | string;
 
 // @public (undocumented)
 export type PlanetSizingMode = 'accessor' | 'degree' | 'incoming' | 'outgoing';

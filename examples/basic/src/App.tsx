@@ -261,6 +261,24 @@ export default function App() {
         ? 'Reload CodeGraph dataset (re-run npm run codegraph:export after sync)'
         : 'Load CodeGraph dataset for this repository';
 
+  const codegraphRibbonButton = (
+    <button
+      type="button"
+      className={
+        codegraphStatus === 'loaded' || codegraphStatus === 'loading'
+          ? 'pill-button is-active'
+          : codegraphStatus === 'missing' || codegraphStatus === 'error'
+            ? 'pill-button is-error'
+            : 'pill-button'
+      }
+      title={codegraphButtonTitle}
+      onClick={() => void loadCodeGraphDataset(codegraphStatus === 'loaded')}
+    >
+      <FileCode size={15} aria-hidden="true" />
+      CodeGraph
+    </button>
+  );
+
   const visualizerProps = {
     dataset,
     accessors,
@@ -315,6 +333,7 @@ export default function App() {
         ) : null}
       </>
     ),
+    datasetRibbonActions: codegraphRibbonButton,
     sideRailActions: (
       <>
         {demoMode === 'initiatives' ? (
@@ -329,20 +348,6 @@ export default function App() {
             <Database size={17} aria-hidden="true" />
           </button>
         ) : null}
-        <button
-          type="button"
-          className={
-            codegraphStatus === 'loaded' || codegraphStatus === 'loading'
-              ? 'is-active'
-              : codegraphStatus === 'missing' || codegraphStatus === 'error'
-                ? 'is-error'
-                : ''
-          }
-          title={codegraphButtonTitle}
-          onClick={() => void loadCodeGraphDataset(codegraphStatus === 'loaded')}
-        >
-          <FileCode size={17} aria-hidden="true" />
-        </button>
         <button type="button" title="Import JSON dataset" onClick={() => fileInputRef.current?.click()}>
           <Import size={17} aria-hidden="true" />
         </button>
