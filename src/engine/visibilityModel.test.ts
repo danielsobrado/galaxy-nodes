@@ -57,6 +57,8 @@ const nodeDegrees = new Map<string, NodeDegree>([
   ['other', { incoming: 0, outgoing: 1, total: 1 }],
 ]);
 
+const nodeLookup = new Map(dataset.nodes.map((node) => [node.id, node]));
+
 function project(overrides: Partial<Parameters<typeof projectGraphVisibility>[0]> = {}) {
   return projectGraphVisibility({
     accessors: resolveAccessors(undefined),
@@ -66,6 +68,7 @@ function project(overrides: Partial<Parameters<typeof projectGraphVisibility>[0]
     focusedClusterId: null,
     mode: 'default',
     nodeDegrees,
+    nodeLookup,
     options: { enabled: true },
     pathEdgeIds: new Set(),
     pathNodeIds: new Set(),

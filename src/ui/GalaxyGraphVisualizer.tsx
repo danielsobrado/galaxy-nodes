@@ -413,6 +413,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
     selectEdge(edge);
     const edgeId = displayEdgeId(edge);
     if (visibilityModelEnabled) {
+      // PathFocusType expects dependency|signal|…; unknown kinds fall back to dependency for camera framing.
       const pathType = edge.type ?? (edge.kind === 'depends' ? 'dependency' : edge.kind) ?? 'dependency';
       issueCameraCommand({
         path: { edgeIds: [edgeId], nodeIds: [edge.source, edge.target] },

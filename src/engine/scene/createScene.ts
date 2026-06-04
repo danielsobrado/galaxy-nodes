@@ -47,6 +47,9 @@ import {
   FOCUS_NODE_OFFSET_Y_BASE,
   FOCUS_NODE_OFFSET_Z_SCALE,
   FOCUS_NODE_OFFSET_Z_BASE,
+  FOCUS_CLUSTER_OFFSET_X_SCALE,
+  FOCUS_CLUSTER_OFFSET_Y_SCALE,
+  FOCUS_CLUSTER_OFFSET_Z_SCALE,
 } from '../sceneConstants';
 import {
   galaxyGraphThemeCssVariables,
@@ -402,9 +405,9 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       world.quaternion,
     );
     const positionOffset = new THREE.Vector3(
-      cluster.radius * 0.45 + FOCUS_NODE_OFFSET_X_BASE,
-      cluster.radius * 0.24 + FOCUS_NODE_OFFSET_Y_BASE,
-      cluster.radius * 2.4 + FOCUS_NODE_OFFSET_Z_BASE,
+      cluster.radius * FOCUS_CLUSTER_OFFSET_X_SCALE + FOCUS_NODE_OFFSET_X_BASE,
+      cluster.radius * FOCUS_CLUSTER_OFFSET_Y_SCALE + FOCUS_NODE_OFFSET_Y_BASE,
+      cluster.radius * FOCUS_CLUSTER_OFFSET_Z_SCALE + FOCUS_NODE_OFFSET_Z_BASE,
     );
     return { position: target.clone().add(positionOffset), target };
   }
@@ -833,6 +836,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       focusedClusterId,
       mode: visibilityModeForState(focusState),
       nodeDegrees,
+      nodeLookup,
       options: visibilityModelInput,
       pathEdgeIds: selection.pathEdgeIds,
       pathNodeIds: selection.pathNodeIds,

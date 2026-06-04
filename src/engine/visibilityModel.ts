@@ -81,6 +81,7 @@ export interface GraphVisibilityProjectionInput<NMeta = unknown, EMeta = unknown
   focusedClusterId: string | null;
   mode: GalaxyViewMode;
   nodeDegrees: ReadonlyMap<string, NodeDegree>;
+  nodeLookup: ReadonlyMap<string, GraphNode<NMeta>>;
   options?: GalaxyVisibilityModelOptions<NMeta, EMeta>;
   pathEdgeIds: ReadonlySet<string>;
   pathNodeIds: ReadonlySet<string>;
@@ -95,6 +96,12 @@ interface EdgeRecord<EMeta = unknown> {
   sourceIsNode: boolean;
   targetGroup?: string;
   targetIsNode: boolean;
+}
+
+interface ProjectionScope<NMeta = unknown, EMeta = unknown> {
+  edgeRecords: EdgeRecord<EMeta>[];
+  groupScopedNodes: GraphNode<NMeta>[];
+  scopedEdgeIds: ReadonlySet<string>;
 }
 
 export const DEFAULT_VISIBILITY_BUDGETS: GalaxyVisibilityBudgets = {
@@ -193,18 +200,24 @@ function buildEndpointGroups<NMeta, CMeta>(
   return groups;
 }
 
-function buildEdgeRecords<NMeta, EMeta, CMeta>(
+function buildProjectionScope<NMeta, EMeta, CMeta>(
   input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
-): EdgeRecord<EMeta>[] {
-  const nodeIds = new Set(input.dataset.nodes.map((node) => node.id));
+): ProjectionScope<NMeta, EMeta> {
+  const groupScopedNodes: GraphNode<NMeta>[] = [];
+  for (const node of input.nodeLookup.values()) {
+    if (groupMatches(node, input.activeGroup)) groupScopedNodes.push(node);
+  }
+
+  const nodeIds = new Set(input.nodeLookup.keys());
   const endpointGroups = buildEndpointGroups(input.dataset, input.clusters);
-  return input.dataset.edges.map((edge, index) => {
+  const scopedEdgeIds = new Set<string>();
+  const edgeRecords = input.dataset.edges.map((edge, index) => {
     const id = getEdgeId(edge, index);
     const weight = input.accessors.edgeWeight(edge);
     const path = input.pathEdgeIds.has(id);
     const custom = input.options?.edgeImportance?.({ edge, edgeId: id, path, weight });
     const score = finiteOr(typeof custom === 'number' ? custom : weight * 1_000 + (path ? 1_000_000 : 0), 0);
-    return {
+    const record: EdgeRecord<EMeta> = {
       edge,
       id,
       score,
@@ -213,7 +226,11 @@ function buildEdgeRecords<NMeta, EMeta, CMeta>(
       targetGroup: endpointGroups.get(edge.target),
       targetIsNode: nodeIds.has(edge.target),
     };
+    if (edgeMatchesActiveGroup(record, input.activeGroup)) scopedEdgeIds.add(id);
+    return record;
   });
+
+  return { edgeRecords, groupScopedNodes, scopedEdgeIds };
 }
 
 function sortEdges<EMeta>(edges: EdgeRecord<EMeta>[]) {
@@ -310,21 +327,25 @@ function labelProjection<NMeta, EMeta, CMeta>(
   return { labelClusterIds, labelNodeIds };
 }
 
-function overflowFor<NMeta, EMeta, CMeta>(
-  input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
+function overflowFor<NMeta>(
+  groupScopedNodes: readonly GraphNode<NMeta>[],
   visibleNodeIds: ReadonlySet<string>,
   visibleEdgeIds: ReadonlySet<string>,
-  candidateEdgeIds: ReadonlySet<string>,
+  scopedEdgeIds: ReadonlySet<string>,
+  overflowGroup?: (input: GalaxyOverflowGroupInput<NMeta>) => string | null | undefined,
 ): GalaxyVisibilityOverflow {
-  const scopedNodes = input.dataset.nodes.filter((node) => groupMatches(node, input.activeGroup));
-  const hiddenNodes = scopedNodes.filter((node) => !visibleNodeIds.has(node.id));
+  const hiddenNodes = groupScopedNodes.filter((node) => !visibleNodeIds.has(node.id));
   const summariesByGroup = new Map<string, number>();
   for (const node of hiddenNodes) {
-    const group = input.options?.overflowGroup?.({ node }) ?? node.group ?? 'Other';
+    const group = overflowGroup?.({ node }) ?? node.group ?? 'Other';
     summariesByGroup.set(group, (summariesByGroup.get(group) ?? 0) + 1);
   }
+  let hiddenEdgeCount = 0;
+  for (const edgeId of scopedEdgeIds) {
+    if (!visibleEdgeIds.has(edgeId)) hiddenEdgeCount += 1;
+  }
   return {
-    hiddenEdgeCount: Math.max(0, candidateEdgeIds.size - visibleEdgeIds.size),
+    hiddenEdgeCount,
     hiddenNodeCount: hiddenNodes.length,
     summaries: [...summariesByGroup.entries()]
       .sort(([left], [right]) => left.localeCompare(right))
@@ -335,10 +356,10 @@ function overflowFor<NMeta, EMeta, CMeta>(
 function finalizeProjection<NMeta, EMeta, CMeta>(
   mode: GalaxyViewMode,
   input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
+  scope: ProjectionScope<NMeta, EMeta>,
   visibleNodeIds: Set<string>,
   visibleEdgeIds: Set<string>,
   visibleClusterIds: Set<string>,
-  candidateEdgeIds: Set<string>,
   budget: GalaxyVisibilityBudget,
 ): GalaxyVisibilityProjection {
   addSetItems(visibleNodeIds, input.pathNodeIds);
@@ -347,7 +368,13 @@ function finalizeProjection<NMeta, EMeta, CMeta>(
     labelClusterIds,
     labelNodeIds,
     mode,
-    overflow: overflowFor(input, visibleNodeIds, visibleEdgeIds, candidateEdgeIds),
+    overflow: overflowFor(
+      scope.groupScopedNodes,
+      visibleNodeIds,
+      visibleEdgeIds,
+      scope.scopedEdgeIds,
+      input.options?.overflowGroup,
+    ),
     visibleClusterIds,
     visibleEdgeIds,
     visibleNodeIds,
@@ -375,8 +402,9 @@ function allVisibleProjection<NMeta, EMeta, CMeta>(
 function projectDefault<NMeta, EMeta, CMeta>(
   input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
   budget: GalaxyVisibilityBudget,
-  edgeRecords: EdgeRecord<EMeta>[],
+  scope: ProjectionScope<NMeta, EMeta>,
 ) {
+  const { edgeRecords, groupScopedNodes } = scope;
   const maxClusters = clampCount(
     budget.maxVisibleClusters,
     DEFAULT_VISIBILITY_BUDGETS.default.maxVisibleClusters ?? 30,
@@ -400,11 +428,7 @@ function projectDefault<NMeta, EMeta, CMeta>(
 
   for (const cluster of visibleClusters) {
     if (visibleNodeIds.size >= maxNodes) break;
-    const nodes = input.dataset.nodes.filter((node) => {
-      if (!groupMatches(node, input.activeGroup)) return false;
-      if (cluster.group) return node.group === cluster.group;
-      return true;
-    });
+    const nodes = groupScopedNodes.filter((node) => !cluster.group || node.group === cluster.group);
     const limit = Math.min(maxNodesPerCluster, maxNodes - visibleNodeIds.size);
     sortNodes(nodes, input)
       .slice(0, limit)
@@ -412,39 +436,30 @@ function projectDefault<NMeta, EMeta, CMeta>(
   }
 
   if (!visibleClusters.length) {
-    sortNodes(
-      input.dataset.nodes.filter((node) => groupMatches(node, input.activeGroup)),
-      input,
-    )
+    sortNodes(groupScopedNodes, input)
       .slice(0, maxNodes)
       .forEach((node) => visibleNodeIds.add(node.id));
   }
 
   const candidateEdges = edgeRecords.filter((edge) => {
-    if (!edgeMatchesActiveGroup(edge, input.activeGroup)) return false;
+    if (!scope.scopedEdgeIds.has(edge.id)) return false;
     if (input.pathEdgeIds.has(edge.id)) return true;
     const clusterVisible = visibleClusterIds.has(edge.edge.source) || visibleClusterIds.has(edge.edge.target);
     return clusterVisible || edgeInsideVisibleNodes(edge, visibleNodeIds);
   });
   const visibleEdgeIds = selectEdges(candidateEdges, budget, input.pathEdgeIds);
-  return finalizeProjection(
-    'default',
-    input,
-    visibleNodeIds,
-    visibleEdgeIds,
-    visibleClusterIds,
-    new Set(candidateEdges.map((edge) => edge.id)),
-    budget,
-  );
+  return finalizeProjection('default', input, scope, visibleNodeIds, visibleEdgeIds, visibleClusterIds, budget);
 }
 
 function projectExpanded<NMeta, EMeta, CMeta>(
   input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
   budget: GalaxyVisibilityBudget,
-  edgeRecords: EdgeRecord<EMeta>[],
+  scope: ProjectionScope<NMeta, EMeta>,
 ) {
   if (!input.selectedNodeId)
-    return projectDefault(input, resolveGalaxyVisibilityBudgets(input.options).default, edgeRecords);
+    return projectDefault(input, resolveGalaxyVisibilityBudgets(input.options).default, scope);
+
+  const { edgeRecords } = scope;
 
   const maxNodes = clampCount(budget.maxVisibleNodes, DEFAULT_VISIBILITY_BUDGETS.expanded.maxVisibleNodes);
   const maxPrimary = clampCount(
@@ -462,14 +477,14 @@ function projectExpanded<NMeta, EMeta, CMeta>(
   const incidentEdges = sortEdges(
     edgeRecords.filter(
       (edge) =>
-        edgeMatchesActiveGroup(edge, input.activeGroup) &&
+        scope.scopedEdgeIds.has(edge.id) &&
         (edge.edge.source === input.selectedNodeId || edge.edge.target === input.selectedNodeId),
     ),
   );
   const primaryNodeIds: string[] = [];
   for (const edge of incidentEdges) {
     const neighborId = edge.edge.source === input.selectedNodeId ? edge.edge.target : edge.edge.source;
-    const neighbor = input.dataset.nodes.find((node) => node.id === neighborId);
+    const neighbor = input.nodeLookup.get(neighborId);
     if (!neighbor || visibleNodeIds.has(neighbor.id)) continue;
     primaryNodeIds.push(neighbor.id);
     visibleNodeIds.add(neighbor.id);
@@ -482,7 +497,7 @@ function projectExpanded<NMeta, EMeta, CMeta>(
       if (edge.edge.source !== primaryNodeId && edge.edge.target !== primaryNodeId) continue;
       const secondId = edge.edge.source === primaryNodeId ? edge.edge.target : edge.edge.source;
       if (secondId === input.selectedNodeId || visibleNodeIds.has(secondId)) continue;
-      const node = input.dataset.nodes.find((entry) => entry.id === secondId);
+      const node = input.nodeLookup.get(secondId);
       if (node && groupMatches(node, input.activeGroup)) secondHopCandidates.set(node.id, node);
     }
   }
@@ -491,28 +506,22 @@ function projectExpanded<NMeta, EMeta, CMeta>(
     .forEach((node) => visibleNodeIds.add(node.id));
 
   const candidateEdges = edgeRecords.filter((edge) => {
-    if (!edgeMatchesActiveGroup(edge, input.activeGroup)) return false;
+    if (!scope.scopedEdgeIds.has(edge.id)) return false;
     return input.pathEdgeIds.has(edge.id) || edgeInsideVisibleNodes(edge, visibleNodeIds);
   });
   const visibleEdgeIds = selectEdges(candidateEdges, budget, input.pathEdgeIds);
-  return finalizeProjection(
-    'expanded',
-    input,
-    visibleNodeIds,
-    visibleEdgeIds,
-    visibleClusterIds,
-    new Set(candidateEdges.map((edge) => edge.id)),
-    budget,
-  );
+  return finalizeProjection('expanded', input, scope, visibleNodeIds, visibleEdgeIds, visibleClusterIds, budget);
 }
 
 function projectDeep<NMeta, EMeta, CMeta>(
   input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
   budget: GalaxyVisibilityBudget,
-  edgeRecords: EdgeRecord<EMeta>[],
+  scope: ProjectionScope<NMeta, EMeta>,
 ) {
   if (!input.selectedNodeId)
-    return projectDefault(input, resolveGalaxyVisibilityBudgets(input.options).default, edgeRecords);
+    return projectDefault(input, resolveGalaxyVisibilityBudgets(input.options).default, scope);
+
+  const { edgeRecords } = scope;
 
   const maxNodes = clampCount(budget.maxVisibleNodes, DEFAULT_VISIBILITY_BUDGETS.deep.maxVisibleNodes);
   const maxDepth = clampCount(budget.maxDepth, DEFAULT_VISIBILITY_BUDGETS.deep.maxDepth ?? 3);
@@ -529,14 +538,14 @@ function projectDeep<NMeta, EMeta, CMeta>(
     const nextEdges = sortEdges(
       edgeRecords.filter(
         (edge) =>
-          edgeMatchesActiveGroup(edge, input.activeGroup) &&
+          scope.scopedEdgeIds.has(edge.id) &&
           (edge.edge.source === current.nodeId || edge.edge.target === current.nodeId),
       ),
     );
     for (const edge of nextEdges) {
       const nextNodeId = edge.edge.source === current.nodeId ? edge.edge.target : edge.edge.source;
       if (seen.has(nextNodeId)) continue;
-      const node = input.dataset.nodes.find((entry) => entry.id === nextNodeId);
+      const node = input.nodeLookup.get(nextNodeId);
       if (!node || !groupMatches(node, input.activeGroup)) continue;
       seen.add(nextNodeId);
       visibleNodeIds.add(nextNodeId);
@@ -546,37 +555,30 @@ function projectDeep<NMeta, EMeta, CMeta>(
   }
 
   const candidateEdges = edgeRecords.filter((edge) => {
-    if (!edgeMatchesActiveGroup(edge, input.activeGroup)) return false;
+    if (!scope.scopedEdgeIds.has(edge.id)) return false;
     return input.pathEdgeIds.has(edge.id) || edgeTouchesVisibleNode(edge, visibleNodeIds);
   });
   const visibleEdgeIds = selectEdges(candidateEdges, budget, input.pathEdgeIds);
-  return finalizeProjection(
-    'deep',
-    input,
-    visibleNodeIds,
-    visibleEdgeIds,
-    visibleClusterIds,
-    new Set(candidateEdges.map((edge) => edge.id)),
-    budget,
-  );
+  return finalizeProjection('deep', input, scope, visibleNodeIds, visibleEdgeIds, visibleClusterIds, budget);
 }
 
 function projectPath<NMeta, EMeta, CMeta>(
   input: GraphVisibilityProjectionInput<NMeta, EMeta, CMeta>,
   budgets: GalaxyVisibilityBudgets,
-  edgeRecords: EdgeRecord<EMeta>[],
+  scope: ProjectionScope<NMeta, EMeta>,
 ) {
-  const expanded = projectExpanded(input, budgets.expanded, edgeRecords);
+  const expanded = projectExpanded(input, budgets.expanded, scope);
   addSetItems(expanded.visibleNodeIds, input.pathNodeIds);
   addSetItems(expanded.visibleEdgeIds, input.pathEdgeIds);
   return {
     ...expanded,
     mode: 'path' as const,
     overflow: overflowFor(
-      input,
+      scope.groupScopedNodes,
       expanded.visibleNodeIds,
       expanded.visibleEdgeIds,
-      new Set(edgeRecords.filter((edge) => edgeMatchesActiveGroup(edge, input.activeGroup)).map((edge) => edge.id)),
+      scope.scopedEdgeIds,
+      input.options?.overflowGroup,
     ),
   };
 }
@@ -587,9 +589,9 @@ export function projectGraphVisibility<NMeta = unknown, EMeta = unknown, CMeta =
   if (!input.options?.enabled) return allVisibleProjection(input);
 
   const budgets = resolveGalaxyVisibilityBudgets(input.options);
-  const edgeRecords = buildEdgeRecords(input);
-  if (input.mode === 'expanded') return projectExpanded(input, budgets.expanded, edgeRecords);
-  if (input.mode === 'deep') return projectDeep(input, budgets.deep, edgeRecords);
-  if (input.mode === 'path') return projectPath(input, budgets, edgeRecords);
-  return projectDefault(input, budgets.default, edgeRecords);
+  const scope = buildProjectionScope(input);
+  if (input.mode === 'expanded') return projectExpanded(input, budgets.expanded, scope);
+  if (input.mode === 'deep') return projectDeep(input, budgets.deep, scope);
+  if (input.mode === 'path') return projectPath(input, budgets, scope);
+  return projectDefault(input, budgets.default, scope);
 }
