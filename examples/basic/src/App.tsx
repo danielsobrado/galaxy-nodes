@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Activity, Database, Import } from 'lucide-react';
+import { Activity, Database, Import, MousePointerClick } from 'lucide-react';
 import {
   GalaxyGraphVisualizer,
   getEdgeId,
@@ -124,6 +124,7 @@ export default function App() {
   );
   const [theme, setTheme] = useState<GalaxyGraphThemeInput>('galaxy-dark');
   const [sharpMoney, setSharpMoney] = useState(true);
+  const [focusModelEnabled, setFocusModelEnabled] = useState(true);
   const [dbStatus, setDbStatus] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const streamChunkRef = useRef(0);
@@ -234,21 +235,36 @@ export default function App() {
       onThemeChange={setTheme}
       options={{
         datasetSizes: DATASET_SIZES,
+        focusModel: {
+          enabled: focusModelEnabled,
+          variant: 'fullFocus',
+        },
         showDatasetSizeControls: true,
         showKeyLegend: true,
         showLegend: true,
         showThemeControl: true,
       }}
       controlActions={
-        <button
-          type="button"
-          className={sharpMoney ? 'toggle is-on' : 'toggle'}
-          aria-pressed={sharpMoney}
-          onClick={() => setSharpMoney((value) => !value)}
-        >
-          <Activity size={15} aria-hidden="true" />
-          Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
-        </button>
+        <>
+          <button
+            type="button"
+            className={focusModelEnabled ? 'toggle is-on' : 'toggle'}
+            aria-pressed={focusModelEnabled}
+            onClick={() => setFocusModelEnabled((value) => !value)}
+          >
+            <MousePointerClick size={15} aria-hidden="true" />
+            Click focus <span>{focusModelEnabled ? 'ON' : 'OFF'}</span>
+          </button>
+          <button
+            type="button"
+            className={sharpMoney ? 'toggle is-on' : 'toggle'}
+            aria-pressed={sharpMoney}
+            onClick={() => setSharpMoney((value) => !value)}
+          >
+            <Activity size={15} aria-hidden="true" />
+            Status focus <span>{sharpMoney ? 'ON' : 'OFF'}</span>
+          </button>
+        </>
       }
       sideRailActions={
         <>
