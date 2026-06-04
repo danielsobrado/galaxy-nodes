@@ -173,7 +173,9 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
   function edgeVisibleInSelectionContext(edgeId: string) {
     const { selectedNodeHighlight, selectedEdgeHighlight } = selection;
     return Boolean(
-      selectedNodeHighlight?.connectedEdgeIds.has(edgeId) || selectedEdgeHighlight?.connectedEdgeIds.has(edgeId),
+      selection.pathEdgeIds?.has(edgeId) ||
+      selectedNodeHighlight?.connectedEdgeIds.has(edgeId) ||
+      selectedEdgeHighlight?.connectedEdgeIds.has(edgeId),
     );
   }
 
@@ -229,7 +231,9 @@ export function createEdgeLayer<NMeta = unknown, EMeta = unknown>(deps: EdgeLaye
       const baseOpacity = Number(visual.userData.baseOpacity ?? state.baseOpacity ?? 0.18);
       const selected = selectedEdgeId === state.id;
       const connectedToSelection = Boolean(
-        selectedNodeHighlight?.connectedEdgeIds.has(state.id) || selectedEdgeHighlight?.connectedEdgeIds.has(state.id),
+        selection.pathEdgeIds?.has(state.id) ||
+        selectedNodeHighlight?.connectedEdgeIds.has(state.id) ||
+        selectedEdgeHighlight?.connectedEdgeIds.has(state.id),
       );
       const hovered = hoveredEdgeId === state.id;
       material.opacity = selected

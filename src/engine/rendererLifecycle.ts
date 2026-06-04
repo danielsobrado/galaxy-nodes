@@ -43,6 +43,7 @@ export type SceneFactory = <NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
   initialTheme: GalaxyGraphThemeInput | undefined,
   initialUxVariant: GalaxyRendererOptions<NMeta, EMeta, CMeta>['uxVariant'],
+  initialFocusModel: GalaxyRendererOptions<NMeta, EMeta, CMeta>['focusModel'],
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,
@@ -88,9 +89,23 @@ function applyCameraCommand<NMeta, EMeta>(
 ) {
   if (!cameraCommand || !runtime) return;
   if (cameraCommand.type === 'reset') runtime.resetCamera();
-  if (cameraCommand.type === 'focus' && cameraCommand.nodeId) runtime.focusNode(cameraCommand.nodeId);
+  if (cameraCommand.type === 'focus' && cameraCommand.nodeId)
+    runtime.focusNode(cameraCommand.nodeId, cameraCommand.dataReady);
   if (cameraCommand.type === 'focus-edge' && cameraCommand.edgeId) runtime.focusEdge(cameraCommand.edgeId);
   if (cameraCommand.type === 'move' && cameraCommand.direction) runtime.moveCamera(cameraCommand.direction, 1.75);
+  if (cameraCommand.type === 'expand-neighbors') runtime.expandNeighbors();
+  if (cameraCommand.type === 'collapse-neighbors') runtime.collapseNeighbors();
+  if (cameraCommand.type === 'show-path' && cameraCommand.pathType && cameraCommand.path)
+    runtime.showPath(cameraCommand.pathType, cameraCommand.path);
+  if (cameraCommand.type === 'hide-path') runtime.hidePath();
+  if (cameraCommand.type === 'back') runtime.backFocus();
+  if (cameraCommand.type === 'recenter') runtime.recenterFocus();
+  if (cameraCommand.type === 'unfocus') runtime.unfocus();
+  if (cameraCommand.type === 'focus-data-ready' && cameraCommand.nodeId)
+    runtime.completeFocusData(cameraCommand.nodeId);
+  if (cameraCommand.type === 'focus-data-timeout' && cameraCommand.nodeId)
+    runtime.timeoutFocusData(cameraCommand.nodeId);
+  if (cameraCommand.type === 'focus-load-failed' && cameraCommand.nodeId) runtime.failFocusData(cameraCommand.nodeId);
 }
 
 function clearSceneDom(host: HTMLDivElement) {
@@ -209,6 +224,7 @@ function snapshotAppliedState<NMeta, EMeta, CMeta>(
     selectedNodeId: state.options.selectedNodeId,
     showClusters: state.options.showClusters,
     theme: state.options.theme,
+    focusModel: state.options.focusModel,
     uxVariant: state.options.uxVariant,
     ...overrides,
   };
@@ -229,6 +245,7 @@ function patchRuntime<NMeta = unknown, EMeta = unknown, CMeta = unknown>(state: 
   if (!applied || applied.planetSizing !== next.planetSizing) runtime.updatePlanetSizing(next.planetSizing);
   if (!applied || applied.accessors !== next.accessors) runtime.updateAccessors(next.accessors);
   if (!applied || applied.theme !== next.theme) runtime.updateTheme(next.theme);
+  if (!applied || applied.focusModel !== next.focusModel) runtime.updateFocusModel(next.focusModel);
   if (!applied || applied.uxVariant !== next.uxVariant) runtime.updateUxVariant(next.uxVariant);
   if (!applied || applied.selectedNodeId !== next.selectedNodeId || applied.selectedEdgeId !== next.selectedEdgeId) {
     runtime.updateSelection(next.selectedNodeId, next.selectedEdgeId);
@@ -304,6 +321,7 @@ function rebuildRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         state.options.planetSizing,
         state.options.theme,
         state.options.uxVariant,
+        state.options.focusModel,
         state.callbacksRef,
         state.pausedRef,
         (nextFailure) => reportRendererFailure(host, state, nextFailure.reason, nextFailure.message, nextFailure.error),
@@ -349,10 +367,17 @@ export function createGalaxyRendererController<NMeta = unknown, EMeta = unknown,
   rebuildRenderer(host, state, createScene);
 
   return {
+    backFocus: () => state.runtime?.backFocus(),
+    collapseNeighbors: () => state.runtime?.collapseNeighbors(),
+    expandNeighbors: (depth?: 1 | 2) => state.runtime?.expandNeighbors(depth),
     focusEdge: (edgeId) => state.runtime?.focusEdge(edgeId),
     focusNode: (nodeId) => state.runtime?.focusNode(nodeId),
+    hidePath: () => state.runtime?.hidePath(),
     moveCamera: (direction: SpaceDirection, multiplier?: number) => state.runtime?.moveCamera(direction, multiplier),
+    recenterFocus: () => state.runtime?.recenterFocus(),
     resetCamera: () => state.runtime?.resetCamera(),
+    showPath: (pathType, path) => state.runtime?.showPath(pathType, path),
+    unfocus: () => state.runtime?.unfocus(),
     retry: () => {
       rebuildRenderer(host, state, createScene);
     },

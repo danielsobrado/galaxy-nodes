@@ -19,6 +19,7 @@ import type {
 
 export type {
   CameraCommand,
+  FocusPathResult,
   GalaxyGraphBlendMode,
   GalaxyGraphDataColorStrategy,
   GalaxyGraphPointStyle,
@@ -33,12 +34,14 @@ export type {
   GalaxyMotionPreference,
   GalaxyNodeHoverAnchor,
   GalaxyPlanetSizingOptions,
+  GalaxyFocusModelOptions,
   GalaxyRenderMode,
   PlanetSizingMode,
   ResolvedGalaxyGraphTheme,
   GraphCameraState,
   GraphUxEvent,
   GraphUxVariant,
+  PathFocusType,
 } from '../engine/core';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from '../engine/sceneFallback';
 
@@ -74,6 +77,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
   accessors,
   theme,
   cameraCommand,
+  focusModel,
   uxVariant,
   motionPreference = 'system',
   onSceneFailure,
@@ -105,6 +109,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       cameraCommand,
       dataset,
       expectedSize,
+      focusModel,
       galaxyMode,
       layout,
       motionPreference,
@@ -124,6 +129,7 @@ export default function GalaxyScene<NMeta = unknown, EMeta = unknown, CMeta = un
       cameraCommand,
       dataset,
       expectedSize,
+      focusModel,
       galaxyMode,
       layout,
       motionPreference,

@@ -9,8 +9,11 @@ import type {
   GalaxyRenderMode,
   GalaxySceneFailure,
   GalaxySceneProps,
+  FocusPathResult,
+  GalaxyFocusModelOptions,
   GraphUxEvent,
   GraphUxVariant,
+  PathFocusType,
 } from './GalaxyScene';
 import type { GraphLayoutInput } from '../domain/layout';
 import type {
@@ -47,6 +50,7 @@ export interface GalaxyGraphVisualizerOptions {
   planetSizing?: GalaxyPlanetSizingOptions;
   /** Edge render tier: 'auto' (default), 'quality' (tube edges), or 'scale' (lightweight line edges). */
   renderMode?: GalaxyRenderMode;
+  focusModel?: GalaxyFocusModelOptions;
   showClusters?: boolean;
   showControls?: boolean;
   showDatasetSizeControls?: boolean;
@@ -73,6 +77,7 @@ export interface GalaxyGraphLabels {
   accessibleSummaryIntro: (stats: GraphStats, shownNodes: number, shownEdges: number) => string;
   alphaBadge: string;
   allGroups: string;
+  backFocus: string;
   clusterToggle: string;
   datasetSize: string;
   edgeId: string;
@@ -116,6 +121,7 @@ export interface GalaxyGraphLabels {
   pauseMotion: string;
   playMotion: string;
   relationshipId: string;
+  recenterFocus: string;
   resetCamera: string;
   sceneTools: string;
   searchInput: string;
@@ -172,6 +178,16 @@ export interface LargeGraphOptions<NMeta = unknown, EMeta = unknown, CMeta = unk
     endpoints: { source: EdgeEndpoint<NMeta>; target: EdgeEndpoint<NMeta> },
     signal: AbortSignal,
   ) => Promise<unknown>;
+  loadFocusPath?: (
+    request: {
+      activeGroup: string | null;
+      loadedEdgeIds: string[];
+      loadedNodeIds: string[];
+      nodeId: string;
+      pathType: PathFocusType;
+    },
+    signal: AbortSignal,
+  ) => Promise<FocusPathResult>;
   loadNodeDetail?: (node: GraphNode<NMeta>, signal: AbortSignal) => Promise<unknown>;
 }
 

@@ -13,6 +13,7 @@ export type {
 export { default as GalaxyScene } from '../ui/GalaxyScene';
 export type {
   CameraCommand,
+  FocusPathResult,
   GalaxyGraphBlendMode,
   GalaxyGraphDataColorStrategy,
   GalaxyGraphPointStyle,
@@ -26,6 +27,7 @@ export type {
   GalaxyGraphToneMapping,
   GalaxyMotionPreference,
   GalaxyNodeHoverAnchor,
+  GalaxyFocusModelOptions,
   GalaxyPlanetSizingOptions,
   GalaxySceneFailure,
   GalaxySceneFailureReason,
@@ -33,6 +35,7 @@ export type {
   GraphCameraState,
   GraphUxEvent,
   GraphUxVariant,
+  PathFocusType,
   PlanetSizingMode,
   ResolvedGalaxyGraphTheme,
 } from '../ui/GalaxyScene';

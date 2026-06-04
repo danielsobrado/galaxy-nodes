@@ -1,5 +1,16 @@
 import { type ReactNode } from 'react';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronUp, Focus, RotateCcw } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUp,
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  Focus,
+  LocateFixed,
+  RotateCcw,
+} from 'lucide-react';
 import type { CameraCommand } from './GalaxyScene';
 import type { GraphEdge, GraphNode, SpaceDirection } from '../domain/types';
 import type { GalaxyGraphLabels } from './galaxyGraphVisualizerTypes';
@@ -45,6 +56,24 @@ export function GalaxySideRail<NMeta, EMeta>({
         onClick={() => issueCameraCommand({ type: 'reset' })}
       >
         <RotateCcw size={17} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        title={chromeLabels.backFocus}
+        aria-label={chromeLabels.backFocus}
+        disabled={sceneControlDisabled}
+        onClick={() => issueCameraCommand({ type: 'back' })}
+      >
+        <ChevronLeft size={17} aria-hidden="true" />
+      </button>
+      <button
+        type="button"
+        title={chromeLabels.recenterFocus}
+        aria-label={chromeLabels.recenterFocus}
+        disabled={sceneControlDisabled}
+        onClick={() => issueCameraCommand({ type: 'recenter' })}
+      >
+        <LocateFixed size={17} aria-hidden="true" />
       </button>
       <button
         type="button"

@@ -9,12 +9,19 @@ import type { GraphDataset } from '../domain/types';
 const mocks = vi.hoisted(() => ({
   latestCallbacks: null as GalaxyRendererCallbacks | null,
   renderer: {
+    backFocus: vi.fn(),
+    collapseNeighbors: vi.fn(),
     dispose: vi.fn(),
+    expandNeighbors: vi.fn(),
     focusEdge: vi.fn(),
     focusNode: vi.fn(),
+    hidePath: vi.fn(),
     moveCamera: vi.fn(),
+    recenterFocus: vi.fn(),
     resetCamera: vi.fn(),
     retry: vi.fn(),
+    showPath: vi.fn(),
+    unfocus: vi.fn(),
     update: vi.fn(),
   } as GalaxyRenderer,
 }));

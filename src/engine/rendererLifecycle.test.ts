@@ -23,11 +23,21 @@ const options: GalaxyRendererOptions = {
 function makeRuntime(): SceneRuntime {
   return {
     appendDataset: vi.fn(),
+    backFocus: vi.fn(),
+    collapseNeighbors: vi.fn(),
+    completeFocusData: vi.fn(),
     dispose: vi.fn(),
+    expandNeighbors: vi.fn(),
+    failFocusData: vi.fn(),
     focusEdge: vi.fn(),
     focusNode: vi.fn(),
+    hidePath: vi.fn(),
     moveCamera: vi.fn(),
+    recenterFocus: vi.fn(),
     resetCamera: vi.fn(),
+    showPath: vi.fn(),
+    timeoutFocusData: vi.fn(),
+    unfocus: vi.fn(),
     updateAccessors: vi.fn(),
     updateActiveGroup: vi.fn(),
     updateClusterVisibility: vi.fn(),
@@ -37,6 +47,7 @@ function makeRuntime(): SceneRuntime {
     updatePlanetSizing: vi.fn(),
     updateSelection: vi.fn(),
     updateTheme: vi.fn(),
+    updateFocusModel: vi.fn(),
     updateUxVariant: vi.fn(),
   };
 }
@@ -58,7 +69,7 @@ describe('renderer lifecycle telemetry plumbing', () => {
     const nextOnGraphUxEvent = vi.fn<(event: GraphUxEvent) => void>();
     let callbacksRef: { current: SceneCallbacks } | null = null;
     const createSceneMock = vi.fn((...args: unknown[]) => {
-      callbacksRef = args[13] as { current: SceneCallbacks };
+      callbacksRef = args[14] as { current: SceneCallbacks };
       return runtime;
     });
     const renderer = createGalaxyRendererController(
@@ -69,6 +80,7 @@ describe('renderer lifecycle telemetry plumbing', () => {
     );
 
     expect(createSceneMock.mock.calls[0][12]).toBe('cameraOnly');
+    expect(createSceneMock.mock.calls[0][13]).toBeUndefined();
     expect(callbacksRef?.current.onGraphUxEvent).toBe(onGraphUxEvent);
 
     renderer.update({ ...options, uxVariant: 'fullFocus' }, { onGraphUxEvent: nextOnGraphUxEvent });

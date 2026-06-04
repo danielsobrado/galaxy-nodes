@@ -11,12 +11,48 @@ import type { GalaxyMotionPreference, GalaxyRendererContextBudget, ResolvedGalax
 import type { GalaxyGraphThemeInput, GalaxyPlanetSizingOptions, GalaxyRenderMode } from './rendererConfig';
 import type { GalaxySceneFailure } from './sceneFallback';
 
+export type PathFocusType = 'dependency' | 'impact' | 'ownership' | string;
+
+export interface FocusPathResult {
+  edgeIds: string[];
+  label?: string;
+  nodeIds: string[];
+}
+
+export interface GalaxyFocusModelOptions {
+  cameraDurationMs?: number;
+  dataTimeoutMs?: number;
+  enabled?: boolean;
+  maxExpandedNeighbors?: number;
+  maxPrimaryNeighbors?: number;
+  maxSecondHopNeighbors?: number;
+  variant?: GraphUxVariant;
+}
+
 export interface CameraCommand {
-  type: 'focus' | 'focus-edge' | 'move' | 'reset';
+  type:
+    | 'focus'
+    | 'focus-edge'
+    | 'move'
+    | 'reset'
+    | 'expand-neighbors'
+    | 'collapse-neighbors'
+    | 'show-path'
+    | 'hide-path'
+    | 'back'
+    | 'recenter'
+    | 'unfocus'
+    | 'focus-data-ready'
+    | 'focus-data-missing'
+    | 'focus-data-timeout'
+    | 'focus-load-failed';
   direction?: SpaceDirection;
   edgeId?: string;
+  dataReady?: boolean;
   nodeId?: string;
   nonce: number;
+  path?: FocusPathResult;
+  pathType?: PathFocusType;
 }
 
 export interface GalaxyNodeHoverAnchor {
@@ -101,6 +137,8 @@ export interface GalaxyRendererOptions<NMeta = unknown, EMeta = unknown, CMeta =
   cameraCommand: CameraCommand | null;
   /** UX experiment variant attached to graph interaction telemetry. Defaults to `'baseline'`. */
   uxVariant?: GraphUxVariant;
+  /** Click-to-focus state machine and camera behavior. Disabled by default for compatibility. */
+  focusModel?: GalaxyFocusModelOptions;
   /** Maximum active Galaxy renderer WebGL contexts allowed in this browser tab. Defaults to 12. */
   contextLimit?: number;
   motionPreference?: GalaxyMotionPreference;
@@ -148,10 +186,17 @@ export type SceneCallbacks<NMeta = unknown, EMeta = unknown> = Required<
   Pick<GalaxyRendererCallbacks<NMeta, EMeta>, 'onCameraViewChange' | 'onGraphUxEvent' | 'onHoverNodeAnchor'>;
 
 export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknown> {
+  backFocus: () => void;
+  collapseNeighbors: () => void;
+  expandNeighbors: (depth?: 1 | 2) => void;
   focusEdge: (edgeId: string) => void;
   focusNode: (nodeId: string) => void;
+  hidePath: () => void;
   moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
+  recenterFocus: () => void;
   resetCamera: () => void;
+  showPath: (pathType: PathFocusType, path: FocusPathResult) => void;
+  unfocus: () => void;
   retry: () => void;
   update: (
     options: GalaxyRendererOptions<NMeta, EMeta, CMeta>,
@@ -161,10 +206,20 @@ export interface GalaxyRenderer<NMeta = unknown, EMeta = unknown, CMeta = unknow
 }
 
 export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
+  backFocus: () => void;
+  collapseNeighbors: () => void;
+  completeFocusData: (nodeId: string) => void;
+  expandNeighbors: (depth?: 1 | 2) => void;
+  failFocusData: (nodeId: string) => void;
   focusEdge: (edgeId: string) => void;
-  focusNode: (nodeId: string) => void;
+  focusNode: (nodeId: string, dataReady?: boolean) => void;
+  hidePath: () => void;
   moveCamera: (direction: SpaceDirection, multiplier?: number) => void;
+  recenterFocus: () => void;
   resetCamera: () => void;
+  showPath: (pathType: PathFocusType, path: FocusPathResult) => void;
+  timeoutFocusData: (nodeId: string) => void;
+  unfocus: () => void;
   updateAccessors: (accessors: GraphAccessors<NMeta, EMeta> | undefined) => void;
   updateActiveGroup: (activeGroup: string | null) => void;
   updateClusterVisibility: (showClusters: boolean) => void;
@@ -174,6 +229,7 @@ export interface SceneRuntime<NMeta = unknown, EMeta = unknown> {
   updatePlanetSizing: (planetSizing: GalaxyPlanetSizingOptions | undefined) => void;
   updateSelection: (selectedNodeId: string | null, selectedEdgeId: string | null) => void;
   updateTheme: (theme: GalaxyGraphThemeInput | undefined) => void;
+  updateFocusModel: (focusModel: GalaxyFocusModelOptions | undefined) => void;
   updateUxVariant: (variant: GraphUxVariant | undefined) => void;
   appendDataset: (dataset: GraphDataset<NMeta, EMeta>) => void;
   dispose: () => void;
@@ -190,6 +246,7 @@ export interface AppliedRendererState<NMeta = unknown, EMeta = unknown> {
   selectedNodeId: string | null;
   showClusters: boolean;
   theme: GalaxyGraphThemeInput | undefined;
+  focusModel: GalaxyFocusModelOptions | undefined;
   uxVariant: GraphUxVariant | undefined;
 }
 

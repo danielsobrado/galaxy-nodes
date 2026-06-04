@@ -99,6 +99,7 @@ export function createPointLayer<NMeta = unknown, EMeta = unknown>(
       const baseColorOffset = index * 3;
       const selected = selectedNodeId === node.id;
       const firstDegree =
+        Boolean(selection.pathNodeIds?.has(node.id)) ||
         selectedEndpointNodeIds.has(node.id) ||
         Boolean(selectedNodeHighlight?.firstDegreeNodeIds.has(node.id)) ||
         Boolean(selectedEdgeHighlight?.firstDegreeNodeIds.has(node.id));

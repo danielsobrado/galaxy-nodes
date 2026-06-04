@@ -42,7 +42,14 @@ function resolveHoverDetailDelayMs(delayMs: number | undefined) {
     : DEFAULT_HOVER_DETAIL_DELAY_MS;
 }
 
-export type { GraphCameraState, GraphUxEvent, GraphUxVariant } from './GalaxyScene';
+export type {
+  FocusPathResult,
+  GalaxyFocusModelOptions,
+  GraphCameraState,
+  GraphUxEvent,
+  GraphUxVariant,
+  PathFocusType,
+} from './GalaxyScene';
 
 export type {
   GalaxyAccessibleSummaryContext,
@@ -144,7 +151,11 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const loadEdgeDetail = largeGraph?.loadEdgeDetail;
   const loadNodeDetail = largeGraph?.loadNodeDetail;
   const canExpandGraph = largeGraphEnabled && Boolean(expandGraph);
+  const focusModel = options?.focusModel;
+  const focusModelVariant = focusModel?.variant ?? options?.uxVariant ?? 'baseline';
+  const focusModelEnabled = focusModel?.enabled ?? focusModelVariant !== 'baseline';
   const resolvedAccessors = useMemo(() => resolveAccessors(accessors), [accessors]);
+  const focusDataRequestRef = useRef(0);
 
   useEffect(() => {
     setAugmentedDataset(largeGraphEnabled ? mergeGraphDataset(dataset, {}, { edgeBudget }) : dataset);
@@ -360,7 +371,17 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   function focusNode(node: GraphNode<NMeta> | null) {
     if (!node || !sceneReady) return;
     selectNode(node);
-    issueCameraCommand({ nodeId: node.id, type: 'focus' });
+    const shouldLoadFocusData = focusModelEnabled && largeGraphEnabled && Boolean(expandGraph);
+    issueCameraCommand({ dataReady: !shouldLoadFocusData, nodeId: node.id, type: 'focus' });
+    if (shouldLoadFocusData) {
+      const requestId = (focusDataRequestRef.current += 1);
+      void runExpansion({ camera: cameraViewRef.current ?? undefined, nodeId: node.id, type: 'node' }).then(
+        (loaded) => {
+          if (focusDataRequestRef.current !== requestId) return;
+          issueCameraCommand({ nodeId: node.id, type: loaded ? 'focus-data-ready' : 'focus-load-failed' });
+        },
+      );
+    }
   }
 
   function focusEdge(edge: GraphEdge<EMeta> | null) {
@@ -447,7 +468,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
 
   const runExpansion = useCallback(
     async (request: Omit<LargeGraphExpandRequest, 'activeGroup' | 'loadedEdgeIds' | 'loadedNodeIds'>) => {
-      if (!largeGraphEnabled || !expandGraph) return;
+      if (!largeGraphEnabled || !expandGraph) return false;
       expansionAbortRef.current?.abort();
       const controller = new AbortController();
       expansionAbortRef.current = controller;
@@ -464,10 +485,12 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
           },
           controller.signal,
         );
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) return false;
         setAugmentedDataset((current) => mergeGraphDataset(current, patch, { edgeBudget }));
+        return true;
       } catch (error) {
         if (!controller.signal.aborted) setExpandError(error);
+        return false;
       } finally {
         if (expansionAbortRef.current === controller) expansionAbortRef.current = null;
         if (!controller.signal.aborted) setExpanding(false);
@@ -479,9 +502,10 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
   const expandNode = useCallback(
     (node: GraphNode<NMeta> | null) => {
       if (!node) return;
+      issueCameraCommand({ type: 'expand-neighbors' });
       void runExpansion({ camera: cameraViewRef.current ?? undefined, nodeId: node.id, type: 'node' });
     },
-    [runExpansion],
+    [issueCameraCommand, runExpansion],
   );
 
   const expandDirection = useCallback(
@@ -613,6 +637,7 @@ export default function GalaxyGraphVisualizer<NMeta = unknown, EMeta = unknown, 
         planetSizing={options?.planetSizing}
         expectedSize={options?.expectedSize}
         renderMode={options?.renderMode}
+        focusModel={focusModel}
         theme={activeTheme}
         cameraCommand={cameraCommand}
         uxVariant={options?.uxVariant}

@@ -18,7 +18,10 @@ export interface SelectionModel<EMeta = unknown> {
   /** Record an edge in the incident/neighbor topology indices (called as edges are built). */
   indexSelectableEdge(edgeId: string, edge: GraphEdge<EMeta>): void;
   /** First/second-degree neighborhood + focused incident edges for a selected node. */
-  getNodeSelectionHighlight(nodeId: string): NodeSelectionHighlight;
+  getNodeSelectionHighlight(
+    nodeId: string,
+    options?: { edgeLimit?: number; secondDegreeLimit?: number },
+  ): NodeSelectionHighlight;
   /** Endpoints highlighted for a selected edge. */
   getEdgeSelectionHighlight(edgeId: string): NodeSelectionHighlight;
   /** Placed node ids ranked by total degree, capped to `limit`. */
@@ -88,10 +91,12 @@ export function createSelectionModel<NMeta = unknown, EMeta = unknown>(
       .slice(0, limit);
   }
 
-  function getNodeSelectionHighlight(nodeId: string): NodeSelectionHighlight {
-    const connectedEdgeIds = new Set(
-      rankedRelationshipEdgeIds(incidentEdgeIdsByNodeId.get(nodeId) ?? [], SELECTED_NODE_EDGE_FOCUS_LIMIT),
-    );
+  function getNodeSelectionHighlight(
+    nodeId: string,
+    options: { edgeLimit?: number; secondDegreeLimit?: number } = {},
+  ): NodeSelectionHighlight {
+    const edgeLimit = options.edgeLimit ?? SELECTED_NODE_EDGE_FOCUS_LIMIT;
+    const connectedEdgeIds = new Set(rankedRelationshipEdgeIds(incidentEdgeIdsByNodeId.get(nodeId) ?? [], edgeLimit));
     const firstDegreeNodeIds = new Set<string>();
     const secondDegreeNodeIds = new Set<string>();
 
@@ -110,7 +115,11 @@ export function createSelectionModel<NMeta = unknown, EMeta = unknown>(
       });
     });
 
-    return { connectedEdgeIds, firstDegreeNodeIds, secondDegreeNodeIds };
+    return {
+      connectedEdgeIds,
+      firstDegreeNodeIds,
+      secondDegreeNodeIds: new Set(rankedHighlightNodeIds(secondDegreeNodeIds, options.secondDegreeLimit ?? Infinity)),
+    };
   }
 
   function getEdgeSelectionHighlight(edgeId: string): NodeSelectionHighlight {

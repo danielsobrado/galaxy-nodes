@@ -41,6 +41,12 @@ import {
   HOVER_LABEL_MIN_HEIGHT,
   HOVER_LABEL_HEIGHT_FACTOR,
   WORLD_ROTATION_SPEED,
+  FOCUS_NODE_OFFSET_X_SCALE,
+  FOCUS_NODE_OFFSET_X_BASE,
+  FOCUS_NODE_OFFSET_Y_SCALE,
+  FOCUS_NODE_OFFSET_Y_BASE,
+  FOCUS_NODE_OFFSET_Z_SCALE,
+  FOCUS_NODE_OFFSET_Z_BASE,
 } from '../sceneConstants';
 import {
   galaxyGraphThemeCssVariables,
@@ -53,13 +59,22 @@ import {
 } from '../rendererConfig';
 import type {
   GalaxyNodeHoverAnchor,
+  GalaxyFocusModelOptions,
+  FocusPathResult,
   GraphCameraState,
   GraphUxEvent,
   GraphUxVariant,
   MutableRef,
   SceneCallbacks,
   SceneRuntime,
+  PathFocusType,
 } from '../rendererTypes';
+import {
+  focusedNodeId as focusStateNodeId,
+  reduceFocusState,
+  type FocusEvent,
+  type FocusState,
+} from './focusStateMachine';
 import { selectedEdgeLabelPosition } from '../edges';
 import {
   edgeDisplayLabel,
@@ -88,7 +103,58 @@ const CAMERA_HOME = new THREE.Vector3(120, 430, 1540);
 const TARGET_HOME = new THREE.Vector3(0, 0, 0);
 const DEFAULT_UX_VARIANT: GraphUxVariant = 'baseline';
 const ZOOM_DISTANCE_EPSILON = 0.5;
+const DEFAULT_FOCUS_CAMERA_DURATION_MS = 550;
+const DEFAULT_FOCUS_DATA_TIMEOUT_MS = 450;
+const DEFAULT_FOCUS_PRIMARY_NEIGHBORS = 5;
+const DEFAULT_FOCUS_EXPANDED_NEIGHBORS = 25;
+const DEFAULT_FOCUS_SECOND_HOP_NEIGHBORS = 40;
 const tmpVector = new THREE.Vector3();
+const tmpCameraLookMatrix = new THREE.Matrix4();
+const tmpCameraQuaternion = new THREE.Quaternion();
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+interface ResolvedFocusModel {
+  cameraDurationMs: number;
+  dataTimeoutMs: number;
+  enabled: boolean;
+  maxExpandedNeighbors: number;
+  maxPrimaryNeighbors: number;
+  maxSecondHopNeighbors: number;
+  variant: GraphUxVariant;
+}
+
+interface CameraPose {
+  position: THREE.Vector3;
+  target: THREE.Vector3;
+}
+
+interface CameraJob {
+  completedEvent: FocusEvent;
+  control: THREE.Vector3;
+  durationMs: number;
+  from: CameraPose;
+  kind: 'focus' | 'unfocus' | 'recenter' | 'back';
+  nodeId?: string;
+  startedAt: number;
+  telemetryStartedAt?: number;
+  to: CameraPose;
+}
+
+function resolveFocusModel(
+  focusModel: GalaxyFocusModelOptions | undefined,
+  uxVariant: GraphUxVariant,
+): ResolvedFocusModel {
+  const variant = focusModel?.variant ?? uxVariant;
+  return {
+    cameraDurationMs: Math.max(0, focusModel?.cameraDurationMs ?? DEFAULT_FOCUS_CAMERA_DURATION_MS),
+    dataTimeoutMs: Math.max(0, focusModel?.dataTimeoutMs ?? DEFAULT_FOCUS_DATA_TIMEOUT_MS),
+    enabled: focusModel?.enabled ?? variant !== 'baseline',
+    maxExpandedNeighbors: Math.max(1, focusModel?.maxExpandedNeighbors ?? DEFAULT_FOCUS_EXPANDED_NEIGHBORS),
+    maxPrimaryNeighbors: Math.max(1, focusModel?.maxPrimaryNeighbors ?? DEFAULT_FOCUS_PRIMARY_NEIGHBORS),
+    maxSecondHopNeighbors: Math.max(0, focusModel?.maxSecondHopNeighbors ?? DEFAULT_FOCUS_SECOND_HOP_NEIGHBORS),
+    variant,
+  };
+}
 
 export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   host: HTMLDivElement,
@@ -104,6 +170,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
   planetSizingInput: GalaxyPlanetSizingOptions | undefined,
   initialTheme: GalaxyGraphThemeInput | undefined,
   initialUxVariant: GraphUxVariant | undefined,
+  initialFocusModel: GalaxyFocusModelOptions | undefined,
   callbacksRef: MutableRef<SceneCallbacks<NMeta, EMeta>>,
   pausedRef: MutableRef<boolean>,
   onContextLost: (failure: GalaxySceneFailure) => void,
@@ -121,12 +188,20 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     selectedEdgeHighlight: null,
     hoveredNodeId: null,
     hoveredEdgeId: null,
+    focusMode: 'none',
+    pathEdgeIds: new Set(),
+    pathNodeIds: new Set(),
   };
   let theme = resolveGalaxyGraphTheme(initialTheme);
   let accessors = resolveAccessors(accessorsInput);
   let nodeSizeScale = initialNodeSizeScale;
   let planetSizing = resolvePlanetSizing(planetSizingInput);
   let uxVariant = initialUxVariant ?? DEFAULT_UX_VARIANT;
+  let focusModelInput = initialFocusModel;
+  let focusModel = resolveFocusModel(focusModelInput, uxVariant);
+  let focusState: FocusState = { name: 'idle' };
+  const focusHistory: string[] = [];
+  let dataTimeoutId: number | null = null;
   let cameraState: GraphCameraState = 'idle';
   let programmaticCameraChangeDepth = 0;
   let userControlActive = false;
@@ -233,6 +308,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   function emitPanOrOrbit() {
     if (selection.selectedNodeId && cameraState !== 'moving') cameraState = 'orbit';
+    if (focusModel.enabled && focusModel.variant !== 'baseline') dispatchFocusEvent({ type: 'USER_ORBIT_OR_ZOOM' });
     emitGraphUxEvent({
       type: 'pan_or_orbit',
       timestampMs: performance.now(),
@@ -242,6 +318,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   function emitZoomChanged(zoomDistance: number) {
     if (selection.selectedNodeId && cameraState !== 'moving') cameraState = 'orbit';
+    if (focusModel.enabled && focusModel.variant !== 'baseline') dispatchFocusEvent({ type: 'USER_ORBIT_OR_ZOOM' });
     emitGraphUxEvent({
       type: 'zoom_changed',
       timestampMs: performance.now(),
@@ -258,6 +335,116 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       lastControlZoomDistance = currentZoomDistance();
       programmaticCameraChangeDepth -= 1;
     }
+  }
+
+  let activeCameraJob: CameraJob | null = null;
+
+  function clamp01(value: number) {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  function easeInOutCubic(value: number) {
+    const x = clamp01(value);
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  }
+
+  function quadraticBezier(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, t: number) {
+    const u = 1 - t;
+    return tmpVector
+      .copy(a)
+      .multiplyScalar(u * u)
+      .addScaledVector(b, 2 * u * t)
+      .addScaledVector(c, t * t);
+  }
+
+  function currentCameraPose(): CameraPose {
+    return { position: camera.position.clone(), target: controls.target.clone() };
+  }
+
+  function applyCameraPose(position: THREE.Vector3, target: THREE.Vector3) {
+    camera.position.copy(position);
+    controls.target.copy(target);
+    tmpCameraLookMatrix.lookAt(camera.position, target, WORLD_UP);
+    tmpCameraQuaternion.setFromRotationMatrix(tmpCameraLookMatrix);
+    camera.quaternion.copy(tmpCameraQuaternion);
+    controls.update();
+    cameraController.emitView();
+    needsRender = true;
+  }
+
+  function targetForNode(nodeId: string): CameraPose | null {
+    const node = nodeLookup.get(nodeId);
+    const position = node ? nodePositions.get(node.id) : undefined;
+    if (!node || !position) return null;
+
+    const target = new THREE.Vector3(position.x, position.y, position.z).applyQuaternion(world.quaternion);
+    const nodeSize = Math.max(accessors.nodeSize(node), planetRadius(node));
+    const positionOffset = new THREE.Vector3(
+      nodeSize * FOCUS_NODE_OFFSET_X_SCALE + FOCUS_NODE_OFFSET_X_BASE,
+      nodeSize * FOCUS_NODE_OFFSET_Y_SCALE + FOCUS_NODE_OFFSET_Y_BASE,
+      nodeSize * FOCUS_NODE_OFFSET_Z_SCALE + FOCUS_NODE_OFFSET_Z_BASE,
+    );
+    return { position: target.clone().add(positionOffset), target };
+  }
+
+  function homePose(): CameraPose {
+    return { position: CAMERA_HOME.clone(), target: TARGET_HOME.clone() };
+  }
+
+  function startCameraJob(
+    kind: CameraJob['kind'],
+    to: CameraPose,
+    completedEvent: FocusEvent,
+    options: { nodeId?: string; telemetryStartedAt?: number } = {},
+  ) {
+    const from = currentCameraPose();
+    const midpoint = from.position.clone().lerp(to.position, 0.5);
+    const arcHeight = Math.max(20, Math.min(260, from.position.distanceTo(to.position) * 0.18));
+    const control = midpoint.add(WORLD_UP.clone().multiplyScalar(arcHeight));
+    activeCameraJob = {
+      completedEvent,
+      control,
+      durationMs: focusModel.cameraDurationMs,
+      from,
+      kind,
+      nodeId: options.nodeId,
+      startedAt: performance.now(),
+      telemetryStartedAt: options.telemetryStartedAt,
+      to,
+    };
+    cameraState = 'moving';
+    needsRender = true;
+  }
+
+  function settleCameraJob(job: CameraJob) {
+    runProgrammaticCameraChange(() => applyCameraPose(job.to.position, job.to.target));
+    activeCameraJob = null;
+    dispatchFocusEvent(job.completedEvent);
+    if (job.telemetryStartedAt && job.nodeId) {
+      const completedAt = performance.now();
+      emitGraphUxEvent({
+        type: 'focus_completed',
+        nodeId: job.nodeId,
+        timestampMs: completedAt,
+        durationMs: completedAt - job.telemetryStartedAt,
+        visibleNodeCount: pointLayer.visibleCount(),
+        visibleEdgeCount: edgeLayer.visibleCount(),
+      });
+    }
+  }
+
+  function tickCameraJob() {
+    const job = activeCameraJob;
+    if (!job) return false;
+
+    const elapsed = performance.now() - job.startedAt;
+    const t = job.durationMs <= 0 ? 1 : clamp01(elapsed / job.durationMs);
+    const eased = easeInOutCubic(t);
+    const nextPosition = quadraticBezier(job.from.position, job.control, job.to.position, eased).clone();
+    const nextTarget = job.from.target.clone().lerp(job.to.target, eased);
+    runProgrammaticCameraChange(() => applyCameraPose(nextPosition, nextTarget));
+    if (t >= 1) settleCameraJob(job);
+    return true;
   }
 
   scene.add(new THREE.AmbientLight(0x96ffe2, AMBIENT_LIGHT_INTENSITY));
@@ -536,10 +723,20 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeLayer.applyAppearance();
   }
 
+  function nodeHighlightOptions() {
+    if (!focusModel.enabled || focusModel.variant !== 'fullFocus') return undefined;
+    return {
+      edgeLimit: selection.focusMode === 'expanded' ? focusModel.maxExpandedNeighbors : focusModel.maxPrimaryNeighbors,
+      secondDegreeLimit: focusModel.maxSecondHopNeighbors,
+    };
+  }
+
   function updateSelection(nextSelectedNodeId: string | null, nextSelectedEdgeId: string | null) {
     selection.selectedNodeId = nextSelectedNodeId;
     selection.selectedEdgeId = nextSelectedEdgeId;
-    selection.selectedNodeHighlight = nextSelectedNodeId ? getNodeSelectionHighlight(nextSelectedNodeId) : null;
+    selection.selectedNodeHighlight = nextSelectedNodeId
+      ? getNodeSelectionHighlight(nextSelectedNodeId, nodeHighlightOptions())
+      : null;
     selection.selectedEdgeHighlight = nextSelectedEdgeId ? getEdgeSelectionHighlight(nextSelectedEdgeId) : null;
     const hasSelection = Boolean(nextSelectedNodeId || nextSelectedEdgeId);
     if (!hasSelection && cameraState !== 'moving') cameraState = 'idle';
@@ -585,12 +782,150 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     edgeLayer.applyAppearance();
   }
 
+  function clearFocusDataTimeout() {
+    if (dataTimeoutId === null) return;
+    window.clearTimeout(dataTimeoutId);
+    dataTimeoutId = null;
+  }
+
+  function focusModeForState(state: FocusState) {
+    if (!focusModel.enabled || focusModel.variant === 'baseline') return 'none' as const;
+    if (focusModel.variant === 'cameraOnly') return 'cameraOnly' as const;
+    if (state.name === 'expandedFocus') return 'expanded' as const;
+    if (state.name === 'pathFocus') return 'path' as const;
+    if (state.name === 'orbitFocus') return 'orbit' as const;
+    if (state.name === 'focusedPartial') return 'partial' as const;
+    return 'fullFocus' as const;
+  }
+
+  function applyFocusStateSelection(state: FocusState) {
+    selection.focusMode = focusModeForState(state);
+    selection.pathNodeIds = state.name === 'pathFocus' ? new Set(state.path.nodeIds) : new Set();
+    selection.pathEdgeIds = state.name === 'pathFocus' ? new Set(state.path.edgeIds) : new Set();
+    updateSelection(selection.selectedNodeId, selection.selectedEdgeId);
+  }
+
+  function startFocusCamera(nodeId: string, kind: CameraJob['kind'] = 'focus') {
+    const pose = targetForNode(nodeId);
+    if (!pose) return;
+    const startedAt = performance.now();
+    emitGraphUxEvent({ type: 'focus_started', nodeId, timestampMs: startedAt, variant: focusModel.variant });
+    startCameraJob(kind, pose, { type: 'CAMERA_SETTLED', nodeId }, { nodeId, telemetryStartedAt: startedAt });
+  }
+
+  function startUnfocusCamera() {
+    emitGraphUxEvent({
+      type: 'camera_reset',
+      timestampMs: performance.now(),
+      ...focusedNodePayload(),
+    });
+    startCameraJob('unfocus', homePose(), { type: 'CAMERA_SETTLED' });
+  }
+
+  function dispatchFocusEvent(event: FocusEvent) {
+    const previousState = focusState;
+    const nextState = reduceFocusState(focusState, event);
+    focusState = nextState;
+
+    if (event.type !== 'FOCUS_DATA_MISSING') clearFocusDataTimeout();
+
+    if (nextState.name !== previousState.name || focusStateNodeId(nextState) !== focusStateNodeId(previousState)) {
+      cameraState =
+        nextState.name === 'orbitFocus'
+          ? 'orbit'
+          : nextState.name === 'focusingCamera' ||
+              nextState.name === 'unfocusing' ||
+              nextState.name === 'navigatingBack'
+            ? 'moving'
+            : focusStateNodeId(nextState)
+              ? 'focused'
+              : 'idle';
+    }
+
+    if (event.type === 'FOCUS_DATA_MISSING' && nextState.name === 'loadingFocusData') {
+      dataTimeoutId = window.setTimeout(() => {
+        dispatchFocusEvent({ type: 'DATA_TIMEOUT', nodeId: nextState.nodeId });
+      }, focusModel.dataTimeoutMs);
+    }
+
+    if (nextState.name === 'focusingCamera' && previousState.name !== 'focusingCamera') {
+      startFocusCamera(nextState.nodeId);
+    }
+
+    if (nextState.name === 'focusedPartial' && previousState.name === 'loadingFocusData') {
+      startFocusCamera(nextState.nodeId);
+    }
+
+    if (nextState.name === 'focused' && previousState.name === 'focusingCamera') {
+      cameraState = 'focused';
+    }
+
+    if (nextState.name === 'navigatingBack' && previousState.name !== 'navigatingBack') {
+      if (nextState.targetNodeId) {
+        updateSelection(nextState.targetNodeId, null);
+        startFocusCamera(nextState.targetNodeId, 'back');
+      } else {
+        startUnfocusCamera();
+      }
+    }
+
+    if (nextState.name === 'unfocusing' && previousState.name !== 'unfocusing') {
+      startUnfocusCamera();
+    }
+
+    if (nextState.name === 'idle' && previousState.name === 'unfocusing') {
+      activeCameraJob = null;
+      cameraState = 'idle';
+      selection.focusMode = 'none';
+      selection.pathNodeIds = new Set();
+      selection.pathEdgeIds = new Set();
+      updateSelection(null, null);
+      callbacksRef.current.onSelectNode(null);
+      callbacksRef.current.onSelectEdge(null);
+    }
+
+    applyFocusStateSelection(nextState);
+  }
+
+  function beginNodeFocus(nodeId: string, dataReady = true) {
+    if (!focusModel.enabled || focusModel.variant === 'baseline') {
+      focusNodeWithTelemetry(nodeId);
+      return;
+    }
+
+    const previousNodeId = focusStateNodeId(focusState);
+    if (previousNodeId && previousNodeId !== nodeId) focusHistory.push(previousNodeId);
+    activeCameraJob = null;
+    updateSelection(nodeId, null);
+    dispatchFocusEvent({ type: 'NODE_CLICK', nodeId, previousNodeId: previousNodeId ?? undefined });
+    dispatchFocusEvent(
+      dataReady
+        ? { type: 'FOCUS_DATA_READY', nodeId }
+        : { type: 'FOCUS_DATA_MISSING', nodeId, startedAt: performance.now() },
+    );
+  }
+
+  function completeFocusData(nodeId: string) {
+    if (focusState.name === 'loadingFocusData') dispatchFocusEvent({ type: 'DATA_READY', nodeId });
+    else dispatchFocusEvent({ type: 'FOCUS_DATA_READY', nodeId });
+  }
+
+  function failFocusData(nodeId: string) {
+    dispatchFocusEvent({ type: 'LOAD_FAILED', nodeId });
+  }
+
+  function navigateBackFocus() {
+    const targetNodeId = focusHistory.pop();
+    dispatchFocusEvent({ type: 'BACK', targetNodeId });
+  }
+
   function clearHover() {
     setSceneLabel(hoverLabel, null, null);
     renderer.domElement.style.cursor = 'grab';
     selection.hoveredNodeId = null;
     selection.hoveredEdgeId = null;
     updateHoverHighlight();
+    if (focusModel.enabled && focusModel.variant !== 'baseline') dispatchFocusEvent({ type: 'HOVER_END' });
     callbacksRef.current.onHoverNode(null);
     callbacksRef.current.onHoverNodeAnchor?.(null);
     callbacksRef.current.onHoverEdge(null);
@@ -659,6 +994,14 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
 
   function updateUxVariant(nextUxVariant: GraphUxVariant | undefined) {
     uxVariant = nextUxVariant ?? DEFAULT_UX_VARIANT;
+    focusModel = resolveFocusModel(focusModelInput, uxVariant);
+    applyFocusStateSelection(focusState);
+  }
+
+  function updateFocusModel(nextFocusModel: GalaxyFocusModelOptions | undefined) {
+    focusModelInput = nextFocusModel;
+    focusModel = resolveFocusModel(focusModelInput, uxVariant);
+    applyFocusStateSelection(focusState);
   }
 
   function updateAccessors(nextAccessors: GraphAccessors<NMeta, EMeta> | undefined) {
@@ -762,6 +1105,9 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     }
     if (nodeChanged) {
       if (nodeId) emitGraphUxEvent({ type: 'node_hover', nodeId, timestampMs: performance.now() });
+      if (focusModel.enabled && focusModel.variant !== 'baseline') {
+        dispatchFocusEvent(nodeId ? { type: 'NODE_HOVER', nodeId } : { type: 'HOVER_END' });
+      }
       callbacksRef.current.onHoverNode(node);
       callbacksRef.current.onHoverNodeAnchor?.(nodeId ? nodeHoverAnchor(resolveNodeEndpoint(nodeId)) : null);
     }
@@ -780,6 +1126,10 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
         cameraState,
       });
       callbacksRef.current.onSelectEdge(null);
+      if (focusModel.enabled && focusModel.variant !== 'baseline') {
+        updateSelection(node.id, null);
+        beginNodeFocus(node.id);
+      }
       callbacksRef.current.onSelectNode(node);
       return;
     }
@@ -788,8 +1138,12 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
       callbacksRef.current.onSelectEdge(edge);
       return;
     }
-    callbacksRef.current.onSelectNode(null);
-    callbacksRef.current.onSelectEdge(null);
+    if (focusModel.enabled && focusModel.variant !== 'baseline')
+      dispatchFocusEvent({ type: 'ESC_OR_BACKGROUND_CLICK' });
+    else {
+      callbacksRef.current.onSelectNode(null);
+      callbacksRef.current.onSelectEdge(null);
+    }
   }
 
   function handlePointerMove(event: PointerEvent) {
@@ -892,6 +1246,7 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     } else {
       keyboardCameraActive = false;
     }
+    if (tickCameraJob()) needsRender = true;
     controls.update();
 
     const paused = pausedRef.current;
@@ -979,12 +1334,20 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     runProgrammaticCameraChange(() => cameraController.focusEdge(edgeId));
   }
 
+  function focusNodeCommand(nodeId: string, dataReady = true) {
+    beginNodeFocus(nodeId, dataReady);
+  }
+
   function moveCameraWithTelemetry(direction: SpaceDirection, multiplier?: number) {
     emitPanOrOrbit();
     runProgrammaticCameraChange(() => cameraController.move(direction, multiplier));
   }
 
   function resetCameraWithTelemetry() {
+    if (focusModel.enabled && focusModel.variant !== 'baseline') {
+      dispatchFocusEvent({ type: 'ESC_OR_BACKGROUND_CLICK' });
+      return;
+    }
     emitGraphUxEvent({
       type: 'camera_reset',
       timestampMs: performance.now(),
@@ -994,11 +1357,44 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     runProgrammaticCameraChange(cameraController.reset);
   }
 
+  function expandNeighborsCommand(depth: 1 | 2 = 1) {
+    dispatchFocusEvent({ type: 'EXPAND_NEIGHBORS', depth });
+  }
+
+  function collapseNeighborsCommand() {
+    dispatchFocusEvent({ type: 'COLLAPSE_NEIGHBORS' });
+  }
+
+  function showPathCommand(pathType: PathFocusType, path: FocusPathResult) {
+    dispatchFocusEvent({ type: 'SHOW_PATH', pathType, path });
+  }
+
+  function hidePathCommand() {
+    dispatchFocusEvent({ type: 'HIDE_PATH' });
+  }
+
+  function recenterFocusCommand() {
+    const nodeId = focusStateNodeId(focusState);
+    if (!nodeId) return;
+    if (focusState.name === 'orbitFocus') dispatchFocusEvent({ type: 'RECENTER' });
+    else startFocusCamera(nodeId, 'recenter');
+  }
+
   return {
+    backFocus: wake(navigateBackFocus),
+    collapseNeighbors: wake(collapseNeighborsCommand),
+    completeFocusData: wake(completeFocusData),
+    expandNeighbors: wake(expandNeighborsCommand),
+    failFocusData: wake(failFocusData),
     focusEdge: wake(focusEdgeWithTelemetry),
-    focusNode: wake(focusNodeWithTelemetry),
+    focusNode: wake(focusNodeCommand),
+    hidePath: wake(hidePathCommand),
     moveCamera: wake(moveCameraWithTelemetry),
+    recenterFocus: wake(recenterFocusCommand),
     resetCamera: wake(resetCameraWithTelemetry),
+    showPath: wake(showPathCommand),
+    timeoutFocusData: wake((nodeId: string) => dispatchFocusEvent({ type: 'DATA_TIMEOUT', nodeId })),
+    unfocus: wake(() => dispatchFocusEvent({ type: 'ESC_OR_BACKGROUND_CLICK' })),
     updateAccessors: wake(updateAccessors),
     updateActiveGroup: wake(updateActiveGroup),
     updateClusterVisibility: wake(updateClusterVisibilityFromProp),
@@ -1008,11 +1404,14 @@ export function createScene<NMeta = unknown, EMeta = unknown, CMeta = unknown>(
     updatePlanetSizing: wake(updatePlanetSizing),
     updateSelection: wake(updateSelection),
     updateTheme: wake(updateTheme),
+    updateFocusModel: wake(updateFocusModel),
     updateUxVariant: wake(updateUxVariant),
     appendDataset: wake(appendDataset),
     dispose: () => {
       if (sceneDisposed) return;
       sceneDisposed = true;
+      clearFocusDataTimeout();
+      activeCameraJob = null;
       window.cancelAnimationFrame(animationFrame);
       window.removeEventListener('resize', resize);
       resizeObserver?.disconnect();

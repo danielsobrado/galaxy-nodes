@@ -10,6 +10,8 @@ export interface NodeSelectionHighlight {
   secondDegreeNodeIds: Set<string>;
 }
 
+export type SceneFocusMode = 'none' | 'cameraOnly' | 'fullFocus' | 'expanded' | 'path' | 'orbit' | 'partial';
+
 export interface SelectionState {
   selectedNodeId: string | null;
   selectedEdgeId: string | null;
@@ -17,4 +19,7 @@ export interface SelectionState {
   selectedEdgeHighlight: NodeSelectionHighlight | null;
   hoveredNodeId: string | null;
   hoveredEdgeId: string | null;
+  focusMode: SceneFocusMode;
+  pathEdgeIds: Set<string>;
+  pathNodeIds: Set<string>;
 }

@@ -25,6 +25,7 @@ export function createGalaxyVueRenderer<NMeta = unknown, EMeta = unknown, CMeta 
 
 export type {
   CameraCommand,
+  FocusPathResult,
   GalaxyGraphBlendMode,
   GalaxyGraphDataColorStrategy,
   GalaxyGraphPointStyle,
@@ -38,6 +39,7 @@ export type {
   GalaxyGraphToneMapping,
   GalaxyMotionPreference,
   GalaxyNodeHoverAnchor,
+  GalaxyFocusModelOptions,
   GalaxyPlanetSizingOptions,
   GalaxyRenderer,
   GalaxyRendererCallbacks,
@@ -55,6 +57,7 @@ export type {
   GraphCameraState,
   GraphUxEvent,
   GraphUxVariant,
+  PathFocusType,
   PlanetSizingMode,
   ResolvedGalaxyGraphTheme,
   SpaceDirection,

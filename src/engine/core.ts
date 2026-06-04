@@ -31,12 +31,15 @@ export type {
 export type {
   CameraCommand,
   GalaxyNodeHoverAnchor,
+  GalaxyFocusModelOptions,
   GalaxyRenderer,
   GalaxyRendererCallbacks,
   GalaxyRendererOptions,
+  FocusPathResult,
   GraphCameraState,
   GraphUxEvent,
   GraphUxVariant,
+  PathFocusType,
 } from './rendererTypes';
 export type { GalaxySceneFailure, GalaxySceneFailureReason } from './sceneFallback';
 
