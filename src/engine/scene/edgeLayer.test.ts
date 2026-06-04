@@ -28,6 +28,9 @@ function emptySelection(): SelectionState {
     selectedEdgeHighlight: null,
     hoveredNodeId: null,
     hoveredEdgeId: null,
+    focusMode: 'none',
+    pathEdgeIds: new Set(),
+    pathNodeIds: new Set(),
   };
 }
 
@@ -83,5 +86,46 @@ describe('edgeLayer.applyAppearance', () => {
     const light = build(emptySelection(), 'network-light');
 
     expect(light.radius('e0')).toBeCloseTo(dark.radius('e0'), 6);
+  });
+
+  it('uses visibility projection to hide unrelated edges unless they are selected', () => {
+    const selection = {
+      ...emptySelection(),
+      selectedEdgeId: 'e1',
+      visibility: {
+        labelClusterIds: new Set<string>(),
+        labelNodeIds: new Set<string>(),
+        mode: 'expanded' as const,
+        overflow: { hiddenEdgeCount: 0, hiddenNodeCount: 0, summaries: [] },
+        visibleClusterIds: new Set<string>(),
+        visibleEdgeIds: new Set<string>(['e0']),
+        visibleNodeIds: new Set<string>(),
+      },
+    };
+    const edgeStates = new Map<string, EdgeVisualState>();
+    const layer = createEdgeLayer({
+      world: new THREE.Group(),
+      edgeRenderMode: 'tube',
+      edgeLookup: new Map<string, GraphEdge>(),
+      edgeEndpoints: new Map<string, EdgeEndpoints>(),
+      edgeStates,
+      pickTargets: [],
+      nodeLookup: new Map(nodes.map((node) => [node.id, node])),
+      nodePositions: new Map<string, Vec3>(nodes.map((node, index) => [node.id, { x: index, y: 0, z: 0 }])),
+      clusterLookup: new Map(),
+      accessors: () => resolveAccessors(undefined),
+      activeGroup: () => null,
+      galaxyMode: () => true,
+      theme: () => resolveGalaxyGraphTheme(),
+      planetRadius: () => 1,
+      selection,
+      indexSelectableEdge: () => {},
+    });
+    edges.forEach(layer.addEdge);
+
+    layer.updateVisibility();
+
+    expect(edgeStates.get('e0')?.visible).toBe(true);
+    expect(edgeStates.get('e1')?.visible).toBe(true);
   });
 });

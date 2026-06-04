@@ -28,6 +28,7 @@ vi.mock('./GalaxyScene', () => ({
         data-paused={String(props.paused)}
         data-selected-node={props.selectedNodeId ?? ''}
         data-selected-edge={props.selectedEdgeId ?? ''}
+        data-visibility-model={String(Boolean(props.visibilityModel?.enabled))}
       />
     );
   },
@@ -371,6 +372,49 @@ describe('GalaxyGraphVisualizer', () => {
       });
     });
     expect(onGraphUxEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'task_completed' }));
+  });
+
+  it('passes visibility model options and cluster selection callbacks to the scene', () => {
+    const onSelectCluster = vi.fn();
+    render(
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        onSelectCluster={onSelectCluster}
+        options={{ visibilityModel: { enabled: true } }}
+      />,
+    );
+
+    expect(screen.getByTestId('galaxy-scene').dataset.visibilityModel).toBe('true');
+
+    act(() => {
+      latestSceneProps?.onSelectCluster?.(dataset.clusters![0]);
+    });
+    expect(onSelectCluster).toHaveBeenCalledWith(dataset.clusters![0]);
+  });
+
+  it('turns trace-link edge actions into a direct path command when visibility model is enabled', () => {
+    const onNavigate = vi.fn<(command: CameraCommand) => void>();
+    render(
+      <GalaxyGraphVisualizer
+        dataset={dataset}
+        onNavigate={onNavigate}
+        options={{ visibilityModel: { enabled: true } }}
+      />,
+    );
+
+    act(() => {
+      latestSceneProps?.onSceneReady?.();
+      latestSceneProps?.onSelectEdge(edge);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Trace link' }));
+
+    expect(onNavigate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: { edgeIds: ['depends:alpha->beta:0'], nodeIds: ['alpha', 'beta'] },
+        pathType: 'dependency',
+        type: 'show-path',
+      }),
+    );
   });
 
   it('does not show large-graph controls unless enabled', () => {

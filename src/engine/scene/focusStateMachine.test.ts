@@ -59,11 +59,51 @@ describe('focus state machine', () => {
       pathType: 'dependency',
     });
 
+    state = reduceFocusState(state, { type: 'HIDE_PATH' });
+    expect(state).toEqual({ name: 'expandedFocus', nodeId: 'alpha', depth: 1 });
+
     state = reduceFocusState(state, { targetNodeId: 'previous', type: 'BACK' });
     expect(state).toEqual({ name: 'navigatingBack', targetNodeId: 'previous' });
 
     state = reduceFocusState(state, { nodeId: 'previous', type: 'CAMERA_SETTLED' });
     expect(state).toEqual({ name: 'focused', nodeId: 'previous' });
+  });
+
+  it('follows expanded, path, deep, and collapse-all visibility transitions', () => {
+    let state: FocusState = { name: 'focused', nodeId: 'alpha' };
+
+    state = reduceFocusState(state, { depth: 1, type: 'EXPAND_NEIGHBORS' });
+    expect(state).toEqual({ name: 'expandedFocus', nodeId: 'alpha', depth: 1 });
+
+    state = reduceFocusState(state, {
+      path: { edgeIds: ['edge-a'], nodeIds: ['alpha', 'beta'] },
+      pathType: 'dependency',
+      type: 'SHOW_PATH',
+    });
+    expect(state).toEqual({
+      name: 'pathFocus',
+      nodeId: 'alpha',
+      path: { edgeIds: ['edge-a'], nodeIds: ['alpha', 'beta'] },
+      pathType: 'dependency',
+    });
+
+    state = reduceFocusState(state, { nodeId: 'beta', type: 'INSPECT_PATH' });
+    expect(state).toEqual({ name: 'deepFocus', nodeId: 'beta', previousNodeId: 'alpha' });
+
+    state = reduceFocusState(state, { type: 'EXIT_DEEP' });
+    expect(state).toEqual({ name: 'expandedFocus', nodeId: 'beta', depth: 1 });
+
+    state = reduceFocusState(state, { type: 'EXPAND_DEEP' });
+    expect(state).toEqual({ name: 'deepFocus', nodeId: 'beta' });
+
+    state = reduceFocusState(state, { type: 'EXPAND_BRANCH', nodeId: 'second-hop' });
+    expect(state).toEqual({ name: 'deepFocus', nodeId: 'second-hop', previousNodeId: 'beta' });
+
+    state = reduceFocusState(state, { type: 'COLLAPSE_ALL' });
+    expect(state).toEqual({ name: 'unfocusing', nodeId: 'second-hop' });
+
+    state = reduceFocusState(state, { type: 'CAMERA_SETTLED' });
+    expect(state).toEqual({ name: 'idle' });
   });
 
   it('interrupts active focus with a different node click and handles load failure', () => {

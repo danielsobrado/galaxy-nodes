@@ -24,6 +24,9 @@ function emptySelection(): SelectionState {
     selectedEdgeHighlight: null,
     hoveredNodeId: null,
     hoveredEdgeId: null,
+    focusMode: 'none',
+    pathEdgeIds: new Set(),
+    pathNodeIds: new Set(),
   };
 }
 
@@ -56,5 +59,25 @@ describe('pointLayer visibility', () => {
     layer.updateAppearance();
     expect(layer.visibleSizeAt(0)).toBeGreaterThan(0); // a is in g1
     expect(layer.visibleSizeAt(1)).toBe(0); // b is in g2 and unrelated
+  });
+
+  it('honors visibility projection while keeping the selected node visible', () => {
+    const selection = {
+      ...emptySelection(),
+      selectedNodeId: 'b',
+      visibility: {
+        labelClusterIds: new Set<string>(),
+        labelNodeIds: new Set<string>(),
+        mode: 'expanded' as const,
+        overflow: { hiddenEdgeCount: 0, hiddenNodeCount: 0, summaries: [] },
+        visibleClusterIds: new Set<string>(),
+        visibleEdgeIds: new Set<string>(),
+        visibleNodeIds: new Set<string>(['a']),
+      },
+    };
+    const layer = build(selection);
+    layer.updateAppearance();
+    expect(layer.visibleSizeAt(0)).toBeGreaterThan(0);
+    expect(layer.visibleSizeAt(1)).toBeGreaterThan(0);
   });
 });
